@@ -18,7 +18,7 @@ public class Lazy<V> {
 
     public V getOrLoad() {
         V val;
-        if ((val = value) == null) {
+        if ((val = get()) == null) {
             V witness = (V) VAL.compareAndExchange(this, null,
                     val = supplier.get());
             return witness == null ? val : witness;
