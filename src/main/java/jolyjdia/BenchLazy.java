@@ -16,8 +16,6 @@ public class BenchLazy {
     private Lazy<ArrayList<String>> listLazyAcq;
     private LazyDoubleCheckedLocking<ArrayList<String>> listLazyLock;
 
-    public BenchLazy() {}
-
     public static void main(String[] args) throws RunnerException {
         Options opt = new OptionsBuilder()
                 .include(BenchLazy.class.getSimpleName())

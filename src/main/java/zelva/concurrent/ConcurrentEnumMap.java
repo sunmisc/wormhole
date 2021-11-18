@@ -3,7 +3,10 @@ package zelva.concurrent;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.*;
+import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.ForkJoinPool;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.atomic.LongAdder;
 import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
@@ -78,11 +81,29 @@ public class ConcurrentEnumMap<K extends Enum<K>,V> extends AbstractMap<K,V>
                 Enum<?> key = e.getKey(); Object val = e.getValue();
                 if (key.getDeclaringClass() != keyType)
                     throw new IllegalArgumentException("unsuitable type");
-                if (AA.getAndSet(table, key.ordinal(), val) == null)
+                if (getAndSetAt(table, key.ordinal(), val) == null)
                     ++delta;
             }
             addCount(delta);
         }
+    }
+    @SuppressWarnings("unchecked")
+    static <V> V tabAt(V[] tab, int i) {
+        return (V) AA.getVolatile(tab, i);
+    }
+    static <V> boolean casTabAt(V[] tab, int i, V c, V v) {
+        return AA.compareAndSet(tab, i, c, v);
+    }
+    static <V> boolean weakCasTabAt(V[] tab, int i, V c, V v) {
+        return AA.weakCompareAndSet(tab, i, c, v);
+    }
+    @SuppressWarnings("unchecked")
+    static <V> V caeTabAt(V[] tab, int i, V c, V v) {
+        return (V) AA.compareAndExchange(tab, i, c, v);
+    }
+    @SuppressWarnings("unchecked")
+    static <V> V getAndSetAt(V[] tab, int i, V v) {
+        return (V) AA.getAndSet(tab, i, v);
     }
 
     private void addCount(long c) {
@@ -97,17 +118,23 @@ public class ConcurrentEnumMap<K extends Enum<K>,V> extends AbstractMap<K,V>
     @Override
     public V get(Object key) {
         return isValidKey(key)
-                ? (V) AA.getAcquire(table, ((Enum<?>)key).ordinal())
+                ? tabAt(table, ((Enum<?>)key).ordinal())
                 : null;
     }
     @Override
     public V put(K key, V value) {
         if (key == null || value == null)
             throw new NullPointerException();
-        Object prev = AA.getAndSet(table, key.ordinal(), value);
-        if (prev == null)
-            addCount(1L);
-        return (V)prev;
+        int i = key.ordinal();
+        V[] tab = table;
+        for (V prev;;) {
+            if (weakCasTabAt(tab, i,
+                    prev = tabAt(tab, i), value)) {
+                if (prev == null)
+                    addCount(1L);
+            }
+            return prev;
+        }
     }
 
     @Override
@@ -115,23 +142,22 @@ public class ConcurrentEnumMap<K extends Enum<K>,V> extends AbstractMap<K,V>
         if (m.isEmpty())
             return;
         int delta = 0;
-        if (m instanceof ConcurrentEnumMap) {
-            ConcurrentEnumMap<?,?> em = (ConcurrentEnumMap<?,?>) m;
+        if (m instanceof ConcurrentEnumMap<?, ?> em) {
             if (em.keyType != keyType)
                 throw new ClassCastException(em.keyType + " not equal to " + keyType);
             V[] tab = table;
             for (int i = 0, len = tab.length; i < len; ++i) {
-                Object val = AA.getAcquire(em.table, i);
-                if (val != null && AA.getAndSet(tab, i, val) == null) {
+                Object val = tabAt(em.table, i);
+                if (val != null && getAndSetAt(tab, i, val) == null) {
                     ++delta;
                 }
             }
         } else {
             for (Map.Entry<? extends K, ? extends V> e : m.entrySet()) {
                 Enum<?> key = e.getKey(); Object val = e.getValue();
-                if (key.getDeclaringClass() != keyType)
+                if (key.getDeclaringClass() == keyType)
                     continue;
-                if (AA.getAndSet(table, key.ordinal(), val) == null)
+                if (getAndSetAt(table, key.ordinal(), val) == null)
                     ++delta;
             }
         }
@@ -143,7 +169,7 @@ public class ConcurrentEnumMap<K extends Enum<K>,V> extends AbstractMap<K,V>
             throw new NullPointerException();
         V[] tab = table;
         for (int i = 0, len = tab.length; i < len; ++i) {
-            V v = (V) AA.getAcquire(tab, i);
+            V v = tabAt(tab, i);
             if (v == null)
                 continue;
             action.accept(keys[i], v);
@@ -155,7 +181,7 @@ public class ConcurrentEnumMap<K extends Enum<K>,V> extends AbstractMap<K,V>
         int delta = 0;
         V[] tab = table;
         for (int i = 0, len = tab.length; i < len; ++i) {
-            if (AA.getAndSet(tab, i, null) != null) {
+            if (getAndSetAt(tab, i, null) != null) {
                 --delta;
             }
         }
@@ -165,10 +191,19 @@ public class ConcurrentEnumMap<K extends Enum<K>,V> extends AbstractMap<K,V>
     @Override
     public V remove(Object key) {
         if (isValidKey(key)) {
-            Object prev = AA.getAndSet(table, ((Enum<?>) key).ordinal(), null);
-            if (prev != null)
-                addCount(-1L);
-            return (V) prev;
+            int i = ((Enum<?>) key).ordinal();
+            final V[] tab = table;
+            for (V prev;;) {
+                if ((prev = tabAt(tab, i)) == null)
+                    return null;
+                V p = caeTabAt(tab, i, prev, null);
+                if (p == null) {
+                    return null;
+                } else if (p == prev) {
+                    addCount(-1L);
+                    return prev;
+                }
+            }
         }
         return null;
     }
@@ -197,7 +232,7 @@ public class ConcurrentEnumMap<K extends Enum<K>,V> extends AbstractMap<K,V>
             throw new NullPointerException();
         V[] tab = table;
         for (int i = 0, len = tab.length; i < len; ++i) {
-            if (Objects.equals(AA.getAcquire(tab, i), value)) {
+            if (Objects.equals(tabAt(tab, i), value)) {
                 return true;
             }
         }
@@ -208,10 +243,16 @@ public class ConcurrentEnumMap<K extends Enum<K>,V> extends AbstractMap<K,V>
     public V putIfAbsent(K key, V value) {
         if (key == null || value == null)
             throw new NullPointerException();
-        Object prev = AA.compareAndExchange(table, key.ordinal(), null, value);
-        if (prev == null)
-            addCount(1L);
-        return (V)prev;
+        int i = key.ordinal();
+        V[] tab = table;
+        for (V prev;;) {
+            if ((prev = tabAt(tab, i)) != null) {
+                return prev;
+            } else if (weakCasTabAt(tab, i, null, value)) {
+                addCount(1L);
+            }
+            return null;
+        }
     }
 
     @Override
@@ -221,13 +262,12 @@ public class ConcurrentEnumMap<K extends Enum<K>,V> extends AbstractMap<K,V>
             throw new NullPointerException();
         int i = key.ordinal();
         V[] tab = table;
-        for (V prev; ;) {
-            prev = (V) AA.getAcquire(tab, i);
-            V newVal = remappingFunction.apply(key, prev);
-            if (prev == null && newVal == null) {
+        for (V prev;;) {
+            V newVal = remappingFunction.apply(key, prev = tabAt(tab, i));
+            if (newVal == null && prev == null) {
                 return null;
                 // strong CAS to minimize function call
-            } else if (AA.compareAndSet(tab, i, prev, newVal)) {
+            } else if (casTabAt(tab, i, prev, newVal)) {
                 addCount(prev == null ? 1L : newVal == null ? -1L : 0);
                 return newVal;
             }
@@ -240,12 +280,12 @@ public class ConcurrentEnumMap<K extends Enum<K>,V> extends AbstractMap<K,V>
             throw new NullPointerException();
         int i = key.ordinal();
         V[] tab = table;
-        for (V prev, newVal; ;) {
-            prev = (V) AA.getAcquire(tab, i);
-            if (prev != null || (newVal = mappingFunction.apply(key)) == null) {
+        for (V prev, newVal;;) {
+            if ((prev = tabAt(tab, i)) != null ||
+                    (newVal = mappingFunction.apply(key)) == null) {
                 return prev;
                 // strong CAS to minimize function call
-            } else if (AA.compareAndSet(tab, i, null, newVal)) {
+            } else if (casTabAt(tab, i, null, newVal)) {
                 addCount(1L);
                 return newVal;
             }
@@ -258,13 +298,12 @@ public class ConcurrentEnumMap<K extends Enum<K>,V> extends AbstractMap<K,V>
             throw new NullPointerException();
         int i = key.ordinal();
         V[] tab = table;
-        for (V prev; ;) {
-            prev = (V) AA.getAcquire(tab, i);
-            if (prev == null)
+        for (V prev;;) {
+            if ((prev = tabAt(tab, i)) == null)
                 return null;
             V newVal = remappingFunction.apply(key, prev);
             // strong CAS to minimize function call
-            if (AA.compareAndSet(tab, i, prev, newVal)) {
+            if (casTabAt(tab, i, prev, newVal)) {
                 if (newVal == null)
                     addCount(-1L);
                 return newVal;
@@ -278,10 +317,9 @@ public class ConcurrentEnumMap<K extends Enum<K>,V> extends AbstractMap<K,V>
             throw new NullPointerException();
         int i = key.ordinal();
         V[] tab = table;
-        for (V prev; ;) {
-            prev = (V) AA.getAcquire(tab, i);
-            if (prev == null) {
-                if (AA.weakCompareAndSet(tab, i, null, value)) {
+        for (V prev;;) {
+            if ((prev = tabAt(tab, i)) == null) {
+                if (weakCasTabAt(tab, i, null, value)) {
                     addCount(1L);
                     return value;
                 } else {
@@ -289,7 +327,7 @@ public class ConcurrentEnumMap<K extends Enum<K>,V> extends AbstractMap<K,V>
                 }
             }
             V newVal = remappingFunction.apply(prev, value);
-            if (AA.compareAndSet(tab, i, prev, newVal)) {
+            if (casTabAt(tab, i, prev, newVal)) {
                 if (newVal == null)
                     addCount(-1L);
                 return newVal;
@@ -303,7 +341,10 @@ public class ConcurrentEnumMap<K extends Enum<K>,V> extends AbstractMap<K,V>
             throw new NullPointerException();
         if (isValidKey(key)) {
             int i = ((Enum<?>) key).ordinal();
-            return AA.compareAndSet(table, i, value, null);
+            if (casTabAt(table, i, value, null)) {
+                addCount(-1);
+                return true;
+            }
         }
         return false;
     }
@@ -312,7 +353,7 @@ public class ConcurrentEnumMap<K extends Enum<K>,V> extends AbstractMap<K,V>
     public boolean replace(K key, V oldValue, V newValue) {
         if (key == null || oldValue == null || newValue == null)
             throw new NullPointerException();
-        return AA.compareAndSet(table, key.ordinal(), oldValue, newValue);
+        return casTabAt(table, key.ordinal(), oldValue, newValue);
     }
 
     @Override
@@ -397,8 +438,7 @@ public class ConcurrentEnumMap<K extends Enum<K>,V> extends AbstractMap<K,V>
                 throw new NullPointerException();
             V[] tab = map.table;
             for (int i = 0, len = tab.length; i < len; ++i) {
-                Object e = AA.getAcquire(tab, i);
-                if (o.equals(e) && AA.weakCompareAndSet(tab, i, e, null)) {
+                if (casTabAt(tab, i, o, null)) {
                     map.addCount(-1L);
                     return true;
                 }
@@ -424,17 +464,15 @@ public class ConcurrentEnumMap<K extends Enum<K>,V> extends AbstractMap<K,V>
 
         @Override
         public boolean contains(Object o) {
-            if (o instanceof Map.Entry) {
-                Map.Entry<?,?> entry = (Map.Entry<?,?>) o;
-                return map.containsKey(entry.getKey());
+            if (o instanceof Entry<?,?> e) {
+                return map.containsKey(e.getKey());
             }
             return false;
         }
         @Override
         public boolean remove(Object o) {
-            if (o instanceof Map.Entry) {
-                Map.Entry<?,?> entry = (Map.Entry<?,?>) o;
-                return map.remove(entry.getKey(), entry.getValue());
+            if (o instanceof Entry<?,?> e) {
+                return map.remove(e.getKey(), e.getValue());
             }
             return false;
         }
@@ -472,7 +510,7 @@ public class ConcurrentEnumMap<K extends Enum<K>,V> extends AbstractMap<K,V>
         public V next() {
             if (!hasNext())
                 throw new NoSuchElementException();
-            return (V) AA.getAcquire(map.table, index++);
+            return tabAt(map.table, index++);
         }
     }
 
@@ -486,7 +524,7 @@ public class ConcurrentEnumMap<K extends Enum<K>,V> extends AbstractMap<K,V>
             if (!hasNext())
                 throw new NoSuchElementException();
             int c = index;
-            V e = (V) AA.getAcquire(map.table, c);
+            V e = tabAt(map.table, c);
             index = c + 1;
             return new MapEntry<>(map.keys[c], e, map);
         }
@@ -506,7 +544,7 @@ public class ConcurrentEnumMap<K extends Enum<K>,V> extends AbstractMap<K,V>
             V[] tab = map.table;
             int len = tab.length;
             for (int i = index; i < len; ++i) {
-                if ((V) AA.getAcquire(tab, index) == null) {
+                if (tabAt(tab, index) == null) {
                     index++;
                 }
             }
@@ -515,7 +553,7 @@ public class ConcurrentEnumMap<K extends Enum<K>,V> extends AbstractMap<K,V>
 
         @Override
         public void remove() {
-            if (AA.getAndSet(map.table, index, null) != null)
+            if (getAndSetAt(map.table, index, null) != null)
                 map.addCount(-1L);
         }
     }
@@ -530,14 +568,11 @@ public class ConcurrentEnumMap<K extends Enum<K>,V> extends AbstractMap<K,V>
             this.val = val;
             this.map = map;
         }
-        @Override
-        public K getKey() {
-            return key;
-        }
-        @Override
-        public V getValue() {
-            return val;
-        }
+
+        @Override public K getKey() {return key;}
+
+        @Override public V getValue() {return val;}
+
         @Override
         public int hashCode() {
             return key.hashCode() ^ val.hashCode();
@@ -571,10 +606,10 @@ public class ConcurrentEnumMap<K extends Enum<K>,V> extends AbstractMap<K,V>
         int h = 0;
         V[] tab = table;
         for (int i = 0, len = tab.length; i < len; i++) {
-            V e = (V) AA.getAcquire(tab, i);
-            if (e == null)
+            V val;
+            if ((val = tabAt(tab, i)) == null)
                 continue;
-            h += keys[i].hashCode() ^ e.hashCode();
+            h += keys[i].hashCode() ^ val.hashCode();
         }
         return h;
     }
@@ -582,14 +617,12 @@ public class ConcurrentEnumMap<K extends Enum<K>,V> extends AbstractMap<K,V>
     public boolean equals(Object o) {
         if (this == o)
             return true;
-        if (o instanceof ConcurrentEnumMap)  {
-            ConcurrentEnumMap<?,?> em = (ConcurrentEnumMap<?,?>) o;
+        if (o instanceof ConcurrentEnumMap<?,?> em)  {
             if (keyType != em.keyType || em.size() != size())
                 return false;
             V[] tab = table;
             for (int i = 0, len = tab.length; i < len; i++) {
-                V e1 = (V) AA.getAcquire(tab, i),
-                        e2 = (V) AA.getAcquire(em.table, i);
+                Object e1 = tabAt(tab, i), e2 = tabAt(em.table, i);
                 if (!Objects.equals(e1, e2)) {
                     return false;
                 }
