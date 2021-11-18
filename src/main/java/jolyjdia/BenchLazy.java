@@ -6,10 +6,11 @@ import org.openjdk.jmh.runner.RunnerException;
 import org.openjdk.jmh.runner.options.Options;
 import org.openjdk.jmh.runner.options.OptionsBuilder;
 import zelva.concurrent.Lazy;
+
 import java.util.ArrayList;
 import java.util.function.Supplier;
 
-@Threads(8)
+@Threads(6)
 @State(Scope.Benchmark)
 public class BenchLazy {
     private Lazy<ArrayList<String>> listLazyAcq;
@@ -20,6 +21,8 @@ public class BenchLazy {
     public static void main(String[] args) throws RunnerException {
         Options opt = new OptionsBuilder()
                 .include(BenchLazy.class.getSimpleName())
+               // .measurementIterations(4)
+                //.forks(1)
                 .syncIterations(false)
                 .build();
         new Runner(opt).run();
