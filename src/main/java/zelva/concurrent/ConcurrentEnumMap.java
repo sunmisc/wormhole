@@ -34,7 +34,7 @@ import java.util.function.Function;
  * and scales well
  *
  * @since 9
- * @author JDIALIA
+ * @author ZelvaLea
  *
  * Type parameters:
  * <K> – the type of keys maintained by this map
