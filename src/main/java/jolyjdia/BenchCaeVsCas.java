@@ -9,7 +9,7 @@ import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 
 /* WTF???
-Benchmark          (val)   Mode  Cnt           Score           Error  Units
+Benchmark           Mode  Cnt           Score          Error  Units
 BenchCaeVsCas.cae  thrpt   25    51788738,954 ±  4603153,925  ops/s
 BenchCaeVsCas.cas  thrpt   25  1221298925,434 ± 23802252,623  ops/s
 */
@@ -17,7 +17,6 @@ BenchCaeVsCas.cas  thrpt   25  1221298925,434 ± 23802252,623  ops/s
 @Threads(6)
 @State(Scope.Benchmark)
 public class BenchCaeVsCas {
-    private volatile String lazy;
 
     public static void main(String[] args) throws RunnerException {
         Options opt = new OptionsBuilder()
@@ -27,6 +26,7 @@ public class BenchCaeVsCas {
         new Runner(opt).run();
     }
 
+    private volatile String lazy;
     @Benchmark
     public String cas() { // witness
         // weakCas?
