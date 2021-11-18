@@ -19,7 +19,7 @@ public class LoopRunner implements Runnable {
     }
 
     public void stop() {
-        STOP.setOpaque(this, false);
+        STOP.setOpaque(this, true);
     }
 
     private static final VarHandle STOP;

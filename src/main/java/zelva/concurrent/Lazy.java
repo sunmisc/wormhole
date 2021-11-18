@@ -6,22 +6,24 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 
 public class Lazy<V> {
-    private V value; // non volatile
+    private volatile V value; // non-volatile
     private final Supplier<? extends V> supplier;
 
     public Lazy(Supplier<? extends V> supplier) {
         this.supplier = supplier;
     }
+    @SuppressWarnings("unchecked")
     public V get() {
         return (V) VAL.getAcquire(this);
     }
 
+    @SuppressWarnings("unchecked")
     public V getOrLoad() {
         V val;
         if ((val = get()) == null) {
-            V witness = (V) VAL.compareAndExchange(this, null,
+            Object witness = VAL.compareAndExchange(this, null,
                     val = supplier.get());
-            return witness == null ? val : witness;
+            return witness == null ? val : (V) witness;
         }
         return val;
     }
