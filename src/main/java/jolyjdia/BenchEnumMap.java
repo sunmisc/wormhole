@@ -49,11 +49,14 @@ public class BenchEnumMap {
     }
 
 
-    @Benchmark public String putIfAbsentAsHash() {return hashMap.putIfAbsent(key, "Test-Fest");}
-    @Benchmark public String putIfAbsentAsEnum() {return enumMap.putIfAbsent(key, "Test-Fest");}
+/*    @Benchmark public String putIfAbsentAsHash() {return hashMap.putIfAbsent(key, "Test-Fest");}
+    @Benchmark public String putIfAbsentAsEnum() {return enumMap.putIfAbsent(key, "Test-Fest");}*/
 
-    @Benchmark public String putAsHash() {return hashMap.putIfAbsent(key, "Test-Fest");}
-    @Benchmark public String putAsEnum() {return enumMap.putIfAbsent(key, "Test-Fest");}
+    @Benchmark public String putAsHash() {return hashMap.put(key, "Test-Fest");}
+    @Benchmark public String putAsEnum() {return enumMap.put(key, "Test-Fest");}
+
+    @Benchmark public String removeAsHash() {return hashMap.remove(key);}
+    @Benchmark public String removeAsEnum() {return enumMap.remove(key);}
 
 /*    @Benchmark public String mergeAsHash() {return hashMap.merge(key, "Test-Fest", (k,v) -> "T");}
     @Benchmark public String mergeAsEnum() {return enumMap.merge(key, "Test-Fest", (k,v) -> "T");}
@@ -62,10 +65,8 @@ public class BenchEnumMap {
     @Benchmark public String computeAsEnum() {return enumMap.compute(key, (k,v) -> "F");}
 
     @Benchmark public String getAsHash() {return hashMap.get(key);}
-    @Benchmark public String getAsEnum() {return enumMap.get(key);}
+    @Benchmark public String getAsEnum() {return enumMap.get(key);}*/
 
-    @Benchmark public String removeAsHash() {return hashMap.remove(key);}
-    @Benchmark public String removeAsEnum() {return enumMap.remove(key);}*/
 
     public enum Letter {
         A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R,S,T,U,V,W,X,Y,Z
