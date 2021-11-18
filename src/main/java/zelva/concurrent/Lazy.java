@@ -6,7 +6,7 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 
 public class Lazy<V> {
-    private volatile V value; // non-volatile
+    private V value; // non-volatile
     private final Supplier<? extends V> supplier;
 
     public Lazy(Supplier<? extends V> supplier) {
