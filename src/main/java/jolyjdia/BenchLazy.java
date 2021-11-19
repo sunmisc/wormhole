@@ -19,8 +19,8 @@ public class BenchLazy {
     public static void main(String[] args) throws RunnerException {
         Options opt = new OptionsBuilder()
                 .include(BenchLazy.class.getSimpleName())
-               // .measurementIterations(4)
-                //.forks(1)
+                .measurementIterations(4)
+                .forks(1)
                 .syncIterations(false)
                 .build();
         new Runner(opt).run();

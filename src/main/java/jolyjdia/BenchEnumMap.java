@@ -60,19 +60,19 @@ BenchEnumMap.replaceAsHash               Z  thrpt    4    14844581,365 ±     55
     }
 
 
-    @Benchmark public String putIfAbsentAsHash() {return hashMap.putIfAbsent(key, "Test-Fest");}
+    /*@Benchmark public String putIfAbsentAsHash() {return hashMap.putIfAbsent(key, "Test-Fest");}
     @Benchmark public String putIfAbsentAsEnum() {return enumMap.putIfAbsent(key, "Test-Fest");}
 
     @Benchmark public String putAsHash() {return hashMap.put(key, "Test-Fest");}
     @Benchmark public String putAsEnum() {return enumMap.put(key, "Test-Fest");}
 
     @Benchmark public String removeAsHash() {return hashMap.remove(key);}
-    @Benchmark public String removeAsEnum() {return enumMap.remove(key);}
+    @Benchmark public String removeAsEnum() {return enumMap.remove(key);}*/
 
     @Benchmark public boolean removeValAsHash() {return hashMap.remove(key, "T");}
     @Benchmark public boolean removeValAsEnum() {return enumMap.remove(key, "T");}
 
-    @Benchmark public boolean replaceAsHash() {return hashMap.replace(key, "Q", "L");}
+    /*@Benchmark public boolean replaceAsHash() {return hashMap.replace(key, "Q", "L");}
     @Benchmark public boolean replaceAsEnum() {return enumMap.replace(key, "Q", "L");}
 
     @Benchmark public String mergeAsHash() {return hashMap.merge(key, "Test-Fest", (k,v) -> "T");}
@@ -91,7 +91,7 @@ BenchEnumMap.replaceAsHash               Z  thrpt    4    14844581,365 ±     55
     @Benchmark public String getAsEnum() {return enumMap.get(key);}
 
     @Benchmark public void clearAsHash() {hashMap.clear();}
-    @Benchmark public void clearAsEnum() {enumMap.clear();}
+    @Benchmark public void clearAsEnum() {enumMap.clear();}*/
 
 
     public enum Letter {

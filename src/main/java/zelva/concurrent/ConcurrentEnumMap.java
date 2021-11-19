@@ -89,6 +89,10 @@ public class ConcurrentEnumMap<K extends Enum<K>,V> extends AbstractMap<K,V>
     static <V> V tabAt(V[] tab, int i) {
         return (V) AA.getVolatile(tab, i);
     }
+    @SuppressWarnings("unchecked")
+    static <V> V tabRelaxAt(V[] tab, int i) {
+        return (V) AA.getAcquire(tab, i);
+    }
     static <V> boolean casTabAt(V[] tab, int i, V c, V v) {
         return AA.compareAndSet(tab, i, c, v);
     }
@@ -176,7 +180,7 @@ public class ConcurrentEnumMap<K extends Enum<K>,V> extends AbstractMap<K,V>
         V[] tab = table;
         for (int i = 0, len = tab.length; i < len; ++i) {
             Object prev;
-            if ((prev = AA.getAcquire(tab, i)) != null &&
+            if ((prev = tabRelaxAt(tab, i)) != null &&
                     casTabAt(tab, i, prev, null)) {
                 --delta;
             }
@@ -332,7 +336,7 @@ public class ConcurrentEnumMap<K extends Enum<K>,V> extends AbstractMap<K,V>
         if (isValidKey(key)) {
             int i = ((Enum<?>) key).ordinal();
             V[] tab = table;
-            if (AA.getAcquire(tab, i) == value &&
+            if (tabRelaxAt(tab, i) == value &&
                     casTabAt(tab, i, value, null)) {
                 addCount(-1);
                 return true;
@@ -345,7 +349,10 @@ public class ConcurrentEnumMap<K extends Enum<K>,V> extends AbstractMap<K,V>
     public boolean replace(K key, V oldValue, V newValue) {
         if (key == null || oldValue == null || newValue == null)
             throw new NullPointerException();
-        return casTabAt(table, key.ordinal(), oldValue, newValue);
+        int i = key.ordinal();
+        V[] tab = table;
+        return tabRelaxAt(tab, i) == oldValue &&
+                casTabAt(tab, i, oldValue, newValue);
     }
 
     @Override
@@ -545,8 +552,15 @@ public class ConcurrentEnumMap<K extends Enum<K>,V> extends AbstractMap<K,V>
 
         @Override
         public void remove() {
-            if (getAndSetAt(map.table, index, null) != null)
-                map.addCount(-1L);
+            V[] tab = map.table;
+            for (V prev;;) {
+                if ((prev = tabRelaxAt(tab, index)) == null)
+                    return;
+                else if (casTabAt(tab, index, prev, null)) {
+                    map.addCount(-1L);
+                    return;
+                }
+            }
         }
     }
 
@@ -596,12 +610,14 @@ public class ConcurrentEnumMap<K extends Enum<K>,V> extends AbstractMap<K,V>
     @Override
     public int hashCode() {
         int h = 0;
-        V[] tab = table;
-        for (int i = 0, len = tab.length; i < len; i++) {
-            V val;
-            if ((val = tabAt(tab, i)) == null)
-                continue;
-            h += keys[i].hashCode() ^ val.hashCode();
+        if (!isEmpty()) {
+            V[] tab = table;
+            for (int i = 0, len = tab.length; i < len; i++) {
+                V val;
+                if ((val = tabAt(tab, i)) == null)
+                    continue;
+                h += keys[i].hashCode() ^ val.hashCode();
+            }
         }
         return h;
     }
