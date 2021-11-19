@@ -5,38 +5,40 @@ import org.openjdk.jmh.runner.Runner;
 import org.openjdk.jmh.runner.RunnerException;
 import org.openjdk.jmh.runner.options.Options;
 import org.openjdk.jmh.runner.options.OptionsBuilder;
+import zelva.concurrent.AtomicRef;
+
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 
-/* WTF???
-Benchmark           Mode  Cnt           Score          Error  Units
-BenchCaeVsCas.cae  thrpt   25    51788738,954 ±  4603153,925  ops/s
-BenchCaeVsCas.cas  thrpt   25  1221298925,434 ± 23802252,623  ops/s
+/*
+Benchmark            Mode  Cnt           Score          Error  Units
+BenchCaeVsCas.cae   thrpt   25    51436065,789 ±  4435443,091  ops/s
+BenchCaeVsCas.ttas  thrpt   25  1044049933,794 ± 52089863,800  ops/s
 */
 
 @Threads(6)
 @State(Scope.Benchmark)
-public class BenchCaeVsCas {
+public class BenchCAE_Vs_TACAE {
 
     public static void main(String[] args) throws RunnerException {
         Options opt = new OptionsBuilder()
-                .include(BenchCaeVsCas.class.getSimpleName())
+                .include(BenchCAE_Vs_TACAE.class.getSimpleName())
                 .syncIterations(false)
                 .build();
         new Runner(opt).run();
     }
 
-    private volatile String lazy;
+    private String lazy;
+    private AtomicRef<String> ref;
+
+    @Setup
+    public void prepare() {
+        ref = new AtomicRef<>();
+    }
+
     @Benchmark
-    public String cas() { // witness
-        // weakCas?
-        for (String x;;) {
-            if ((x = lazy) != null) {
-                return x;
-            } else if (VAL.compareAndSet(this, null, "Test-Fest")) {
-                return null;
-            }
-        }
+    public String ttas() { // witness
+        return ref.testAndCompareAndExchange(null, "Test-Fest");
     }
     @Benchmark
     public String cae() {
@@ -46,7 +48,7 @@ public class BenchCaeVsCas {
     static {
         try {
             MethodHandles.Lookup l = MethodHandles.lookup();
-            VAL = l.findVarHandle(BenchCaeVsCas.class, "lazy", String.class);
+            VAL = l.findVarHandle(BenchCAE_Vs_TACAE.class, "lazy", String.class);
         } catch (ReflectiveOperationException e) {
             throw new ExceptionInInitializerError(e);
         }
