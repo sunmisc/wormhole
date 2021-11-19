@@ -3,10 +3,7 @@ package zelva.concurrent;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.*;
-import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.ForkJoinPool;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.atomic.LongAdder;
 import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
@@ -40,6 +37,7 @@ import java.util.function.Function;
  * <K> – the type of keys maintained by this map
  * <V> – the type of mapped values
  */
+// НЕ ИСПОЛЬЗОВАТЬ, ЕЩЕ НЕ ПРОТЕСТИРОВАНО!!!
 public class ConcurrentEnumMap<K extends Enum<K>,V> extends AbstractMap<K,V>
         implements ConcurrentMap<K,V> {
     // An object of the class for the enumeration type of all the keys of this map
@@ -76,7 +74,7 @@ public class ConcurrentEnumMap<K extends Enum<K>,V> extends AbstractMap<K,V>
             this.keyType = keys[0].getDeclaringClass();
             this.table = (V[]) new Object[keyType.getEnumConstants().length];
             this.counter = new LongAdder();
-            int delta = 0;
+            long delta = 0;
             for (Map.Entry<? extends K, ? extends V> e : m.entrySet()) {
                 Enum<?> key = e.getKey(); Object val = e.getValue();
                 if (key.getDeclaringClass() != keyType)
@@ -126,22 +124,17 @@ public class ConcurrentEnumMap<K extends Enum<K>,V> extends AbstractMap<K,V>
         if (key == null || value == null)
             throw new NullPointerException();
         int i = key.ordinal();
-        V[] tab = table;
-        for (V prev;;) {
-            if (weakCasTabAt(tab, i,
-                    prev = tabAt(tab, i), value)) {
-                if (prev == null)
-                    addCount(1L);
-            }
-            return prev;
-        }
+        final V prev = getAndSetAt(table, i, value);
+        if (prev == null)
+            addCount(1L);
+        return prev;
     }
 
     @Override
     public void putAll(Map<? extends K, ? extends V> m) {
         if (m.isEmpty())
             return;
-        int delta = 0;
+        long delta = 0;
         if (m instanceof ConcurrentEnumMap<?, ?> em) {
             if (em.keyType != keyType)
                 throw new ClassCastException(em.keyType + " not equal to " + keyType);
@@ -178,10 +171,13 @@ public class ConcurrentEnumMap<K extends Enum<K>,V> extends AbstractMap<K,V>
 
     @Override
     public void clear() {
-        int delta = 0;
+        if (isEmpty()) return;
+        long delta = 0;
         V[] tab = table;
         for (int i = 0, len = tab.length; i < len; ++i) {
-            if (getAndSetAt(tab, i, null) != null) {
+            Object prev;
+            if ((prev = AA.getAcquire(tab, i)) != null &&
+                    casTabAt(tab, i, prev, null)) {
                 --delta;
             }
         }
@@ -193,15 +189,13 @@ public class ConcurrentEnumMap<K extends Enum<K>,V> extends AbstractMap<K,V>
         if (isValidKey(key)) {
             int i = ((Enum<?>) key).ordinal();
             final V[] tab = table;
-            for (V prev;;) {
-                if ((prev = tabAt(tab, i)) == null)
+            for (V prev, p;;) {
+                if ((prev = tabAt(tab, i)) == null ||
+                        (p = caeTabAt(tab, i, prev, null)) == null) {
                     return null;
-                V p = caeTabAt(tab, i, prev, null);
-                if (p == null) {
-                    return null;
-                } else if (p == prev) {
+                } else if (prev == p) { // true CAE
                     addCount(-1L);
-                    return prev;
+                    return p;
                 }
             }
         }
@@ -244,15 +238,11 @@ public class ConcurrentEnumMap<K extends Enum<K>,V> extends AbstractMap<K,V>
         if (key == null || value == null)
             throw new NullPointerException();
         int i = key.ordinal();
-        V[] tab = table;
-        for (V prev;;) {
-            if ((prev = tabAt(tab, i)) != null) {
-                return prev;
-            } else if (weakCasTabAt(tab, i, null, value)) {
-                addCount(1L);
-            }
-            return null;
-        }
+        V[] tab = table; V p;
+        if ((p = tabAt(tab, i)) == null &&
+                (p = caeTabAt(tab, i, null, value)) == null)
+            addCount(1L);
+        return p;
     }
 
     @Override
@@ -341,7 +331,9 @@ public class ConcurrentEnumMap<K extends Enum<K>,V> extends AbstractMap<K,V>
             throw new NullPointerException();
         if (isValidKey(key)) {
             int i = ((Enum<?>) key).ordinal();
-            if (casTabAt(table, i, value, null)) {
+            V[] tab = table;
+            if (AA.getAcquire(tab, i) == value &&
+                    casTabAt(tab, i, value, null)) {
                 addCount(-1);
                 return true;
             }
