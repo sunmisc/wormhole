@@ -89,10 +89,6 @@ public class ConcurrentEnumMap<K extends Enum<K>,V> extends AbstractMap<K,V>
     static <V> V tabAt(V[] tab, int i) {
         return (V) AA.getVolatile(tab, i);
     }
-    @SuppressWarnings("unchecked")
-    static <V> V tabRelaxAt(V[] tab, int i) {
-        return (V) AA.getAcquire(tab, i);
-    }
     static <V> boolean casTabAt(V[] tab, int i, V c, V v) {
         return AA.compareAndSet(tab, i, c, v);
     }
@@ -180,7 +176,7 @@ public class ConcurrentEnumMap<K extends Enum<K>,V> extends AbstractMap<K,V>
         V[] tab = table;
         for (int i = 0, len = tab.length; i < len; ++i) {
             Object prev;
-            if ((prev = tabRelaxAt(tab, i)) != null &&
+            if ((prev = tabAt(tab, i)) != null &&
                     casTabAt(tab, i, prev, null)) {
                 --delta;
             }
@@ -336,7 +332,7 @@ public class ConcurrentEnumMap<K extends Enum<K>,V> extends AbstractMap<K,V>
         if (isValidKey(key)) {
             int i = ((Enum<?>) key).ordinal();
             V[] tab = table;
-            if (tabRelaxAt(tab, i) == value &&
+            if (tabAt(tab, i) == value &&
                     casTabAt(tab, i, value, null)) {
                 addCount(-1);
                 return true;
@@ -351,7 +347,7 @@ public class ConcurrentEnumMap<K extends Enum<K>,V> extends AbstractMap<K,V>
             throw new NullPointerException();
         int i = key.ordinal();
         V[] tab = table;
-        return tabRelaxAt(tab, i) == oldValue &&
+        return tabAt(tab, i) == oldValue &&
                 casTabAt(tab, i, oldValue, newValue);
     }
 
@@ -554,7 +550,7 @@ public class ConcurrentEnumMap<K extends Enum<K>,V> extends AbstractMap<K,V>
         public void remove() {
             V[] tab = map.table;
             for (V prev;;) {
-                if ((prev = tabRelaxAt(tab, index)) == null)
+                if ((prev = tabAt(tab, index)) == null)
                     return;
                 else if (casTabAt(tab, index, prev, null)) {
                     map.addCount(-1L);
