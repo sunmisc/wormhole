@@ -14,4 +14,8 @@ public class AtomicRef<V> extends AtomicReference<V> {
         return ((val = get()) != expectedValue)
                 ? val : compareAndExchange(val, newVal);
     }
+    public boolean testAndCompareAndSet(V expectedValue, V newVal) {
+        return expectedValue == get() &&
+                compareAndSet(expectedValue, newVal);
+    }
 }

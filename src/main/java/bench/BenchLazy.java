@@ -1,4 +1,4 @@
-package jolyjdia;
+package bench;
 
 import org.openjdk.jmh.annotations.*;
 import org.openjdk.jmh.runner.Runner;
@@ -30,12 +30,12 @@ public class BenchLazy {
     public void prepare() {
         listLazyAcq = new Lazy<>(() -> {
             ArrayList<String> list = new ArrayList<>();
-            list.add("dasd");
+            list.add("Fest");
             return list;
         });
         listLazyLock = new LazyDoubleCheckedLocking<>(() -> {
             ArrayList<String> list = new ArrayList<>();
-            list.add("dasd");
+            list.add("Fest");
             return list;
         });
     }
