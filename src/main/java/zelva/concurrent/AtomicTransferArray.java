@@ -74,19 +74,20 @@ public class AtomicTransferArray<E> {
         }
     }
 
-    public Node<E>[] resize(int size) {
+    public void resize(int size) {
         @SuppressWarnings("unchecked")
         Node<E>[] na = (Node<E>[]) Array.newInstance(Node.class, size);
-        return transfer(array, na);
+        transfer(array, na);
     }
 
     private Node<E>[] transfer(Node<E>[] prev, Node<E>[] next) {
+        int p = prev.length, n = next.length;
+        if (p == n) return prev;
         for (Node<E> f;;) {
             if (TRF_ARR.weakCompareAndSet(this, null, next)) {
                 final TransferNode<E> tfn = new TransferNode<>(next);
-                for (int i = 0,
-                     n = Math.min(prev.length, next.length);
-                     i < n; ++i) {
+                n = Math.min(p, n);
+                for (int i = 0; i < n; ++i) {
                     if ((f = getAndSet(prev, i, tfn)) == null) {
                         continue;
                     } else if (f instanceof TransferNode<E> t) {

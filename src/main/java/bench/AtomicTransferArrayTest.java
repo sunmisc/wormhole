@@ -28,7 +28,6 @@ public class AtomicTransferArrayTest {
     public static class JcstressTest extends AtomicTrasformerArray {
         @Actor
         public void actor1() {
-            resize(4);
             set(0);
             resize(4);
             set(2);
@@ -37,7 +36,6 @@ public class AtomicTransferArrayTest {
 
         @Actor
         public void actor2() {
-            resize(4);
             set(1);
             resize(4);
             set(3);
