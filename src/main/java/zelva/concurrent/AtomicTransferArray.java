@@ -2,6 +2,7 @@ package zelva.concurrent;
 
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
+import java.lang.reflect.Array;
 
 /**
  * Demo Array Atomic Resize
@@ -19,30 +20,67 @@ import java.lang.invoke.VarHandle;
  * @param <E>
  */
 public class AtomicTransferArray<E> {
-    public volatile Node<E>[] array = new Node[1];
+    private static final int INITIAL_CAPACITY = 16;
+    volatile Node<E>[] array;
     volatile Node<E>[] transfer;
 
-    public AtomicTransferArray(Node<E>[] array) {
-        this.array = array;
+    @SuppressWarnings("unchecked")
+    public AtomicTransferArray(int size) {
+        this.array = (Node<E>[]) Array.newInstance(Node.class, size);
     }
-    public AtomicTransferArray() {}
+    public AtomicTransferArray() {
+        this(INITIAL_CAPACITY);
+    }
 
-    public Node<E>[] set(E element, int i) {
+    public boolean compareAndSet(int i, E c, E v) {
+        for (Node<E>[] arr = array;;) {
+            Node<E> f; E e;
+            if ((e = (f = arrTab(arr, i)).element) != c) {
+                return false;
+            } else if (f instanceof TransferNode<E> t) {
+                arr = t.transfer;
+            } else {
+                return VAL.compareAndSet(f, e, v);
+            }
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    public E set(E element, int i) {
         Node<E>[] arr = array;
         for (Node<E> f;;) {
             if ((f = arrTab(arr, i)) == null) {
                 if (casArrAt(arr, i, null, new Node<>(element))) {
-                    return arr;
+                    return null;
                 }
             } else if (f instanceof TransferNode<E> t) {
                 arr = t.transfer;
             } else {
-                f.element = element;
-                return arr;
+                return (E) VAL.getAndSet(f, element);
             }
         }
     }
-    public void transfer(Node<E>[] prev, Node<E>[] next) {
+
+    public E get(int i) {
+        for (Node<E>[] arr = array;;) {
+            Node<E> f = arrTab(arr, i);
+            if (f == null) {
+                return null;
+            } else if (f instanceof TransferNode<E> t) {
+                arr = t.transfer;
+            } else {
+                return f.element;
+            }
+        }
+    }
+
+    public Node<E>[] resize(int size) {
+        @SuppressWarnings("unchecked")
+        Node<E>[] na = (Node<E>[]) Array.newInstance(Node.class, size);
+        return transfer(array, na);
+    }
+
+    private Node<E>[] transfer(Node<E>[] prev, Node<E>[] next) {
         int n = next.length;
         for (Node<E>[] na;;) {
             if (((na = transfer) == null || na.length != n) &&
@@ -59,43 +97,44 @@ public class AtomicTransferArray<E> {
                     }
                     casArrAt(next, i, null, f);
                 }
-                transfer = null;
                 if (prev != next)
                     ARR.compareAndSet(this, prev, next);
-                return;
+                transfer = null;
+                return next;
             }
         }
     }
-
+    @SuppressWarnings("unchecked")
     static <E> Node<E> arrTab(Node<E>[] arr, int i) {
-        return (Node<E>) AA.getVolatile(arr, i); // acquire
+        return (Node<E>) AA.getAcquire(arr, i);
     }
     static <E> boolean casArrAt(Node<E>[] arr, int i, Node<E> c, Node<E> v) {
         return AA.compareAndSet(arr, i, c, v);
     }
+    @SuppressWarnings("unchecked")
     static <E> Node<E> getAndSet(Node<E>[] arr, int i, Node<E> v) {
         return (Node<E>) AA.getAndSet(arr, i, v);
     }
 
     @Override
     public String toString() {
-        Node<E>[] arr = array;
         StringBuilder b = new StringBuilder();
         b.append('[');
-        for (int i = 0; ;) {
+        int i = 0;
+        for (Node<E>[] arr = array;;) {
             Node<E> f = arrTab(arr, i);
             if (f instanceof TransferNode<E> t) {
                 arr = t.transfer;
             } else {
                 b.append(f);
-                if (arr.length - 1 == i++)
+                if (++i >= arr.length)
                     return b.append(']').toString();
                 b.append(", ");
             }
         }
     }
 
-    public static class Node<E> {
+    private static class Node<E> {
         volatile E element;
 
         Node(E element) {
@@ -121,12 +160,13 @@ public class AtomicTransferArray<E> {
     }
     private static final VarHandle AA
             = MethodHandles.arrayElementVarHandle(Object[].class);
-    private static final VarHandle ARR, TRF_ARR;
+    private static final VarHandle ARR, TRF_ARR, VAL;
     static {
         try {
             MethodHandles.Lookup l = MethodHandles.lookup();
             ARR = l.findVarHandle(AtomicTransferArray.class, "array", Node[].class);
             TRF_ARR = l.findVarHandle(AtomicTransferArray.class, "transfer", Node[].class);
+            VAL = l.findVarHandle(Node.class, "element", Object.class);
         } catch (ReflectiveOperationException e) {
             throw new ExceptionInInitializerError(e);
         }
