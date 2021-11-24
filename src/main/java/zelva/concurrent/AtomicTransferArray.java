@@ -63,8 +63,8 @@ public class AtomicTransferArray<E> {
 
     public E get(int i) {
         for (Node<E>[] arr = array;;) {
-            Node<E> f = arrTab(arr, i);
-            if (f == null) {
+            Node<E> f;
+            if ((f = arrTab(arr, i)) == null) {
                 return null;
             } else if (f instanceof TransferNode<E> t) {
                 arr = t.transfer;
@@ -81,15 +81,13 @@ public class AtomicTransferArray<E> {
     }
 
     private Node<E>[] transfer(Node<E>[] prev, Node<E>[] next) {
-        int n = next.length;
-        for (Node<E>[] na;;) {
-            if (((na = transfer) == null || na.length != n) &&
-                    TRF_ARR.weakCompareAndSet(this, na, next)) {
+        for (Node<E> f;;) {
+            if (TRF_ARR.weakCompareAndSet(this, null, next)) {
                 final TransferNode<E> tfn = new TransferNode<>(next);
-                int m = Math.min(prev.length, n);
-                for (int i = 0; i < m; i++) {
-                    Node<E> f = getAndSet(prev, i, tfn);
-                    if (f == null) {
+                for (int i = 0,
+                     n = Math.min(prev.length, next.length);
+                     i < n; ++i) {
+                    if ((f = getAndSet(prev, i, tfn)) == null) {
                         continue;
                     } else if (f instanceof TransferNode<E> t) {
                         next = t.transfer;
@@ -97,9 +95,8 @@ public class AtomicTransferArray<E> {
                     }
                     casArrAt(next, i, null, f);
                 }
-                if (prev != next)
-                    ARR.compareAndSet(this, prev, next);
                 transfer = null;
+                ARR.compareAndSet(this, prev, next);
                 return next;
             }
         }
