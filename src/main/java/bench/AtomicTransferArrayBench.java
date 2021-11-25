@@ -8,6 +8,7 @@ import org.openjdk.jmh.runner.options.OptionsBuilder;
 import zelva.concurrent.AtomicTransferArray;
 
 import java.util.Arrays;
+import java.util.concurrent.ThreadLocalRandom;
 
 /*
 AtomicTransferArrayBench.setAndResizeAtomic   2224  thrpt    4  19649842,037 ± 202856,969  ops/s
@@ -40,7 +41,7 @@ public class AtomicTransferArrayBench {
     @Benchmark
     public Integer setAndResizeAtomic() {
         Integer i = myArray.set(key, 1);
-        myArray.resize(4);
+        myArray.resize(ThreadLocalRandom.current().nextInt(2, 8));
         return i;
     }
     @Benchmark
@@ -48,7 +49,7 @@ public class AtomicTransferArrayBench {
         synchronized (defArray) {
             Integer i = defArray[1];
             defArray[1] = key;
-            defArray = Arrays.copyOf(defArray, 4);
+            defArray = Arrays.copyOf(defArray, ThreadLocalRandom.current().nextInt(2, 8));
             return i;
         }
     }

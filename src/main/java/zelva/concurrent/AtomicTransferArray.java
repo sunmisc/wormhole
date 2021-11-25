@@ -26,7 +26,8 @@ public class AtomicTransferArray<E> {
 
     @SuppressWarnings("unchecked")
     public AtomicTransferArray(int size) {
-        this.array = (Node<E>[]) Array.newInstance(Node.class, size);
+        this.array = (Node<E>[]) Array.newInstance(Node.class,
+                Math.max(1, size));
     }
     public AtomicTransferArray() {
         this(INITIAL_CAPACITY);
@@ -35,7 +36,7 @@ public class AtomicTransferArray<E> {
     public boolean compareAndSet(int i, E c, E v) {
         for (Node<E>[] arr = array;;) {
             Node<E> f; E e;
-            if ((e = (f = arrTab(arr, i)).element) != c) {
+            if ((e = (f = arrayAt(arr, i)).element) != c) {
                 return false;
             } else if (f instanceof TransferNode<E> t) {
                 arr = t.transfer;
@@ -46,17 +47,29 @@ public class AtomicTransferArray<E> {
     }
 
     @SuppressWarnings("unchecked")
-    public E set(E element, int i) {
+    public E set(int i, E element) {
         Node<E>[] arr = array;
+        boolean rem = element == null;
         for (Node<E> f;;) {
-            if ((f = arrTab(arr, i)) == null) {
-                if (casArrAt(arr, i, null, new Node<>(element))) {
+            if ((f = arrayAt(arr, i)) == null) {
+                if (rem || weakCasArrayAt(arr, i, null,
+                        new Node<>(element))) {
                     return null;
                 }
             } else if (f instanceof TransferNode<E> t) {
                 arr = t.transfer;
             } else {
-                return (E) VAL.getAndSet(f, element);
+                if (rem) {
+                    if (weakCasArrayAt(arr, i, f, null)) {
+                        return null;
+                    }
+                } else {
+                    E e;
+                    if (element != (e = f.element)) {
+                        f.element = element;
+                    }
+                    return e;
+                }
             }
         }
     }
@@ -64,7 +77,7 @@ public class AtomicTransferArray<E> {
     public E get(int i) {
         for (Node<E>[] arr = array;;) {
             Node<E> f;
-            if ((f = arrTab(arr, i)) == null) {
+            if ((f = arrayAt(arr, i)) == null) {
                 return null;
             } else if (f instanceof TransferNode<E> t) {
                 arr = t.transfer;
@@ -84,17 +97,17 @@ public class AtomicTransferArray<E> {
         int p = prev.length, n = next.length;
         if (p == n) return prev;
         for (Node<E> f;;) {
-            if (TRF_ARR.weakCompareAndSet(this, null, next)) {
+            if (transfer == null &&
+                    TRF_ARR.weakCompareAndSet(this, null, next)) {
                 final TransferNode<E> tfn = new TransferNode<>(next);
-                n = Math.min(p, n);
-                for (int i = 0; i < n; ++i) {
-                    if ((f = getAndSet(prev, i, tfn)) == null) {
+                for (int i = 0, s = Math.min(p, n); i < s; ++i) {
+                    if ((f = getAndSetAt(prev, i, tfn)) == null) {
                         continue;
                     } else if (f instanceof TransferNode<E> t) {
                         next = t.transfer;
                         break;
                     }
-                    casArrAt(next, i, null, f);
+                    replaceNull(next, i, f);
                 }
                 transfer = null;
                 ARR.compareAndSet(this, prev, next);
@@ -103,31 +116,38 @@ public class AtomicTransferArray<E> {
         }
     }
     @SuppressWarnings("unchecked")
-    static <E> Node<E> arrTab(Node<E>[] arr, int i) {
+    static <E> Node<E> arrayAt(Node<E>[] arr, int i) {
         return (Node<E>) AA.getAcquire(arr, i);
     }
-    static <E> boolean casArrAt(Node<E>[] arr, int i, Node<E> c, Node<E> v) {
-        return AA.compareAndSet(arr, i, c, v);
+    static <E> void replaceNull(Node<E>[] arr, int i, Node<E> v) {
+        AA.compareAndSet(arr, i, null, v);
+    }
+    static <E> boolean weakCasArrayAt(Node<E>[] arr, int i, Node<E> c, Node<E> v) {
+        return AA.weakCompareAndSet(arr, i, c, v);
     }
     @SuppressWarnings("unchecked")
-    static <E> Node<E> getAndSet(Node<E>[] arr, int i, Node<E> v) {
+    static <E> Node<E> getAndSetAt(Node<E>[] arr, int i, Node<E> v) {
         return (Node<E>) AA.getAndSet(arr, i, v);
+    }
+
+    public int size() {
+        return array.length;
     }
 
     @Override
     public String toString() {
-        StringBuilder b = new StringBuilder();
-        b.append('[');
+        StringBuilder sb = new StringBuilder();
+        sb.append('[');
         int i = 0;
         for (Node<E>[] arr = array;;) {
-            Node<E> f = arrTab(arr, i);
+            Node<E> f = arrayAt(arr, i);
             if (f instanceof TransferNode<E> t) {
                 arr = t.transfer;
             } else {
-                b.append(f);
+                sb.append(f);
                 if (++i >= arr.length)
-                    return b.append(']').toString();
-                b.append(", ");
+                    return sb.append(']').toString();
+                sb.append(", ");
             }
         }
     }
@@ -140,7 +160,8 @@ public class AtomicTransferArray<E> {
         }
         @Override
         public String toString() {
-            return String.valueOf(element);
+            E e = element;
+            return e == null ? "EmptyNode" : e.toString();
         }
     }
 
