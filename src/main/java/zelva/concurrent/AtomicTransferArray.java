@@ -13,13 +13,17 @@ import java.lang.reflect.Array;
  * один за другим
  * для удобной модификации используется Node с волатильным значением
  *
- * Вот такая шиза пришла в голову дауну
- * Реализация пока что не работает и просто демонстрирует идею
- *
  * @author ZelvaLea
  * @param <E>
  */
 public class AtomicTransferArray<E> {
+    /*
+     *  [T] [1] [2] [3] [4] [5] [6] [7] [8] [9]  |  OLD ARRAY
+     *   ^   ^   ^   ^   ^   ^   ^   ^   ^   ^
+     *   v   v   v   v   v   v   v   v   v   v
+     *  [0]>[N]>[N]>[N]>[N]>[N]>[N]>[N]>[N]>[N]  |  NEW ARRAY
+     *
+     */
     private static final int INITIAL_CAPACITY = 16;
     volatile Node<E>[] array;
     volatile Node<E>[] transfer;
