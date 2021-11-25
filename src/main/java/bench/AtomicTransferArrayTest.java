@@ -15,6 +15,10 @@ public class AtomicTransferArrayTest {
 
     public static class AtomicTrasformerArray extends AtomicTransferArray<Integer> {
 
+        public AtomicTrasformerArray() {
+            super(2);
+        }
+
         public Integer set(int i) {
             return set(i, i);
         }
@@ -23,7 +27,7 @@ public class AtomicTransferArrayTest {
         }
     }
     @JCStressTest
-   // @Outcome(id = "[0, 1, 2, 3]", expect = ACCEPTABLE, desc = "Boring")
+    // @Outcome(id = "[0, 1, 2, 3]", expect = ACCEPTABLE, desc = "Boring")
     @State
     public static class JcstressTest extends AtomicTrasformerArray {
         @Actor
