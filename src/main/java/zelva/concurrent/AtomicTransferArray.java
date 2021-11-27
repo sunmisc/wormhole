@@ -3,6 +3,7 @@ package zelva.concurrent;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.lang.reflect.Array;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Demo Array Atomic Resize
@@ -50,7 +51,6 @@ public class AtomicTransferArray<E> {
         }
     }
 
-    @SuppressWarnings("unchecked")
     public E set(int i, E element) {
         Node<E>[] arr = array;
         boolean rem = element == null;
@@ -98,30 +98,33 @@ public class AtomicTransferArray<E> {
     }
 
     private Node<E>[] transfer(Node<E>[] prev, Node<E>[] next) {
+        final TransferNode<E> tfn = new TransferNode<>(next);
         int p = prev.length, n = next.length;
-        if (p == n) return prev;
-        for (Node<E> f;;) {
-            if (transfer == null &&
-                    TRF_ARR.weakCompareAndSet(this, null, next)) {
-                final TransferNode<E> tfn = new TransferNode<>(next);
-                for (int i = 0, s = Math.min(p, n); i < s; ++i) {
-                    if ((f = getAndSetAt(prev, i, tfn)) == null) {
-                        continue;
-                    } else if (f instanceof TransferNode<E> t) {
+        if (p == n)
+            return null;
+        outer: for (int i = Math.min(p, n)-1; i >= 0; i--) {
+            for (Node<E> f;;) {
+                if ((f = arrayAt(prev, i)) != null) {
+                    if (f instanceof TransferNode<E> t) {
                         next = t.transfer;
+                        break outer;
+                    } else if (weakCasArrayAt(prev, i, f, tfn)) {
+                        setArrayAt(next, i, f);
+                        // replaceNull(next, i, f);
                         break;
                     }
-                    replaceNull(next, i, f);
                 }
-                transfer = null;
-                ARR.compareAndSet(this, prev, next);
-                return next;
             }
         }
+        array = next;
+        return next;
     }
     @SuppressWarnings("unchecked")
     static <E> Node<E> arrayAt(Node<E>[] arr, int i) {
         return (Node<E>) AA.getAcquire(arr, i);
+    }
+    static <E> void setArrayAt(Node<E>[] arr, int i, Node<E> v) {
+        AA.setRelease(arr, i, v);
     }
     static <E> void replaceNull(Node<E>[] arr, int i, Node<E> v) {
         AA.compareAndSet(arr, i, null, v);

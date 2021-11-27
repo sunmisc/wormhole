@@ -13,15 +13,12 @@ public class AtomicTransferArrayTest {
         Main.main(args);
     }
 
-    public static class AtomicTrasformerArray extends AtomicTransferArray<Integer> {
+    public static class AtomicTrasformerArray extends AtomicTransferArray<String> {
 
         public AtomicTrasformerArray() {
             super(2);
         }
 
-        public Integer set(int i) {
-            return set(i, i);
-        }
         public String getResult() {
             return super.toString();
         }
@@ -32,17 +29,18 @@ public class AtomicTransferArrayTest {
     public static class JcstressTest extends AtomicTrasformerArray {
         @Actor
         public void actor1() {
-            set(0);
+            set(0, "T");
             resize(4);
-            set(2);
+            set(2, "V");
             resize(4);
         }
 
         @Actor
         public void actor2() {
-            set(1);
+            set(1, "L");
             resize(4);
-            set(3);
+            set(2, null);
+            set(3, "R");
             resize(4);
         }
         @Arbiter
