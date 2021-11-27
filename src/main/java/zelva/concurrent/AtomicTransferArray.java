@@ -3,7 +3,6 @@ package zelva.concurrent;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.lang.reflect.Array;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Demo Array Atomic Resize
@@ -27,7 +26,6 @@ public class AtomicTransferArray<E> {
      */
     private static final int INITIAL_CAPACITY = 16;
     volatile Node<E>[] array;
-    volatile Node<E>[] transfer;
 
     @SuppressWarnings("unchecked")
     public AtomicTransferArray(int size) {
@@ -52,27 +50,24 @@ public class AtomicTransferArray<E> {
     }
 
     public E set(int i, E element) {
+        final boolean remove = element == null;
         Node<E>[] arr = array;
-        boolean rem = element == null;
         for (Node<E> f;;) {
             if ((f = arrayAt(arr, i)) == null) {
-                if (rem || weakCasArrayAt(arr, i, null,
+                if (remove || weakCasArrayAt(arr, i, null,
                         new Node<>(element))) {
                     return null;
                 }
             } else if (f instanceof TransferNode<E> t) {
                 arr = t.transfer;
             } else {
-                if (rem) {
+                if (remove) {
                     if (weakCasArrayAt(arr, i, f, null)) {
                         return null;
                     }
                 } else {
-                    E e;
-                    if (element != (e = f.element)) {
-                        f.element = element;
-                    }
-                    return e;
+                    E e = f.element;
+                    return element != e ? f.element = element : e;
                 }
             }
         }
@@ -100,24 +95,24 @@ public class AtomicTransferArray<E> {
     private Node<E>[] transfer(Node<E>[] prev, Node<E>[] next) {
         final TransferNode<E> tfn = new TransferNode<>(next);
         int p = prev.length, n = next.length;
-        if (p == n)
-            return null;
-        outer: for (int i = Math.min(p, n)-1; i >= 0; i--) {
-            for (Node<E> f;;) {
-                if ((f = arrayAt(prev, i)) != null) {
-                    if (f instanceof TransferNode<E> t) {
-                        next = t.transfer;
-                        break outer;
-                    } else if (weakCasArrayAt(prev, i, f, tfn)) {
-                        setArrayAt(next, i, f);
-                        // replaceNull(next, i, f);
-                        break;
+        if (p != n) {
+            outer: for (int i = Math.min(p, n) - 1; i >= 0; i--) {
+                for (Node<E> f;;) {
+                    if ((f = arrayAt(prev, i)) != null) {
+                        if (f instanceof TransferNode<E> t) {
+                            next = t.transfer;
+                            break outer;
+                        } else if (weakCasArrayAt(prev, i, f, tfn)) {
+                            setArrayAt(next, i, f);
+                            // replaceNull(next, i, f);
+                            break;
+                        }
                     }
                 }
             }
+            return array = next;
         }
-        array = next;
-        return next;
+        return prev;
     }
     @SuppressWarnings("unchecked")
     static <E> Node<E> arrayAt(Node<E>[] arr, int i) {
@@ -186,12 +181,10 @@ public class AtomicTransferArray<E> {
     }
     private static final VarHandle AA
             = MethodHandles.arrayElementVarHandle(Object[].class);
-    private static final VarHandle ARR, TRF_ARR, VAL;
+    private static final VarHandle VAL;
     static {
         try {
             MethodHandles.Lookup l = MethodHandles.lookup();
-            ARR = l.findVarHandle(AtomicTransferArray.class, "array", Node[].class);
-            TRF_ARR = l.findVarHandle(AtomicTransferArray.class, "transfer", Node[].class);
             VAL = l.findVarHandle(Node.class, "element", Object.class);
         } catch (ReflectiveOperationException e) {
             throw new ExceptionInInitializerError(e);
