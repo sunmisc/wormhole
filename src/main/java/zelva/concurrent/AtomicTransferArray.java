@@ -3,6 +3,8 @@ package zelva.concurrent;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.lang.reflect.Array;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Demo Array Atomic Resize
@@ -97,37 +99,43 @@ public class AtomicTransferArray<E> {
         transfer(array, na);
     }
 
-    private Node<E>[] transfer(Node<E>[] prev, Node<E>[] next) {
-        int p = prev.length, n = next.length;
-        if (p == n) return prev;
-        for (Node<E> f;;) {
-            if (transfer == null &&
-                    TRF_ARR.weakCompareAndSet(this, null, next)) {
-                final TransferNode<E> tfn = new TransferNode<>(next);
-                for (int i = 0, s = Math.min(p, n); i < s; ++i) {
-                    if ((f = getAndSetAt(prev, i, tfn)) == null) {
-                        continue;
-                    } else if (f instanceof TransferNode<E> t) {
-                        next = t.transfer;
-                        break;
-                    }
-                    replaceNull(next, i, f);
-                }
-                transfer = null;
-                ARR.compareAndSet(this, prev, next);
-                return next;
+    private void transfer(Node<E>[] prev, Node<E>[] next) {
+        final TransferNode<E> tfn = new TransferNode<>(next);
+        int i = 0, s = prev.length;
+        for (Node<E> f; i < 4;) { // test
+            Node<E>[] arr = prev;
+            while ((f = arrayAt(arr, i)) instanceof TransferNode<E> t) {
+                arr = t.transfer;
+            }
+            if (f != null)
+                setAt(next, i, f);
+            if (casArrayAt(arr, i, f, tfn)) {
+                i++;
             }
         }
+        array = next;
+    }
+    private Node<E>[] tryLast(Node<E>[] arr, int i) {
+        while (arrayAt(arr, i) instanceof TransferNode<E> t) {
+            arr = t.transfer;
+        }
+        return arr;
     }
     @SuppressWarnings("unchecked")
     static <E> Node<E> arrayAt(Node<E>[] arr, int i) {
         return (Node<E>) AA.getAcquire(arr, i);
+    }
+    static <E> void setAt(Node<E>[] arr, int i, Node<E> v) {
+        AA.setRelease(arr, i, v);
     }
     static <E> void replaceNull(Node<E>[] arr, int i, Node<E> v) {
         AA.compareAndSet(arr, i, null, v);
     }
     static <E> boolean weakCasArrayAt(Node<E>[] arr, int i, Node<E> c, Node<E> v) {
         return AA.weakCompareAndSet(arr, i, c, v);
+    }
+    static <E> boolean casArrayAt(Node<E>[] arr, int i, Node<E> c, Node<E> v) {
+        return AA.compareAndSet(arr, i, c, v);
     }
     @SuppressWarnings("unchecked")
     static <E> Node<E> getAndSetAt(Node<E>[] arr, int i, Node<E> v) {
@@ -136,6 +144,20 @@ public class AtomicTransferArray<E> {
 
     public int size() {
         return array.length;
+    }
+    public void clear() {
+        Node<E>[] arr = array;
+        for (int i = 0; i < arr.length;) {
+            Node<E> f = arrayAt(arr, i);
+            if (f == null)
+                ++i;
+            else if (f instanceof TransferNode<E> t) {
+                arr = t.transfer;
+                i = 0; // reset
+            } else if (weakCasArrayAt(arr, i, f, null)) {
+                ++i;
+            }
+        }
     }
 
     @Override
