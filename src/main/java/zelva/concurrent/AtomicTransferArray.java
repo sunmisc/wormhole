@@ -3,9 +3,6 @@ package zelva.concurrent;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.lang.reflect.Array;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ForkJoinPool;
-import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Demo Array Atomic Resize
@@ -29,7 +26,6 @@ public class AtomicTransferArray<E> {
      */
     private static final int INITIAL_CAPACITY = 16;
     volatile Node<E>[] array;
-    volatile Node<E>[] transfer;
 
     @SuppressWarnings("unchecked")
     public AtomicTransferArray(int size) {
@@ -109,18 +105,13 @@ public class AtomicTransferArray<E> {
                 arr = t.transfer;
             }
             setAt(next, i, f);
-            if (casArrayAt(arr, i, f, tfn)) {
+            if (weakCasArrayAt(arr, i, f, tfn)) {
                 i++;
             }
         }
         array = next;
     }
-    private Node<E>[] tryLast(Node<E>[] arr, int i) {
-        while (arrayAt(arr, i) instanceof TransferNode<E> t) {
-            arr = t.transfer;
-        }
-        return arr;
-    }
+
     @SuppressWarnings("unchecked")
     static <E> Node<E> arrayAt(Node<E>[] arr, int i) {
         return (Node<E>) AA.getAcquire(arr, i);
@@ -128,14 +119,8 @@ public class AtomicTransferArray<E> {
     static <E> void setAt(Node<E>[] arr, int i, Node<E> v) {
         AA.setRelease(arr, i, v);
     }
-    static <E> void replaceNull(Node<E>[] arr, int i, Node<E> v) {
-        AA.compareAndSet(arr, i, null, v);
-    }
     static <E> boolean weakCasArrayAt(Node<E>[] arr, int i, Node<E> c, Node<E> v) {
         return AA.weakCompareAndSet(arr, i, c, v);
-    }
-    static <E> boolean casArrayAt(Node<E>[] arr, int i, Node<E> c, Node<E> v) {
-        return AA.compareAndSet(arr, i, c, v);
     }
     @SuppressWarnings("unchecked")
     static <E> Node<E> getAndSetAt(Node<E>[] arr, int i, Node<E> v) {
@@ -205,12 +190,11 @@ public class AtomicTransferArray<E> {
     }
     private static final VarHandle AA
             = MethodHandles.arrayElementVarHandle(Object[].class);
-    private static final VarHandle ARR, TRF_ARR, VAL;
+    private static final VarHandle ARR, VAL;
     static {
         try {
             MethodHandles.Lookup l = MethodHandles.lookup();
             ARR = l.findVarHandle(AtomicTransferArray.class, "array", Node[].class);
-            TRF_ARR = l.findVarHandle(AtomicTransferArray.class, "transfer", Node[].class);
             VAL = l.findVarHandle(Node.class, "element", Object.class);
         } catch (ReflectiveOperationException e) {
             throw new ExceptionInInitializerError(e);
