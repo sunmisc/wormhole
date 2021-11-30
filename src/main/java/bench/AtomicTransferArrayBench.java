@@ -18,7 +18,7 @@ AtomicTransferArrayBench.setAndResizeLock     2224  thrpt    4   7477161,135 ± 
 @State(Scope.Benchmark)
 public class AtomicTransferArrayBench {
     private AtomicTransferArray<Integer> myArray;
-   // private Integer[] defArray;
+    private Integer[] defArray;
 
     public static void main(String[] args) throws RunnerException {
         Options opt = new OptionsBuilder()
@@ -35,16 +35,16 @@ public class AtomicTransferArrayBench {
     @Setup
     public void prepare() {
         myArray = new AtomicTransferArray<>(2);
-       // defArray = new Integer[2];
+        defArray = new Integer[2];
     }
-// AtomicTransferArrayBench.setAndResizeLock   2224  thrpt    4  6373685,090 ± 1592902,547  ops/s
+
     @Benchmark
     public Integer setAndResizeAtomic() {
-        Integer i = myArray.set(1, key);
+        Integer i = myArray.set(key, 1);
         myArray.resize(ThreadLocalRandom.current().nextInt(2, 8));
         return i;
     }
-    /*@Benchmark
+    @Benchmark
     public Integer setAndResizeLock() {
         synchronized (defArray) {
             Integer i = defArray[1];
@@ -52,5 +52,5 @@ public class AtomicTransferArrayBench {
             defArray = Arrays.copyOf(defArray, ThreadLocalRandom.current().nextInt(2, 8));
             return i;
         }
-    }*/
+    }
 }
