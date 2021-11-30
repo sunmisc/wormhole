@@ -4,6 +4,7 @@ import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.lang.reflect.Array;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -52,7 +53,6 @@ public class AtomicTransferArray<E> {
         }
     }
 
-    @SuppressWarnings("unchecked")
     public E set(int i, E element) {
         Node<E>[] arr = array;
         boolean rem = element == null;
@@ -99,16 +99,16 @@ public class AtomicTransferArray<E> {
         transfer(array, na);
     }
 
+    // test
     private void transfer(Node<E>[] prev, Node<E>[] next) {
         final TransferNode<E> tfn = new TransferNode<>(next);
-        int i = 0, s = prev.length;
-        for (Node<E> f; i < 4;) { // test
+        int i = 0, s = Math.min(prev.length, next.length); // todo: check
+        for (Node<E> f; i < s;) { // test
             Node<E>[] arr = prev;
             while ((f = arrayAt(arr, i)) instanceof TransferNode<E> t) {
                 arr = t.transfer;
             }
-            if (f != null)
-                setAt(next, i, f);
+            setAt(next, i, f);
             if (casArrayAt(arr, i, f, tfn)) {
                 i++;
             }

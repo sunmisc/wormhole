@@ -13,7 +13,8 @@ public class AtomicTransferArrayTest {
         Main.main(args);
     }
 
-    public static class AtomicTrasformerArray extends AtomicTransferArray<Integer> {
+
+   public static class AtomicTrasformerArray extends AtomicTransferArray<Integer> {
 
         public AtomicTrasformerArray() {
             super(4);
