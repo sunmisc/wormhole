@@ -51,26 +51,23 @@ public class AtomicTransferArray<E> {
 
     public E set(int i, E element) {
         Node<E>[] arr = array;
-        boolean rem = element == null;
+        boolean remove = element == null;
         for (Node<E> f;;) {
             if ((f = arrayAt(arr, i)) == null) {
-                if (rem || weakCasArrayAt(arr, i, null,
+                if (remove || weakCasArrayAt(arr, i, null,
                         new Node<>(element))) {
                     return null;
                 }
             } else if (f instanceof TransferNode<E> t) {
                 arr = t.transfer;
             } else {
-                if (rem) {
+                if (remove) {
                     if (weakCasArrayAt(arr, i, f, null)) {
                         return null;
                     }
                 } else {
-                    E e;
-                    if (element != (e = f.element)) {
-                        f.element = element;
-                    }
-                    return e;
+                    E e = f.element;
+                    return element != e ? f.element = element : e;
                 }
             }
         }
@@ -130,6 +127,8 @@ public class AtomicTransferArray<E> {
     public int size() {
         return array.length;
     }
+
+    // test
     public void clear() {
         Node<E>[] arr = array;
         for (int i = 0; i < arr.length;) {

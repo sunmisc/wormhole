@@ -7,12 +7,10 @@ import org.openjdk.jmh.runner.options.Options;
 import org.openjdk.jmh.runner.options.OptionsBuilder;
 import zelva.concurrent.AtomicTransferArray;
 
-import java.util.Arrays;
-import java.util.concurrent.ThreadLocalRandom;
-
 /*
-AtomicTransferArrayBench.setAndResizeAtomic   2224  thrpt    4  19649842,037 ± 202856,969  ops/s
-AtomicTransferArrayBench.setAndResizeLock     2224  thrpt    4   7477161,135 ± 510439,179  ops/s
+Benchmark                              (key)   Mode  Cnt         Score        Error  Units
+AtomicTransferArrayBench.setAndAtomic   2224  thrpt    4  24701540,852 ± 984372,111  ops/s
+AtomicTransferArrayBench.setAndLock     2224  thrpt    4  10705102,252 ± 223066,806  ops/s
  */
 @Threads(6)
 @State(Scope.Benchmark)
@@ -39,17 +37,14 @@ public class AtomicTransferArrayBench {
     }
 
     @Benchmark
-    public Integer setAndResizeAtomic() {
-        Integer i = myArray.set(key, 1);
-        myArray.resize(ThreadLocalRandom.current().nextInt(2, 8));
-        return i;
+    public Integer setAndAtomic() {
+        return myArray.set(1, key);
     }
     @Benchmark
-    public Integer setAndResizeLock() {
+    public Integer setAndLock() {
         synchronized (defArray) {
             Integer i = defArray[1];
             defArray[1] = key;
-            defArray = Arrays.copyOf(defArray, ThreadLocalRandom.current().nextInt(2, 8));
             return i;
         }
     }
