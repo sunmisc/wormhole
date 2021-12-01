@@ -22,6 +22,15 @@ public class AtomicTransferArray<E> {
      *   v   v   v   v   v   v   v   v   v   v
      *  [0]>[N]>[N]>[N]>[N]>[N]>[N]>[N]>[N]>[N]  |  NEW ARRAY
      *
+     * 
+     * 
+     * transfer:
+     * 
+     *   (T)    (T)    (F)
+     *      \      \
+     *      (T)    (F)
+     *      /
+     *   (F)
      */
     private static final int MIN_CAPACITY = 1;
     private static final int INITIAL_CAPACITY = 16;
@@ -111,6 +120,8 @@ public class AtomicTransferArray<E> {
                 }
                 continue;
             }
+            // одна блокировка, т к только этот метод
+            // может обращаться к разным индексам массива next
             synchronized (f) {
                 setAt(next, i, f);
                 if (casArrayAt(last, i, f, tfn)) {
@@ -135,10 +146,6 @@ public class AtomicTransferArray<E> {
     static <E> boolean casArrayAt(Node<E>[] arr, int i, Node<E> c, Node<E> v) {
         return AA.compareAndSet(arr, i, c, v);
     }
-    @SuppressWarnings("unchecked")
-    static <E> Node<E> getAndSetAt(Node<E>[] arr, int i, Node<E> v) {
-        return (Node<E>) AA.getAndSet(arr, i, v);
-    }
 
     public int size() {
         return array.length;
@@ -149,9 +156,9 @@ public class AtomicTransferArray<E> {
         Node<E>[] arr = array;
         for (int i = 0; i < arr.length;) {
             Node<E> f = arrayAt(arr, i);
-            if (f == null)
+            if (f == null) {
                 ++i;
-            else if (f instanceof TransferNode<E> t) {
+            } else if (f instanceof TransferNode<E> t) {
                 arr = t.transfer;
                 i = 0; // reset
             } else if (weakCasArrayAt(arr, i, f, null)) {
