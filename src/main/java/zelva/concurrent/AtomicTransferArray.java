@@ -12,6 +12,7 @@ import java.lang.invoke.VarHandle;
  * один за другим
  * для удобной модификации используется Node с волатильным значением
  *
+ * @since 9
  * @author ZelvaLea
  * @param <E>
  */

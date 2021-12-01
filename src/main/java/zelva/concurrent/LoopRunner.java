@@ -4,7 +4,7 @@ import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 
 public class LoopRunner implements Runnable {
-    private boolean run = true; // final?
+    private boolean run = true;
     private final Runnable source;
 
     public LoopRunner(Runnable source) {
