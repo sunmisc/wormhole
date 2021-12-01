@@ -136,20 +136,6 @@ public class AtomicTransferArray<E> {
         array = next;
     }
 
-    @SuppressWarnings("unchecked")
-    static <E> Node<E> arrayAt(Node<E>[] arr, int i) {
-        return (Node<E>) AA.getAcquire(arr, i);
-    }
-    static <E> void setAt(Node<E>[] arr, int i, Node<E> v) {
-        AA.setRelease(arr, i, v);
-    }
-    static <E> boolean weakCasArrayAt(Node<E>[] arr, int i, Node<E> c, Node<E> v) {
-        return AA.weakCompareAndSet(arr, i, c, v);
-    }
-    static <E> boolean casArrayAt(Node<E>[] arr, int i, Node<E> c, Node<E> v) {
-        return AA.compareAndSet(arr, i, c, v);
-    }
-
     public int size() {
         return array.length;
     }
@@ -212,6 +198,19 @@ public class AtomicTransferArray<E> {
         public String toString() {
             return "TransferNode "+ element;
         }
+    }
+    @SuppressWarnings("unchecked")
+    static <E> Node<E> arrayAt(Node<E>[] arr, int i) {
+        return (Node<E>) AA.getAcquire(arr, i);
+    }
+    static <E> void setAt(Node<E>[] arr, int i, Node<E> v) {
+        AA.setRelease(arr, i, v);
+    }
+    static <E> boolean weakCasArrayAt(Node<E>[] arr, int i, Node<E> c, Node<E> v) {
+        return AA.weakCompareAndSet(arr, i, c, v);
+    }
+    static <E> boolean casArrayAt(Node<E>[] arr, int i, Node<E> c, Node<E> v) {
+        return AA.compareAndSet(arr, i, c, v);
     }
     private static final VarHandle AA
             = MethodHandles.arrayElementVarHandle(Object[].class);
