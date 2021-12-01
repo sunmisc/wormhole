@@ -2,7 +2,6 @@ package zelva.concurrent;
 
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
-import java.lang.reflect.Array;
 
 /**
  * Demo Array Atomic Resize
@@ -24,12 +23,12 @@ public class AtomicTransferArray<E> {
      *  [0]>[N]>[N]>[N]>[N]>[N]>[N]>[N]>[N]>[N]  |  NEW ARRAY
      *
      */
+    private static final int MIN_CAPACITY = 1;
     private static final int INITIAL_CAPACITY = 16;
     volatile Node<E>[] array;
 
-    @SuppressWarnings("unchecked")
     public AtomicTransferArray(int size) {
-        this.array = new Node[Math.max(1, size)];
+        this.array = prepareArray(size);
     }
     public AtomicTransferArray() {
         this(INITIAL_CAPACITY);
@@ -88,9 +87,11 @@ public class AtomicTransferArray<E> {
     }
 
     public void resize(int size) {
-        @SuppressWarnings("unchecked")
-        Node<E>[] na = new Node[Math.max(1, size)];
-        transfer(array, na);
+        transfer(array, prepareArray(size));
+    }
+    @SuppressWarnings("unchecked")
+    private static <E> Node<E>[] prepareArray(int size) {
+        return new Node[Math.max(MIN_CAPACITY, size)];
     }
 
     // test
@@ -99,7 +100,8 @@ public class AtomicTransferArray<E> {
         int i = 0, s = Math.min(prev.length, next.length); // todo: check
         Node<E>[] last = prev;
         for (Node<E> f; i < s;) { // test
-            while ((f = arrayAt(last, i)) instanceof TransferNode<E> t) {
+            while ((f = arrayAt(last, i))
+                    instanceof TransferNode<E> t) {
                 last = t.transfer;
             }
             if (f == null) {
@@ -107,13 +109,13 @@ public class AtomicTransferArray<E> {
                     last = prev;
                     i++;
                 }
-            } else {
-                synchronized (f) {
-                    setAt(next, i, f);
-                    if (casArrayAt(last, i, f, tfn)) {
-                        last = prev;
-                        i++;
-                    }
+                continue;
+            }
+            synchronized (f) {
+                setAt(next, i, f);
+                if (casArrayAt(last, i, f, tfn)) {
+                    last = prev;
+                    i++;
                 }
             }
         }
