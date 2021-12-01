@@ -29,8 +29,7 @@ public class AtomicTransferArray<E> {
 
     @SuppressWarnings("unchecked")
     public AtomicTransferArray(int size) {
-        this.array = (Node<E>[]) Array.newInstance(Node.class,
-                Math.max(1, size));
+        this.array = new Node[Math.max(1, size)];
     }
     public AtomicTransferArray() {
         this(INITIAL_CAPACITY);
@@ -39,7 +38,9 @@ public class AtomicTransferArray<E> {
     public boolean compareAndSet(int i, E c, E v) {
         for (Node<E>[] arr = array;;) {
             Node<E> f; E e;
-            if ((e = (f = arrayAt(arr, i)).element) != c) {
+            if (((f = arrayAt(arr, i))) == null) {
+                return c == null || casArrayAt(arr, i, null, new Node<>(v));
+            } else if ((e = f.element) != c) {
                 return false;
             } else if (f instanceof TransferNode<E> t) {
                 arr = t.transfer;
@@ -88,7 +89,7 @@ public class AtomicTransferArray<E> {
 
     public void resize(int size) {
         @SuppressWarnings("unchecked")
-        Node<E>[] na = (Node<E>[]) Array.newInstance(Node.class, size);
+        Node<E>[] na = new Node[Math.max(1, size)];
         transfer(array, na);
     }
 
@@ -96,14 +97,24 @@ public class AtomicTransferArray<E> {
     private void transfer(Node<E>[] prev, Node<E>[] next) {
         final TransferNode<E> tfn = new TransferNode<>(next);
         int i = 0, s = Math.min(prev.length, next.length); // todo: check
+        Node<E>[] last = prev;
         for (Node<E> f; i < s;) { // test
-            Node<E>[] arr = prev;
-            while ((f = arrayAt(arr, i)) instanceof TransferNode<E> t) {
-                arr = t.transfer;
+            while ((f = arrayAt(last, i)) instanceof TransferNode<E> t) {
+                last = t.transfer;
             }
-            setAt(next, i, f);
-            if (weakCasArrayAt(arr, i, f, tfn)) {
-                i++;
+            if (f == null) {
+                if (weakCasArrayAt(last, i, null, tfn)) {
+                    last = prev;
+                    i++;
+                }
+            } else {
+                synchronized (f) {
+                    setAt(next, i, f);
+                    if (casArrayAt(last, i, f, tfn)) {
+                        last = prev;
+                        i++;
+                    }
+                }
             }
         }
         array = next;
@@ -118,6 +129,9 @@ public class AtomicTransferArray<E> {
     }
     static <E> boolean weakCasArrayAt(Node<E>[] arr, int i, Node<E> c, Node<E> v) {
         return AA.weakCompareAndSet(arr, i, c, v);
+    }
+    static <E> boolean casArrayAt(Node<E>[] arr, int i, Node<E> c, Node<E> v) {
+        return AA.compareAndSet(arr, i, c, v);
     }
     @SuppressWarnings("unchecked")
     static <E> Node<E> getAndSetAt(Node<E>[] arr, int i, Node<E> v) {
@@ -189,11 +203,10 @@ public class AtomicTransferArray<E> {
     }
     private static final VarHandle AA
             = MethodHandles.arrayElementVarHandle(Object[].class);
-    private static final VarHandle ARR, VAL;
+    private static final VarHandle VAL;
     static {
         try {
             MethodHandles.Lookup l = MethodHandles.lookup();
-            ARR = l.findVarHandle(AtomicTransferArray.class, "array", Node[].class);
             VAL = l.findVarHandle(Node.class, "element", Object.class);
         } catch (ReflectiveOperationException e) {
             throw new ExceptionInInitializerError(e);

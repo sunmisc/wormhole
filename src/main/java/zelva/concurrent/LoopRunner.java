@@ -4,7 +4,7 @@ import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 
 public class LoopRunner implements Runnable {
-    private boolean stop;
+    private boolean run = true; // final?
     private final Runnable source;
 
     public LoopRunner(Runnable source) {
@@ -13,20 +13,20 @@ public class LoopRunner implements Runnable {
 
     @Override
     public void run() {
-        while ((boolean) STOP.getOpaque(this)) {
+        while ((boolean) RN.getOpaque(this)) {
             source.run();
         }
     }
 
     public void stop() {
-        STOP.setOpaque(this, true);
+        RN.setOpaque(this, false);
     }
 
-    private static final VarHandle STOP;
+    private static final VarHandle RN;
     static {
         try {
             MethodHandles.Lookup l = MethodHandles.lookup();
-            STOP = l.findVarHandle(LoopRunner.class, "stop", boolean.class);
+            RN = l.findVarHandle(LoopRunner.class, "run", boolean.class);
         } catch (ReflectiveOperationException e) {
             throw new ExceptionInInitializerError(e);
         }

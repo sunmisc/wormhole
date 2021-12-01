@@ -35,7 +35,7 @@ public class AtomicTransferArrayTest {
             set(0);
             resize(4);
             set(2);
-            resize(4);
+            resize(16);
         }
 
         @Actor
@@ -43,7 +43,7 @@ public class AtomicTransferArrayTest {
             set(1);
             resize(4);
             set(3);
-            resize(4);
+            resize(16);
         }
         @Arbiter
         public void result(L_Result l) {
