@@ -1,6 +1,9 @@
 package bench;
 
-import org.openjdk.jmh.annotations.*;
+import org.openjdk.jmh.annotations.Benchmark;
+import org.openjdk.jmh.annotations.Scope;
+import org.openjdk.jmh.annotations.Setup;
+import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.runner.Runner;
 import org.openjdk.jmh.runner.RunnerException;
 import org.openjdk.jmh.runner.options.Options;
@@ -9,11 +12,12 @@ import zelva.concurrent.AtomicTransferArray;
 
 /*
 Benchmark                              (key)   Mode  Cnt         Score        Error  Units
-AtomicTransferArrayBench.setAndAtomic   2224  thrpt    4  24701540,852 ± 984372,111  ops/s
-AtomicTransferArrayBench.setAndLock     2224  thrpt    4  10705102,252 ± 223066,806  ops/s
+AtomicTransferArrayBench.getAndAtomic  thrpt    4  143325627,929 ± 28977962,401  ops/s
+AtomicTransferArrayBench.getAndLock    thrpt    4   27359068,859 ±   978932,819  ops/s
+AtomicTransferArrayBench.setAndAtomic  thrpt    4  130877180,373 ± 19527474,119  ops/s
+AtomicTransferArrayBench.setAndLock    thrpt    4   26618863,474 ±  6900754,344  ops/s
  */
-@Threads(6)
-@State(Scope.Benchmark)
+@State(Scope.Thread)
 public class AtomicTransferArrayBench {
     private AtomicTransferArray<Integer> myArray;
     private Integer[] defArray;
@@ -23,7 +27,7 @@ public class AtomicTransferArrayBench {
                 .include(AtomicTransferArrayBench.class.getSimpleName())
                 .measurementIterations(4)
                 .forks(1)
-                .syncIterations(false)
+                .syncIterations(true)
                 .build();
         new Runner(opt).run();
     }
@@ -37,13 +41,21 @@ public class AtomicTransferArrayBench {
     }
 
     @Benchmark
-    public Integer setAndAtomic() {
+    public Integer getAndAtomic() {
         return myArray.get(1);
     }
     @Benchmark
+    public Integer setAndAtomic() {
+        return myArray.set(1, 5);
+    }
+    @Benchmark
+    public Integer getAndLock() {
+        return defArray[1];
+    }
+    @Benchmark
     public Integer setAndLock() {
-        synchronized (defArray) {
-            return defArray[1];
-        }
+        Integer i = defArray[1];
+        defArray[1] = 5;
+        return i;
     }
 }
