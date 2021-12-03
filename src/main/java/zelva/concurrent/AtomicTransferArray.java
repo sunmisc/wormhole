@@ -99,41 +99,40 @@ public class AtomicTransferArray<E> {
     }
 
     public void resize(int size) {
-        transfer(array, prepareArray(size));
+        Node<E>[] prev; int ps;
+        if ((ps = (prev = array).length) != size) {
+            Node<E>[] next = prepareArray(size);
+            final TransferNode<E> tfn = new TransferNode<>(next);
+            int i = 0, s = Math.min(ps, size);
+            Node<E>[] last = prev;
+            for (Node<E> f; i < s; ) { // test
+                while ((f = arrayAt(last, i))
+                        instanceof TransferNode<E> t) {
+                    last = t.transfer;
+                }
+                if (f == null) {
+                    if (weakCasArrayAt(last, i, null, tfn)) {
+                        last = prev;
+                        i++;
+                    }
+                    continue;
+                }
+                // одна блокировка, т к только этот метод
+                // может обращаться к разным индексам массива next
+                synchronized (f) {
+                    setAt(next, i, f);
+                    if (casArrayAt(last, i, f, tfn)) {
+                        last = prev;
+                        i++;
+                    }
+                }
+            }
+            array = next;
+        }
     }
     @SuppressWarnings("unchecked")
     private static <E> Node<E>[] prepareArray(int size) {
         return new Node[Math.max(MIN_CAPACITY, size)];
-    }
-
-    // test
-    private void transfer(Node<E>[] prev, Node<E>[] next) {
-        final TransferNode<E> tfn = new TransferNode<>(next);
-        int i = 0, s = Math.min(prev.length, next.length);
-        Node<E>[] last = prev;
-        for (Node<E> f; i < s;) { // test
-            while ((f = arrayAt(last, i))
-                    instanceof TransferNode<E> t) {
-                last = t.transfer;
-            }
-            if (f == null) {
-                if (weakCasArrayAt(last, i, null, tfn)) {
-                    last = prev;
-                    i++;
-                }
-                continue;
-            }
-            // одна блокировка, т к только этот метод
-            // может обращаться к разным индексам массива next
-            synchronized (f) {
-                setAt(next, i, f);
-                if (casArrayAt(last, i, f, tfn)) {
-                    last = prev;
-                    i++;
-                }
-            }
-        }
-        array = next;
     }
 
     public int size() {
@@ -149,7 +148,6 @@ public class AtomicTransferArray<E> {
                 ++i;
             } else if (f instanceof TransferNode<E> t) {
                 arr = t.transfer;
-                i = 0; // reset
             } else if (weakCasArrayAt(arr, i, f, null)) {
                 ++i;
             }

@@ -27,25 +27,23 @@ public class AtomicTransferArrayBench {
                 .build();
         new Runner(opt).run();
     }
-    @Param({"2224"})
-    private int key;
 
     @Setup
     public void prepare() {
         myArray = new AtomicTransferArray<>(2);
         defArray = new Integer[2];
+        myArray.set(1, 666);
+        defArray[1] = 666;
     }
 
     @Benchmark
     public Integer setAndAtomic() {
-        return myArray.set(1, key);
+        return myArray.get(1);
     }
     @Benchmark
     public Integer setAndLock() {
         synchronized (defArray) {
-            Integer i = defArray[1];
-            defArray[1] = key;
-            return i;
+            return defArray[1];
         }
     }
 }
