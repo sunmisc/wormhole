@@ -1,11 +1,12 @@
 package bench;
 
-import com.sun.jna.WString;
 import org.openjdk.jcstress.Main;
-import org.openjdk.jcstress.annotations.*;
+import org.openjdk.jcstress.annotations.Actor;
+import org.openjdk.jcstress.annotations.Arbiter;
+import org.openjdk.jcstress.annotations.JCStressTest;
+import org.openjdk.jcstress.annotations.State;
 import org.openjdk.jcstress.infra.results.L_Result;
 import zelva.concurrent.AtomicTransferArray;
-
 
 public class AtomicTransferArrayTest {
 
@@ -32,12 +33,15 @@ public class AtomicTransferArrayTest {
     public static class JcstressTest extends AtomicTrasformerArray {
         @Actor
         public void actor1() {
-            set(0, 1);
+            resize(2);
+            set(0, 0);
             resize(7);
         }
 
         @Actor
         public void actor2() {
+            resize(3);
+            set(1, 1);
             resize(5);
         }
         @Arbiter
