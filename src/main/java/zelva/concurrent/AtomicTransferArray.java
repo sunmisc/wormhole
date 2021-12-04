@@ -117,14 +117,12 @@ public class AtomicTransferArray<E> {
                     }
                     continue;
                 }
-                // одна блокировка, т к только этот метод
-                // может обращаться к разным индексам массива next
-                synchronized (f) {
-                    setAt(next, i, f);
-                    if (casArrayAt(last, i, f, tfn)) {
-                        last = prev;
-                        i++;
-                    }
+                setAt(next, i, f);
+                if (casArrayAt(last, i, f, tfn)) {
+                    last = prev;
+                    i++;
+                } else {
+                    setAt(next, i, null);
                 }
             }
             array = next;
