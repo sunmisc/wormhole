@@ -97,36 +97,33 @@ public class AtomicTransferArray<E> {
             }
         }
     }
-
+    // test
     public void resize(int size) {
-        Node<E>[] prev; int ps;
-        if ((ps = (prev = array).length) != size) {
-            Node<E>[] next = prepareArray(size);
-            final TransferNode<E> tfn = new TransferNode<>(next);
-            int i = 0, s = Math.min(ps, size);
-            Node<E>[] last = prev;
-            for (Node<E> f; i < s; ) { // test
-                while ((f = arrayAt(last, i))
-                        instanceof TransferNode<E> t) {
-                    last = t.transfer;
-                }
-                if (f == null) {
-                    if (weakCasArrayAt(last, i, null, tfn)) {
-                        last = prev;
-                        i++;
-                    }
-                    continue;
-                }
-                setAt(next, i, f);
-                if (casArrayAt(last, i, f, tfn)) {
-                    last = prev;
-                    i++;
-                } else {
-                    setAt(next, i, null);
-                }
+        Node<E>[] next = prepareArray(size);
+        Node<E>[] prev = array;
+        int ps = prev.length;
+        final TransferNode<E> tfn = new TransferNode<>(next);
+        int i = 0, s = ps;
+        Node<E>[] last = prev;
+        for (Node<E> f; i < s; ) { // test
+            while ((f = arrayAt(last, i))
+                    instanceof TransferNode<E> t) {
+                s = (last = t.transfer).length;
             }
-            array = next;
+            if (f == null) {
+                if (weakCasArrayAt(last, i, null, tfn)) {
+                    i++;
+                }
+                continue;
+            }
+            setAt(next, i, f);
+            if (casArrayAt(last, i, f, tfn)) {
+                i++;
+            } else {
+                setAt(next, i, null);
+            }
         }
+        array = next;
     }
     @SuppressWarnings("unchecked")
     private static <E> Node<E>[] prepareArray(int size) {
