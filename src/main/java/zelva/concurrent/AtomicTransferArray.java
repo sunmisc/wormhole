@@ -53,9 +53,22 @@ public class AtomicTransferArray<E> {
             } else if ((e = f.element) != c) {
                 return false;
             } else if (f instanceof TransferNode<E> t) {
-                arr = t.transfer;
+                arr = t.next;
             } else {
                 return VAL.compareAndSet(f, e, v);
+            }
+        }
+    }
+
+    private Node<E>[] setIfAbsent(int i, Node<E>[] arr, Node<E> c) {
+        for (Node<E> f;;) {
+            if ((f = arrayAt(arr, i)) == null
+                    && weakCasArrayAt(arr, i, null, c)) {
+                return arr;
+            } else if (f instanceof TransferNode<E> t) {
+                arr = t.next;
+            } else {
+                return arr;
             }
         }
     }
@@ -70,7 +83,7 @@ public class AtomicTransferArray<E> {
                     return null;
                 }
             } else if (f instanceof TransferNode<E> t) {
-                arr = t.transfer;
+                arr = t.next;
             } else {
                 E e = f.element;
                 if (remove) {
@@ -91,44 +104,22 @@ public class AtomicTransferArray<E> {
             if ((f = arrayAt(arr, i)) == null) {
                 return null;
             } else if (f instanceof TransferNode<E> t) {
-                arr = t.transfer;
+                arr = t.next;
             } else {
                 return f.element;
             }
         }
     }
 
+    // todo: красиво сделать
     public void resize(int size) {
-        Node<E>[] prev; int ps;
-        if ((ps = (prev = array).length) != size) {
-            Node<E>[] next = prepareArray(size);
-            final TransferNode<E> tfn = new TransferNode<>(next);
-            int i = 0, s = Math.min(ps, size);
-            Node<E>[] last = prev;
-            for (Node<E> f; i < s; ) { // test
-                while ((f = arrayAt(last, i))
-                        instanceof TransferNode<E> t) {
-                    last = t.transfer;
-                }
-                if (f == null) {
-                    if (weakCasArrayAt(last, i, null, tfn)) {
-                        last = prev;
-                        i++;
-                    }
-                    continue;
-                }
-                // одна блокировка, т к только этот метод
-                // может обращаться к разным индексам массива next
-                synchronized (f) {
-                    setAt(next, i, f);
-                    if (casArrayAt(last, i, f, tfn)) {
-                        last = prev;
-                        i++;
-                    }
-                }
-            }
-            array = next;
+        Node<E>[] next = prepareArray(size), prev = array;
+        final TransferNode<E> tfn = new TransferNode<>(next, prev);
+        for (int i = 0, len = prev.length; i < len
+                && tfn.prev != null; ++i) {
+            tfn.setSlot(i, prev);
         }
+        array = tfn.next;
     }
     @SuppressWarnings("unchecked")
     private static <E> Node<E>[] prepareArray(int size) {
@@ -147,7 +138,7 @@ public class AtomicTransferArray<E> {
             if (f == null) {
                 ++i;
             } else if (f instanceof TransferNode<E> t) {
-                arr = t.transfer;
+                arr = t.next;
             } else if (weakCasArrayAt(arr, i, f, null)) {
                 ++i;
             }
@@ -162,7 +153,7 @@ public class AtomicTransferArray<E> {
         for (Node<E>[] arr = array;;) {
             Node<E> f = arrayAt(arr, i);
             if (f instanceof TransferNode<E> t) {
-                arr = t.transfer;
+                arr = t.next;
             } else {
                 sb.append(f);
                 if (++i >= arr.length)
@@ -186,11 +177,50 @@ public class AtomicTransferArray<E> {
     }
 
     private static class TransferNode<E> extends Node<E> {
-        final Node<E>[] transfer;
+        final Node<E>[] next;
+        volatile Node<E>[] prev; // todo: non volatile
 
-        TransferNode(Node<E>[] transfer) {
+        TransferNode(Node<E>[] transfer, Node<E>[] prev) {
             super(null);
-            this.transfer = transfer;
+            this.next = transfer;
+            this.prev = prev;
+        }
+
+        void setSlot(int i, Node<E>[] p) {
+            for (Node<E> f; prev != null;) {
+                if ((f = arrayAt(p, i))
+                        instanceof TransferNode<E> t) {
+                    p = t.helpTransfer();
+                } else {
+                    if (f != null)
+                        setAt(next, i, f);
+                    if (casArrayAt(p, i, f, this)) {
+                        return;
+                    }
+                }
+            }
+        }
+        // todo: красиво сделать
+        Node<E>[] helpTransfer() {
+            Node<E>[] p = prev;
+            if (p != null) {
+                outer: for (int i = p.length - 1; i >= 0 && prev != null; --i) {
+                    for (Node<E> f; prev != null;) {
+                        if ((f = arrayAt(p, i))
+                                instanceof TransferNode<E>) {
+                            continue outer;
+                        } else {
+                            if (f != null)
+                                setAt(next, i, f);
+                            if (casArrayAt(p, i, f, this)) {
+                                continue outer;
+                            }
+                        }
+                    }
+                }
+                prev = null;
+            }
+            return next;
         }
         @Override
         public String toString() {
@@ -199,10 +229,10 @@ public class AtomicTransferArray<E> {
     }
     @SuppressWarnings("unchecked")
     static <E> Node<E> arrayAt(Node<E>[] arr, int i) {
-        return (Node<E>) AA.getAcquire(arr, i);
+        return (Node<E>) AA.getVolatile(arr, i); // todo: acquire
     }
     static <E> void setAt(Node<E>[] arr, int i, Node<E> v) {
-        AA.setRelease(arr, i, v);
+        AA.setVolatile(arr, i, v); // todo: release
     }
     static <E> boolean weakCasArrayAt(Node<E>[] arr, int i, Node<E> c, Node<E> v) {
         return AA.weakCompareAndSet(arr, i, c, v);
