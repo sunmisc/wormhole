@@ -53,25 +53,13 @@ public class AtomicTransferArray<E> {
             } else if ((e = f.element) != c) {
                 return false;
             } else if (f instanceof TransferNode<E> t) {
-                arr = t.next;
+                arr = helpTransfer(t);
             } else {
                 return VAL.compareAndSet(f, e, v);
             }
         }
     }
 
-    private Node<E>[] setIfAbsent(int i, Node<E>[] arr, Node<E> c) {
-        for (Node<E> f;;) {
-            if ((f = arrayAt(arr, i)) == null
-                    && weakCasArrayAt(arr, i, null, c)) {
-                return arr;
-            } else if (f instanceof TransferNode<E> t) {
-                arr = t.next;
-            } else {
-                return arr;
-            }
-        }
-    }
 
     public E set(int i, E element) {
         Node<E>[] arr = array;
