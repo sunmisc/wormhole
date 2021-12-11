@@ -144,7 +144,7 @@ public class AtomicTransferArray<E> {
             if (f == null) {
                 ++i;
             } else if (f instanceof TransferNode<E> t) {
-                arr = t.next;
+                arr = helpTransfer(t);
             } else if (weakCasArrayAt(arr, i, f, null)) {
                 ++i;
             }
