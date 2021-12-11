@@ -83,7 +83,7 @@ public class AtomicTransferArray<E> {
                     return null;
                 }
             } else if (f instanceof TransferNode<E> t) {
-                arr = t.helpTransfer();
+                arr = helpTransfer(t);
             } else {
                 E e = f.element;
                 if (remove) {
@@ -112,7 +112,7 @@ public class AtomicTransferArray<E> {
     }
     public void resize(int size) {
         Node<E>[] next = prepareArray(size), prev;
-        final TransferNode<E> tfn = new TransferNode<>(this, next,
+        final TransferNode<E> tfn = new TransferNode<>(next,
                 prev = array);
         for (int i = 0,
              len = transferBound(prev.length, size);
@@ -120,7 +120,7 @@ public class AtomicTransferArray<E> {
             for (Node<E> f; tfn.prev != null; ) {
                 if ((f = arrayAt(prev, i))
                         instanceof TransferNode<E> t) {
-                    prev = t.helpTransfer();
+                    prev = helpTransfer(t);
                     len = transferBound(prev.length, size);
                 } else if (trySwapSlot(i, prev, next, f, tfn)) {
                     break;
@@ -195,41 +195,43 @@ public class AtomicTransferArray<E> {
     }
 
     private static class TransferNode<E> extends Node<E> {
-        final AtomicTransferArray<E> self;
         final Node<E>[] next;
-        Node<E>[] prev; // todo: non volatile
+        Node<E>[] prev; // non volatile
 
-        TransferNode(AtomicTransferArray<E> self, Node<E>[] transfer, Node<E>[] prev) {
+        TransferNode(Node<E>[] transfer, Node<E>[] prev) {
             super(null);
-            this.self = self;
             this.next = transfer;
             this.prev = prev;
         }
 
-        Node<E>[] helpTransfer() {
-            Node<E>[] nodes = prev;
-            if (nodes != null) {
-                outer: for (int i = nodes.length - 1; i >= 0; --i) {
-                    if (prev == null) return next;
-                    for (Node<E> f; prev != null; ) {
-                        if ((f = arrayAt(nodes, i)) == this) {
-                            continue outer;
-                        } else if (f instanceof TransferNode<E> t) {
-                            t.helpTransfer();
-                        } else if (trySwapSlot(i, nodes, next, f, this)) {
-                            continue outer;
-                        }
-                    }
-                }
-                if (PREV.compareAndSet(this, nodes, null))
-                    self.array = next;
-            }
-            return next;
-        }
         @Override
         public String toString() {
             return "TransferNode "+ element;
         }
+    }
+    Node<E>[] helpTransfer(TransferNode<E> tfn) {
+        Node<E>[] prev = tfn.prev, next = tfn.next;
+        if (prev != null) {
+            outer: for (int i = prev.length - 1;
+                        i >= 0; --i) {
+                if (tfn.prev == null)
+                    return next;
+                for (Node<E> f; tfn.prev != null; ) {
+                    if ((f = arrayAt(prev, i)) == tfn) {
+                        continue outer;
+                    } else if (f instanceof TransferNode<E> t) {
+                        helpTransfer(t);
+                    } else if (trySwapSlot(i,
+                            prev, next, f, tfn)) {
+                        continue outer;
+                    }
+                }
+            }
+            if (PREV.compareAndSet(tfn, prev, null)) {
+                array = next;
+            }
+        }
+        return next;
     }
     @SuppressWarnings("unchecked")
     static <E> Node<E> arrayAt(Node<E>[] arr, int i) {

@@ -31,17 +31,15 @@ public class AtomicTransferArrayTest {
     public static class JcstressTest extends AtomicTrasformerArray {
         @Actor
         public void actor1() {
-            resize(6);
             set(0, 0);
-            set(1, 1);
-            set(2, 2);
+            resize(8);
+            set(7, 7);
         }
 
         @Actor
         public void actor2() {
-            resize(8);
-            set(3, 3);
-            set(4, 4);
+            set(1, 1);
+            resize(9);
             set(5, 5);
         }
         @Arbiter

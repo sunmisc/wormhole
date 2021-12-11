@@ -17,7 +17,7 @@ AtomicTransferArrayBench.getAndLock    thrpt    4   27359068,859 ±   978932,819
 AtomicTransferArrayBench.setAndAtomic  thrpt    4  130877180,373 ± 19527474,119  ops/s
 AtomicTransferArrayBench.setAndLock    thrpt    4   26618863,474 ±  6900754,344  ops/s
  */
-@State(Scope.Thread)
+@State(Scope.Benchmark)
 public class AtomicTransferArrayBench {
     private AtomicTransferArray<Integer> myArray;
     private Integer[] defArray;
@@ -27,7 +27,7 @@ public class AtomicTransferArrayBench {
                 .include(AtomicTransferArrayBench.class.getSimpleName())
                 .measurementIterations(4)
                 .forks(1)
-                .syncIterations(true)
+                .syncIterations(false)
                 .build();
         new Runner(opt).run();
     }
@@ -35,27 +35,11 @@ public class AtomicTransferArrayBench {
     @Setup
     public void prepare() {
         myArray = new AtomicTransferArray<>(2);
-        defArray = new Integer[2];
-        myArray.set(1, 666);
-        defArray[1] = 666;
     }
 
     @Benchmark
-    public Integer getAndAtomic() {
-        return myArray.get(1);
-    }
-    @Benchmark
-    public Integer setAndAtomic() {
-        return myArray.set(1, 5);
-    }
-    @Benchmark
-    public Integer getAndLock() {
-        return defArray[1];
-    }
-    @Benchmark
-    public Integer setAndLock() {
-        Integer i = defArray[1];
-        defArray[1] = 5;
-        return i;
+    public Integer growArray() {
+        myArray.resize(5);
+        return myArray.size();
     }
 }
