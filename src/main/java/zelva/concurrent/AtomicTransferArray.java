@@ -114,29 +114,29 @@ public class AtomicTransferArray<E> {
         Node<E>[] next = prepareArray(size), prev;
         final TransferNode<E> tfn = new TransferNode<>(this, next,
                 prev = array);
-        for (int i = 0, len = transferBound(prev.length, size);
-             i < len; ++i) {
-            if (tfn.prev == null)
-                return;
+        for (int i = 0,
+             len = transferBound(prev.length, size);
+             i < len && tfn.prev != null;
+             ++i) {
             for (Node<E> f; tfn.prev != null; ) {
+                if (tfn.prev == null) {
+                    return;
+                }
                 if ((f = arrayAt(prev, i))
                         instanceof TransferNode<E> t) {
                     prev = t.helpTransfer();
-                    len = transferBound(
-                            prev.length, size);
-                } else if (trySwapSlot(i, next, prev, f, tfn)) {
-                    break;
+                    len = transferBound(prev.length, size);
+                } else {
+                    if (f != null)
+                        setAt(next, i, f);
+                    if (casArrayAt(prev, i, f, tfn)) {
+                        break;
+                    }
                 }
             }
         }
         tfn.prev = null; // help gc
         array = next;
-    }
-    static <E> boolean trySwapSlot(int i, Node<E>[] next, Node<E>[] prev,
-                                   Node<E> f, Node<E> t) {
-        if (f != null)
-            setAt(next, i, f);
-        return casArrayAt(prev, i, f, t);
     }
     @SuppressWarnings("unchecked")
     private static <E> Node<E>[] prepareArray(int size) {
@@ -211,16 +211,19 @@ public class AtomicTransferArray<E> {
         Node<E>[] helpTransfer() {
             Node<E>[] nodes = prev;
             if (nodes != null) {
-                for (int i = nodes.length - 1; i >= 0; --i) {
-                    if (prev == null)
-                        return next;
+                outer: for (int i = nodes.length - 1; i >= 0; --i) {
+                    if (prev == null) return next;
                     for (Node<E> f; prev != null; ) {
                         if ((f = arrayAt(nodes, i)) == this) {
-                            break;
+                            continue outer;
                         } else if (f instanceof TransferNode<E> t) {
                             t.helpTransfer();
-                        } else if (trySwapSlot(i, next, nodes, f, this)){
-                            break;
+                        } else {
+                            if (f != null)
+                                setAt(next, i, f);
+                            if (casArrayAt(nodes, i, f, this)) {
+                                continue outer;
+                            }
                         }
                     }
                 }
