@@ -114,26 +114,29 @@ public class AtomicTransferArray<E> {
         Node<E>[] next = prepareArray(size), prev;
         final TransferNode<E> tfn = new TransferNode<>(this, next,
                 prev = array);
-        for (int i = 0,
-             len = transferBound(prev.length, size);
-             i < len && tfn.prev != null;
-             ++i) {
-            for (Node<E> f; tfn.prev != null;) {
+        for (int i = 0, len = transferBound(prev.length, size);
+             i < len; ++i) {
+            if (tfn.prev == null)
+                return;
+            for (Node<E> f; tfn.prev != null; ) {
                 if ((f = arrayAt(prev, i))
                         instanceof TransferNode<E> t) {
                     prev = t.helpTransfer();
-                    len = transferBound(prev.length, size);
-                } else {
-                    if (f != null)
-                        setAt(next, i, f);
-                    if (casArrayAt(prev, i, f, tfn)) {
-                        break;
-                    }
+                    len = transferBound(
+                            prev.length, size);
+                } else if (trySwapSlot(i, next, prev, f, tfn)) {
+                    break;
                 }
             }
         }
-        tfn.prev = null;
+        tfn.prev = null; // help gc
         array = next;
+    }
+    static <E> boolean trySwapSlot(int i, Node<E>[] next, Node<E>[] prev,
+                                   Node<E> f, Node<E> t) {
+        if (f != null)
+            setAt(next, i, f);
+        return casArrayAt(prev, i, f, t);
     }
     @SuppressWarnings("unchecked")
     private static <E> Node<E>[] prepareArray(int size) {
@@ -208,25 +211,21 @@ public class AtomicTransferArray<E> {
         Node<E>[] helpTransfer() {
             Node<E>[] nodes = prev;
             if (nodes != null) {
-                outer: for (int i = nodes.length - 1; i >= 0; --i) {
-                    if (prev == null) {
+                for (int i = nodes.length - 1; i >= 0; --i) {
+                    if (prev == null)
                         return next;
-                    }
                     for (Node<E> f; prev != null; ) {
-                        if ((f = arrayAt(nodes, i))
-                                instanceof TransferNode<E>) {
-                            continue outer;
-                        } else {
-                            if (f != null)
-                                setAt(next, i, f);
-                            if (casArrayAt(nodes, i, f, this)) {
-                                continue outer;
-                            }
+                        if ((f = arrayAt(nodes, i)) == this) {
+                            break;
+                        } else if (f instanceof TransferNode<E> t) {
+                            t.helpTransfer();
+                        } else if (trySwapSlot(i, next, nodes, f, this)){
+                            break;
                         }
                     }
                 }
-                prev = null;
-                self.array = next;
+                if (PREV.compareAndSet(this, nodes, null))
+                    self.array = next;
             }
             return next;
         }
@@ -250,11 +249,12 @@ public class AtomicTransferArray<E> {
     }
     private static final VarHandle AA
             = MethodHandles.arrayElementVarHandle(Object[].class);
-    private static final VarHandle VAL;
+    private static final VarHandle VAL, PREV;
     static {
         try {
             MethodHandles.Lookup l = MethodHandles.lookup();
             VAL = l.findVarHandle(Node.class, "element", Object.class);
+            PREV = l.findVarHandle(TransferNode.class, "prev", Node[].class);
         } catch (ReflectiveOperationException e) {
             throw new ExceptionInInitializerError(e);
         }
