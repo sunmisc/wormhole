@@ -27,20 +27,22 @@ public class AtomicTransferArrayTest {
         }
     }
     @JCStressTest
-   // @Outcome(id = "[0, null, null, null, null, 5, null, null, null, null, null, null]",
-  //          expect = ACCEPTABLE, desc = "Boring")
     @State
     public static class JcstressTest extends AtomicTrasformerArray {
         @Actor
         public void actor1() {
-            resize(5);
+            resize(6);
             set(0, 0);
+            set(1, 1);
+            set(2, 2);
         }
 
         @Actor
         public void actor2() {
-            resize(5);
-            set(1, 1);
+            resize(8);
+            set(3, 3);
+            set(4, 4);
+            set(5, 5);
         }
         @Arbiter
         public void result(L_Result l) {

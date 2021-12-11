@@ -83,7 +83,7 @@ public class AtomicTransferArray<E> {
                     return null;
                 }
             } else if (f instanceof TransferNode<E> t) {
-                arr = t.next;
+                arr = t.helpTransfer();
             } else {
                 E e = f.element;
                 if (remove) {
@@ -110,20 +110,37 @@ public class AtomicTransferArray<E> {
             }
         }
     }
-
-    // todo: красиво сделать
     public void resize(int size) {
-        Node<E>[] next = prepareArray(size), prev = array;
-        final TransferNode<E> tfn = new TransferNode<>(next, prev);
-        for (int i = 0, len = prev.length; i < len
-                && tfn.prev != null; ++i) {
-            tfn.setSlot(i, prev);
+        Node<E>[] next = prepareArray(size), prev;
+        final TransferNode<E> tfn = new TransferNode<>(this, next,
+                prev = array);
+        for (int i = 0,
+             len = transferBound(prev.length, size);
+             i < len && tfn.prev != null;
+             ++i) {
+            for (Node<E> f; tfn.prev != null;) {
+                if ((f = arrayAt(prev, i))
+                        instanceof TransferNode<E> t) {
+                    prev = t.helpTransfer();
+                    len = transferBound(prev.length, size);
+                } else {
+                    if (f != null)
+                        setAt(next, i, f);
+                    if (casArrayAt(prev, i, f, tfn)) {
+                        break;
+                    }
+                }
+            }
         }
-        array = tfn.next;
+        tfn.prev = null;
+        array = next;
     }
     @SuppressWarnings("unchecked")
     private static <E> Node<E>[] prepareArray(int size) {
         return new Node[Math.max(MIN_CAPACITY, size)];
+    }
+    private static int transferBound(int x, int y) {
+        return Math.min(x, y);
     }
 
     public int size() {
@@ -177,48 +194,39 @@ public class AtomicTransferArray<E> {
     }
 
     private static class TransferNode<E> extends Node<E> {
+        final AtomicTransferArray<E> self;
         final Node<E>[] next;
         volatile Node<E>[] prev; // todo: non volatile
 
-        TransferNode(Node<E>[] transfer, Node<E>[] prev) {
+        TransferNode(AtomicTransferArray<E> self, Node<E>[] transfer, Node<E>[] prev) {
             super(null);
+            this.self = self;
             this.next = transfer;
             this.prev = prev;
         }
 
-        void setSlot(int i, Node<E>[] p) {
-            for (Node<E> f; prev != null;) {
-                if ((f = arrayAt(p, i))
-                        instanceof TransferNode<E> t) {
-                    p = t.helpTransfer();
-                } else {
-                    if (f != null)
-                        setAt(next, i, f);
-                    if (casArrayAt(p, i, f, this)) {
-                        return;
-                    }
-                }
-            }
-        }
-        // todo: красиво сделать
         Node<E>[] helpTransfer() {
-            Node<E>[] p = prev;
-            if (p != null) {
-                outer: for (int i = p.length - 1; i >= 0 && prev != null; --i) {
-                    for (Node<E> f; prev != null;) {
-                        if ((f = arrayAt(p, i))
+            Node<E>[] nodes = prev;
+            if (nodes != null) {
+                outer: for (int i = nodes.length - 1; i >= 0; --i) {
+                    if (prev == null) {
+                        return next;
+                    }
+                    for (Node<E> f; prev != null; ) {
+                        if ((f = arrayAt(nodes, i))
                                 instanceof TransferNode<E>) {
                             continue outer;
                         } else {
                             if (f != null)
                                 setAt(next, i, f);
-                            if (casArrayAt(p, i, f, this)) {
+                            if (casArrayAt(nodes, i, f, this)) {
                                 continue outer;
                             }
                         }
                     }
                 }
                 prev = null;
+                self.array = next;
             }
             return next;
         }
