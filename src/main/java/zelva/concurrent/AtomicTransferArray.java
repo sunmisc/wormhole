@@ -116,22 +116,14 @@ public class AtomicTransferArray<E> {
                 prev = array);
         for (int i = 0,
              len = transferBound(prev.length, size);
-             i < len && tfn.prev != null;
-             ++i) {
+             i < len; ++i) {
             for (Node<E> f; tfn.prev != null; ) {
-                if (tfn.prev == null) {
-                    return;
-                }
                 if ((f = arrayAt(prev, i))
                         instanceof TransferNode<E> t) {
                     prev = t.helpTransfer();
                     len = transferBound(prev.length, size);
-                } else {
-                    if (f != null)
-                        setAt(next, i, f);
-                    if (casArrayAt(prev, i, f, tfn)) {
-                        break;
-                    }
+                } else if (trySwapSlot(i, prev, next, f, tfn)) {
+                    break;
                 }
             }
         }
@@ -141,6 +133,12 @@ public class AtomicTransferArray<E> {
     @SuppressWarnings("unchecked")
     private static <E> Node<E>[] prepareArray(int size) {
         return new Node[Math.max(MIN_CAPACITY, size)];
+    }
+    private static <E> boolean trySwapSlot(int i,
+                                           Node<E>[] to, Node<E>[] from,
+                                           Node<E> f, Node<E> t) {
+        if (f != null) setAt(from, i, f);
+        return weakCasArrayAt(to, i, f, t);
     }
     private static int transferBound(int x, int y) {
         return Math.min(x, y);
@@ -199,7 +197,7 @@ public class AtomicTransferArray<E> {
     private static class TransferNode<E> extends Node<E> {
         final AtomicTransferArray<E> self;
         final Node<E>[] next;
-        volatile Node<E>[] prev; // todo: non volatile
+        Node<E>[] prev; // todo: non volatile
 
         TransferNode(AtomicTransferArray<E> self, Node<E>[] transfer, Node<E>[] prev) {
             super(null);
@@ -218,12 +216,8 @@ public class AtomicTransferArray<E> {
                             continue outer;
                         } else if (f instanceof TransferNode<E> t) {
                             t.helpTransfer();
-                        } else {
-                            if (f != null)
-                                setAt(next, i, f);
-                            if (casArrayAt(nodes, i, f, this)) {
-                                continue outer;
-                            }
+                        } else if (trySwapSlot(i, nodes, next, f, this)) {
+                            continue outer;
                         }
                     }
                 }
@@ -239,10 +233,10 @@ public class AtomicTransferArray<E> {
     }
     @SuppressWarnings("unchecked")
     static <E> Node<E> arrayAt(Node<E>[] arr, int i) {
-        return (Node<E>) AA.getVolatile(arr, i); // todo: acquire
+        return (Node<E>) AA.getAcquire(arr, i); // todo: acquire
     }
     static <E> void setAt(Node<E>[] arr, int i, Node<E> v) {
-        AA.setVolatile(arr, i, v); // todo: release
+        AA.setRelease(arr, i, v); // todo: release
     }
     static <E> boolean weakCasArrayAt(Node<E>[] arr, int i, Node<E> c, Node<E> v) {
         return AA.weakCompareAndSet(arr, i, c, v);
