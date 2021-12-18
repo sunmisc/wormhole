@@ -22,6 +22,14 @@ import java.lang.invoke.VarHandle;
  * в потоке 2 же начинает с конца, это позволяет достичь максимальной
  * производительности, вместо блокировки, мы помогаем выполнить перенос потоку 1
  *
+ * ============================================
+ * В будущем планируется оптимизировать этот механизм
+ * разделить перенос на левую и на правую часть
+ * тогда если с правой стороны, я дойду до левой, то есть гарантия,
+ * что после этого узла массив заполнен
+ * аналогично с другой стороны массива
+ * ============================================
+ *
  * @since 9
  * @author ZelvaLea
  * @param <E>
@@ -33,10 +41,10 @@ public class AtomicTransferArray<E> {
      *   v   v   v   v   v   v   v   v   v   v
      *  [0]>[N]>[N]>[N]>[N]>[N]>[N]>[N]>[N]>[N]  |  NEW ARRAY
      *
-     * 
-     * 
+     *
+     *
      * transfer:
-     * 
+     *
      *   (T)    (T)    (F)
      *      \      \
      *      (T)    (F)
@@ -142,7 +150,7 @@ public class AtomicTransferArray<E> {
     }
     Node<E>[] helpTransfer(TransferNode<E> tfn) {
         final Node<E>[] oldArr = tfn.oldArr,
-                        newArr = tfn.newArr;
+                newArr = tfn.newArr;
         if (tfn.isLive(oldArr)) {
             outer: for (int i = oldArr.length - 1;
                         i >= 0; --i) {
