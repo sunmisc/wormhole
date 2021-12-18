@@ -1,5 +1,7 @@
 package zelva.concurrent;
 
+import org.jetbrains.annotations.NotNull;
+
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 
@@ -127,16 +129,21 @@ public class AtomicTransferArray<E> {
     public void resize(int size) {
         final Node<E>[] newArr = prepareArray(size);
         Node<E>[] oldArr;
-        final TransferNode<E> tfn = new TransferNode<>(newArr,
+        final LeftTransferNode<E> tfn = new LeftTransferNode<>(newArr,
                 oldArr = array);
-        for (int i = 0,
-             len = tfn.transferBound(oldArr.length);
-             i < len; ++i) {
+        outer: for (int i = 0,
+                    len = tfn.transferBound(oldArr.length);
+                    i < len; ++i) {
             if (tfn.tryFinished())
                 return;
             for (Node<E> f; tfn.isLive(); ) {
-                if ((f = arrayAt(oldArr, i))
-                        instanceof TransferNode<E> t) {
+                if (equal((f = arrayAt(oldArr, i)), tfn)) {
+                    if (f instanceof RightTransferNode<E>) { // finished
+                        break outer;
+                    }
+                    // Thread.yield(); // lost race
+                    continue outer;
+                } else if (f instanceof TransferNode<E> t) {
                     oldArr = helpTransfer(t);
                     len = t.transferBound(size);
                 } else if (trySwapSlot(i, oldArr, newArr,
@@ -146,10 +153,14 @@ public class AtomicTransferArray<E> {
             }
         }
         array = newArr;
-        PREV.setRelease(tfn, FINISHED); // help gc
+        tfn.setFinish(); // help gc
     }
     Node<E>[] helpTransfer(TransferNode<E> tfn) {
-        final Node<E>[] oldArr = tfn.oldArr,
+        if (tfn instanceof LeftTransferNode<E> l) {
+            RightTransferNode<E> h = l.help;
+            tfn = h == null ? l.help = new RightTransferNode<>(l) : h;
+        }
+        final Node<E>[] oldArr = tfn.getOldArray(),
                 newArr = tfn.newArr;
         if (tfn.isLive(oldArr)) {
             outer: for (int i = oldArr.length - 1;
@@ -157,7 +168,11 @@ public class AtomicTransferArray<E> {
                 if (tfn.tryFinished())
                     return newArr;
                 for (Node<E> f; tfn.isLive(); ) {
-                    if ((f = arrayAt(oldArr, i)) == tfn) {
+                    if (equal((f = arrayAt(oldArr, i)), tfn)) {
+                        if (f instanceof LeftTransferNode<E>) { // finished
+                            break outer;
+                        }
+                        // Thread.yield(); // lost race
                         continue outer;
                     } else if (f instanceof TransferNode<E> t) {
                         helpTransfer(t);
@@ -167,12 +182,15 @@ public class AtomicTransferArray<E> {
                     }
                 }
             }
-            if (PREV.compareAndSet(tfn, oldArr, TRANSFERRED)) {
+            if (tfn.tryTransfer(oldArr)) {
                 array = newArr;
-                PREV.setRelease(tfn, FINISHED); // help gc
+                tfn.setFinish(); // help gc
             }
         }
         return newArr;
+    }
+    static <E> boolean equal(Node<E> n, @NotNull TransferNode<E> f) {
+        return n != null && f.equivalent(n);
     }
     @SuppressWarnings("unchecked")
     private static <E> Node<E>[] prepareArray(int size) {
@@ -216,19 +234,64 @@ public class AtomicTransferArray<E> {
             return e == null ? "EmptyNode" : e.toString();
         }
     }
+    private static class RightTransferNode<E> extends TransferNode<E> {
+        final LeftTransferNode<E> source;
 
-    private static class TransferNode<E> extends Node<E> {
-        final Node<E>[] newArr;
+        RightTransferNode(LeftTransferNode<E> source) {
+            super(source.newArr);
+            this.source = source;
+        }
+        @Override Node<E>[] getOldArray() { return source.getOldArray(); }
+        @Override void setOldArray(Node<E>[] array) {source.setOldArray(array);}
+        @Override boolean tryTransfer(Node<E>[] array) {return source.tryTransfer(array);}
+        @Override void setFinish() {source.setFinish();}
+
+        @Override
+        boolean equivalent(Node<E> tfn) {
+            return tfn == this || source == tfn;// || newArr.length == tfn.newArr.length;
+        }
+    }
+    private static class LeftTransferNode<E> extends TransferNode<E> {
         volatile Node<E>[] oldArr;
+        RightTransferNode<E> help;
 
-        TransferNode(Node<E>[] newArr, Node<E>[] oldArr) {
-            super(null);
-            this.newArr = newArr;
+        LeftTransferNode(Node<E>[] newArr, Node<E>[] oldArr) {
+            super(newArr);
             this.oldArr = oldArr;
         }
+
+        @Override
+        Node<E>[] getOldArray() {
+            return oldArr;
+        }
+        @Override
+        void setOldArray(Node<E>[] array) {
+            oldArr = array;
+        }
+        @Override
+        void setFinish() {
+            oldArr = FINISHED;
+        }
+        @Override
+        boolean tryTransfer(Node<E>[] array) {
+            return PREV.compareAndSet(this, array, TRANSFERRED);
+        }
+    }
+    private abstract static class TransferNode<E> extends Node<E> {
+        final Node<E>[] newArr;
+
+        TransferNode(Node<E>[] newArr) {
+            super(null);
+            this.newArr = newArr;
+        }
+        abstract Node<E>[] getOldArray();
+        abstract void setOldArray(Node<E>[] array);
+        abstract boolean tryTransfer(Node<E>[] array);
+        abstract void setFinish();
+
         boolean tryFinished() {
             Node<E>[] o;
-            while ((o = oldArr) == TRANSFERRED);
+            while ((o = getOldArray()) == TRANSFERRED);
             return o == FINISHED;
         }
         int transferBound(int size) {
@@ -238,8 +301,14 @@ public class AtomicTransferArray<E> {
             return o != TRANSFERRED && o != FINISHED;
         }
         boolean isLive() {
-            return isLive(oldArr);
+            return isLive(getOldArray());
         }
+        boolean equivalent(Node<E> tfn) {
+            return this == tfn;// || newArr.length == tfn.newArr.length;
+        }
+    }
+    private static class ArrayIterator {
+
     }
 
     @Override
@@ -250,8 +319,14 @@ public class AtomicTransferArray<E> {
         for (Node<E>[] arr = array;;) {
             Node<E> f = arrayAt(arr, i);
             // todo: optimize
-            while (f instanceof TransferNode<E> t) {
-                f = arrayAt(t.newArr, i);
+            for (;;) {
+                if (f instanceof RightTransferNode<E> t) {
+                    arr = t.newArr;
+                } else if (f instanceof LeftTransferNode<E> t) {
+                    f = arrayAt(t.newArr, i);
+                    continue;
+                }
+                break;
             }
             sb.append(f);
             if (++i >= arr.length)
@@ -280,7 +355,7 @@ public class AtomicTransferArray<E> {
         try {
             MethodHandles.Lookup l = MethodHandles.lookup();
             VAL = l.findVarHandle(Node.class, "element", Object.class);
-            PREV = l.findVarHandle(TransferNode.class, "oldArr", Node[].class);
+            PREV = l.findVarHandle(LeftTransferNode.class, "oldArr", Node[].class);
         } catch (ReflectiveOperationException e) {
             throw new ExceptionInInitializerError(e);
         }
