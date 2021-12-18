@@ -249,14 +249,14 @@ public class AtomicTransferArray<E> {
         int i = 0;
         for (Node<E>[] arr = array;;) {
             Node<E> f = arrayAt(arr, i);
-            if (f instanceof TransferNode<E> t) {
-                arr = t.newArr;
-            } else {
-                sb.append(f);
-                if (++i >= arr.length)
-                    return sb.append(']').toString();
-                sb.append(", ");
+            // todo: optimize
+            while (f instanceof TransferNode<E> t) {
+                f = arrayAt(t.newArr, i);
             }
+            sb.append(f);
+            if (++i >= arr.length)
+                return sb.append(']').toString();
+            sb.append(", ");
         }
     }
     @SuppressWarnings("unchecked")
