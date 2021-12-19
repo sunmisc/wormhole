@@ -1,7 +1,5 @@
 package zelva.concurrent;
 
-import org.jetbrains.annotations.NotNull;
-
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 
@@ -134,17 +132,18 @@ public class AtomicTransferArray<E> {
             if (tfn.handlePossibleFinish())
                 return;
             for (Node<E> f; tfn.isLive(); ) {
-                if (equal((f = arrayAt(oldArr, i)), tfn)) {
-                    if (f instanceof RightTransferNode<E>) { // finished
-                        break outer;
+                if ((f = arrayAt(oldArr, i)) instanceof TransferNode<E> t) {
+                    if (t.equivalent(tfn)) {
+                        if (f instanceof RightTransferNode) { // finished
+                            break outer;
+                        }
+                        Thread.yield(); // lost race
+                        continue outer;
+                    } else {
+                        oldArr = helpTransfer(t);
+                        len = t.transferBound(size);
                     }
-                    // Thread.yield(); // lost race
-                    continue outer;
-                } else if (f instanceof TransferNode<E> t) {
-                    oldArr = helpTransfer(t);
-                    len = t.transferBound(size);
-                } else if (trySwapSlot(i, oldArr, newArr,
-                        f, tfn)) {
+                } else if (trySwapSlot(i, oldArr, newArr, f, tfn)) {
                     break;
                 }
             }
@@ -152,41 +151,43 @@ public class AtomicTransferArray<E> {
         array = newArr;
         tfn.oldArr = null; // help gc
     }
-    Node<E>[] helpTransfer(TransferNode<E> tfn) {
+    Node<E>[] helpTransfer(final TransferNode<E> tfn) {
+        RightTransferNode<E> rtfn;
         if (tfn instanceof LeftTransferNode<E> l) {
             // safe racing race will not break anything for us,
             // because the field inside the object is declared as the final
             RightTransferNode<E> h = l.help;
-            tfn = h == null ? l.help = new RightTransferNode<>(l) : h;
+            rtfn = h == null ? l.help = new RightTransferNode<>(l) : h;
+        } else {
+            rtfn = (RightTransferNode<E>) tfn;
         }
-        final Node<E>[] oldArr = tfn.getOldArray(),
-                newArr = tfn.newArr;
-        if (tfn.isLive(oldArr)) {
-            outer: for (int i = tfn.transferBound(oldArr.length) - 1;
+        final Node<E>[] oldArr = rtfn.getOldArray(),
+                newArr = rtfn.newArr;
+        if (rtfn.isLive(oldArr)) {
+            outer: for (int i = rtfn.transferBound(oldArr.length) - 1;
                         i >= 0; --i) {
-                if (tfn.handlePossibleFinish())
+                if (rtfn.handlePossibleFinish())
                     return newArr;
-                for (Node<E> f; tfn.isLive(); ) {
-                    if (equal((f = arrayAt(oldArr, i)), tfn)) {
-                        if (f instanceof LeftTransferNode<E>) { // finished
-                            break outer;
+                for (Node<E> f; rtfn.isLive(); ) {
+                    if ((f = arrayAt(oldArr, i)) instanceof TransferNode<E> t) {
+                        if (t.equivalent(tfn)) {
+                            if (f instanceof LeftTransferNode) { // finished
+                                break outer;
+                            }
+                            // Thread.yield(); // lost race
+                            continue outer;
+                        } else {
+                            helpTransfer(t);
                         }
-                        // Thread.yield(); // lost race
-                        continue outer;
-                    } else if (f instanceof TransferNode<E> t) {
-                        helpTransfer(t);
                     } else if (trySwapSlot(i,
-                            oldArr, newArr, f, tfn)) {
+                            oldArr, newArr, f, rtfn)) {
                         continue outer;
                     }
                 }
             }
-            tfn.postComplete(oldArr, this);
+            rtfn.postComplete(oldArr, this);
         }
         return newArr;
-    }
-    static <E> boolean equal(Node<E> n, @NotNull TransferNode<E> f) {
-        return n != null && f.equivalent(n);
     }
     @SuppressWarnings("unchecked")
     private static <E> Node<E>[] prepareArray(int size) {

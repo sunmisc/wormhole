@@ -4,10 +4,7 @@ import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.Scope;
 import org.openjdk.jmh.annotations.Setup;
 import org.openjdk.jmh.annotations.State;
-import org.openjdk.jmh.runner.Runner;
 import org.openjdk.jmh.runner.RunnerException;
-import org.openjdk.jmh.runner.options.Options;
-import org.openjdk.jmh.runner.options.OptionsBuilder;
 
 import java.util.concurrent.ThreadLocalRandom;
 
@@ -15,11 +12,14 @@ import java.util.concurrent.ThreadLocalRandom;
 //  3824814,499 ± 35663,373  ops/s
 @State(Scope.Benchmark)
 public class AtomicTransferArrayBench {
-    private AtomicTransferArrayTest.AtomicTrasformerArray myArray;
+    private static AtomicTransferArrayTest.AtomicTrasformerArray myArray;
     private AtomicTransferArrayTest.LockTrasformerArray   lockArray;
 
     public static void main(String[] args) throws RunnerException {
-        Options opt = new OptionsBuilder()
+        myArray = new AtomicTransferArrayTest.AtomicTrasformerArray();
+        myArray.set(1, 1);
+        System.out.println(myArray.getResult());
+        /*Options opt = new OptionsBuilder()
                 .include(AtomicTransferArrayBench.class.getSimpleName())
                 .measurementIterations(4)
                 .forks(1)
@@ -27,7 +27,7 @@ public class AtomicTransferArrayBench {
                 .threadGroups(4)
                 .syncIterations(false)
                 .build();
-        new Runner(opt).run();
+        new Runner(opt).run();*/
     }
 
     @Setup

@@ -19,13 +19,13 @@ public class AtomicTransferArrayTest {
     public static class LockTrasformerArray {
         private Integer[] array = new Integer[10];
 
-        public Integer set(int i, int s) {
+        public synchronized Integer set(int i, int s) {
             return array[i] = s;
         }
-        public void resize(int i) {
+        public synchronized void resize(int i) {
             array = Arrays.copyOf(array, i);
         }
-        public String getResult() {
+        public synchronized String getResult() {
             return Arrays.toString(array);
         }
     }
@@ -51,7 +51,7 @@ public class AtomicTransferArrayTest {
         public void actor1() {
             for (int i = 0; i < 5; ++i) {
                 set(i, 988);
-                //resize(i + 10);
+                resize(i + 10);
                 set(i, i);
             }
         }
@@ -60,7 +60,7 @@ public class AtomicTransferArrayTest {
         public void actor2() {
             for (int i = 5; i < 10; ++i) {
                 set(i, 988);
-                //resize(i + 10);
+                resize(i + 10);
                 set(i, i);
             }
         }
