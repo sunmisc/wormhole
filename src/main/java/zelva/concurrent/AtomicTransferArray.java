@@ -133,7 +133,7 @@ public class AtomicTransferArray<E> {
         outer: for (int i = 0,
                     len = tfn.transferBound(oldArr.length);
                     i < len; ++i) {
-            if (tfn.tryFinished())
+            if (tfn.handlePossibleFinish())
                 return;
             for (Node<E> f; tfn.isLive(); ) {
                 if (equal((f = arrayAt(oldArr, i)), tfn)) {
@@ -151,8 +151,7 @@ public class AtomicTransferArray<E> {
                 }
             }
         }
-        array = newArr;
-        tfn.setFinish(); // help gc
+        tfn.postComplete(oldArr, this);
     }
     Node<E>[] helpTransfer(TransferNode<E> tfn) {
         if (tfn instanceof LeftTransferNode<E> l) {
@@ -164,7 +163,7 @@ public class AtomicTransferArray<E> {
         if (tfn.isLive(oldArr)) {
             outer: for (int i = oldArr.length - 1;
                         i >= 0; --i) {
-                if (tfn.tryFinished())
+                if (tfn.handlePossibleFinish())
                     return newArr;
                 for (Node<E> f; tfn.isLive(); ) {
                     if (equal((f = arrayAt(oldArr, i)), tfn)) {
@@ -181,10 +180,7 @@ public class AtomicTransferArray<E> {
                     }
                 }
             }
-            if (tfn.tryTransfer(oldArr)) {
-                array = newArr;
-                tfn.setFinish(); // help gc
-            }
+            tfn.postComplete(oldArr, this);
         }
         return newArr;
     }
@@ -242,8 +238,10 @@ public class AtomicTransferArray<E> {
         }
         @Override Node<E>[] getOldArray() { return source.getOldArray(); }
         @Override void setOldArray(Node<E>[] array) {source.setOldArray(array);}
-        @Override boolean tryTransfer(Node<E>[] array) {return source.tryTransfer(array);}
-        @Override void setFinish() {source.setFinish();}
+        @Override
+        void postComplete(Node<E>[] array, AtomicTransferArray<E> self) {
+            source.postComplete(array, self);
+        }
 
         @Override
         boolean equivalent(Node<E> tfn) {
@@ -267,16 +265,16 @@ public class AtomicTransferArray<E> {
         void setOldArray(Node<E>[] array) {
             oldArr = array;
         }
+
         @Override
-        void setFinish() {
-            oldArr = FINISHED;
-        }
-        @Override
-        boolean tryTransfer(Node<E>[] array) {
-            return PREV.compareAndSet(this, array, TRANSFERRED);
+        void postComplete(Node<E>[] arr, AtomicTransferArray<E> self) {
+            if (PREV.compareAndSet(this, arr, TRANSFERRED)) {
+                self.array = newArr;
+                oldArr = FINISHED; // help gc
+            }
         }
     }
-    private abstract static class TransferNode<E> extends Node<E> {
+    private static abstract class TransferNode<E> extends Node<E> {
         final Node<E>[] newArr;
 
         TransferNode(Node<E>[] newArr) {
@@ -285,10 +283,9 @@ public class AtomicTransferArray<E> {
         }
         abstract Node<E>[] getOldArray();
         abstract void setOldArray(Node<E>[] array);
-        abstract boolean tryTransfer(Node<E>[] array);
-        abstract void setFinish();
+        abstract void postComplete(Node<E>[] array, AtomicTransferArray<E> source);
 
-        boolean tryFinished() {
+        boolean handlePossibleFinish() {
             Node<E>[] o;
             while ((o = getOldArray()) == TRANSFERRED);
             return o == FINISHED;
