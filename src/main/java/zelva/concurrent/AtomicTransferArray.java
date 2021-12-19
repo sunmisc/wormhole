@@ -155,6 +155,8 @@ public class AtomicTransferArray<E> {
     }
     Node<E>[] helpTransfer(TransferNode<E> tfn) {
         if (tfn instanceof LeftTransferNode<E> l) {
+            // safe racing race will not break anything for us,
+            // because the field inside the object is declared as the final
             RightTransferNode<E> h = l.help;
             tfn = h == null ? l.help = new RightTransferNode<>(l) : h;
         }
@@ -303,9 +305,9 @@ public class AtomicTransferArray<E> {
             return this == tfn;// || newArr.length == tfn.newArr.length;
         }
     }
-    private static class ArrayIterator {
 
-    }
+    @Deprecated
+    private static class ArrayIterator {}
 
     @Override
     public String toString() {
