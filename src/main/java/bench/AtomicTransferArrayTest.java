@@ -33,7 +33,7 @@ public class AtomicTransferArrayTest {
     public static class AtomicTrasformerArray extends AtomicTransferArray<Integer> {
 
         public AtomicTrasformerArray() {
-            super(10);
+            super(2);
         }
 
         public Integer set(int i) {
@@ -44,28 +44,17 @@ public class AtomicTransferArrayTest {
         }
     }
     @JCStressTest
-    //@Outcome(id = {"[0, 1, null, null, null, 5, null, null]"}, expect = ACCEPTABLE, desc = "Both updates.")
     @State
-    public static class JcstressTest extends LockTrasformerArray {
+    public static class JcstressTest extends AtomicTrasformerArray {
         @Actor
         public void actor1() {
-            for (int i = 0; i < 5; ++i) {
-                set(i, 988);
-                resize(i + 10);
-                set(i, i);
-            }
+            set(0, 0);
+            resize(8);
         }
 
         @Actor
-        public void actor2() {
-            for (int i = 5; i < 10; ++i) {
-                set(i, 988);
-                resize(i + 10);
-                set(i, i);
-            }
-        }
-        @Arbiter
-        public void result(L_Result l) {
+        public void actor2(L_Result l) {
+            set(1, 1);
             l.r1 = getResult();
         }
     }

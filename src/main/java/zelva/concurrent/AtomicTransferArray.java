@@ -132,7 +132,8 @@ public class AtomicTransferArray<E> {
             if (tfn.handlePossibleFinish())
                 return;
             for (Node<E> f; tfn.isLive(); ) {
-                if ((f = arrayAt(oldArr, i)) instanceof TransferNode<E> t) {
+                if ((f = arrayAt(oldArr, i))
+                        instanceof TransferNode<E> t) {
                     if (t.equivalent(tfn)) {
                         if (f instanceof RightTransferNode) { // finished
                             break outer;
