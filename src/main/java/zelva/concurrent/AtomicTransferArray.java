@@ -54,9 +54,6 @@ public class AtomicTransferArray<E> {
     private static final int MIN_CAPACITY = 1;
     private static final int INITIAL_CAPACITY = 16;
 
-    // state
-    private static final Node<?>[] TRANSFERRED = new Node[0];
-
     volatile Node<E>[] array;
 
     public AtomicTransferArray(int size) {
@@ -272,6 +269,8 @@ public class AtomicTransferArray<E> {
         }
     }
     private abstract static class TransferNode<E> extends Node<E> {
+        // state
+        static final Node<?>[] TRANSFERRED = new Node[0];
         final Node<E>[] newArr;
 
         TransferNode(Node<E>[] newArr) {
