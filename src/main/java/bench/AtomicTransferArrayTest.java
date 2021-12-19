@@ -8,16 +8,32 @@ import org.openjdk.jcstress.annotations.State;
 import org.openjdk.jcstress.infra.results.L_Result;
 import zelva.concurrent.AtomicTransferArray;
 
+import java.util.Arrays;
+
 public class AtomicTransferArrayTest {
 
     public static void main(String[] args) throws Exception {
         Main.main(args);
     }
 
+    public static class LockTrasformerArray {
+        private Integer[] array = new Integer[10];
+
+        public Integer set(int i, int s) {
+            return array[i] = s;
+        }
+        public void resize(int i) {
+            array = Arrays.copyOf(array, i);
+        }
+        public String getResult() {
+            return Arrays.toString(array);
+        }
+    }
+
     public static class AtomicTrasformerArray extends AtomicTransferArray<Integer> {
 
         public AtomicTrasformerArray() {
-            super(2);
+            super(10);
         }
 
         public Integer set(int i) {
@@ -28,22 +44,25 @@ public class AtomicTransferArrayTest {
         }
     }
     @JCStressTest
+    //@Outcome(id = {"[0, 1, null, null, null, 5, null, null]"}, expect = ACCEPTABLE, desc = "Both updates.")
     @State
-    public static class JcstressTest extends AtomicTrasformerArray {
+    public static class JcstressTest extends LockTrasformerArray {
         @Actor
         public void actor1() {
-            set(0, 0);
-            resize(8);
-            set(7, 7);
-            resize(15);
+            for (int i = 0; i < 5; ++i) {
+                set(i, 988);
+                //resize(i + 10);
+                set(i, i);
+            }
         }
 
         @Actor
         public void actor2() {
-            set(1, 1);
-            resize(9);
-            set(5, 5);
-            resize(10);
+            for (int i = 5; i < 10; ++i) {
+                set(i, 988);
+                //resize(i + 10);
+                set(i, i);
+            }
         }
         @Arbiter
         public void result(L_Result l) {

@@ -8,7 +8,6 @@ import org.openjdk.jmh.runner.Runner;
 import org.openjdk.jmh.runner.RunnerException;
 import org.openjdk.jmh.runner.options.Options;
 import org.openjdk.jmh.runner.options.OptionsBuilder;
-import zelva.concurrent.AtomicTransferArray;
 
 import java.util.concurrent.ThreadLocalRandom;
 
@@ -16,7 +15,8 @@ import java.util.concurrent.ThreadLocalRandom;
 //  3824814,499 ± 35663,373  ops/s
 @State(Scope.Benchmark)
 public class AtomicTransferArrayBench {
-    private AtomicTransferArray<Integer> myArray;
+    private AtomicTransferArrayTest.AtomicTrasformerArray myArray;
+    private AtomicTransferArrayTest.LockTrasformerArray   lockArray;
 
     public static void main(String[] args) throws RunnerException {
         Options opt = new OptionsBuilder()
@@ -32,14 +32,19 @@ public class AtomicTransferArrayBench {
 
     @Setup
     public void prepare() {
-        myArray = new AtomicTransferArray<>(2);
+        myArray = new AtomicTransferArrayTest.AtomicTrasformerArray();
+        lockArray = new AtomicTransferArrayTest.LockTrasformerArray();
     }
 
     @Benchmark
-    public Integer growAtomicArray() {
+    public Integer setAtomicArray() {
         int i = ThreadLocalRandom.current().nextInt(1, 8);
-        myArray.resize(i);
-        myArray.set(0, i);
-        return i;
+        return myArray.set(i, i);
+    }
+
+    @Benchmark
+    public Integer setLockArray() {
+        int i = ThreadLocalRandom.current().nextInt(1, 8);
+        return lockArray.set(i, i);
     }
 }
