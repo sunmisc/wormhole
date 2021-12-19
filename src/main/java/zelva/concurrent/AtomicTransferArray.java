@@ -238,8 +238,7 @@ public class AtomicTransferArray<E> {
         }
         @Override Node<E>[] getOldArray() { return source.getOldArray(); }
 
-        @Override
-        void postComplete(Node<E>[] arr, AtomicTransferArray<E> self) {
+        private void postComplete(Node<E>[] arr, AtomicTransferArray<E> self) {
             source.postComplete(arr, self);
         }
 
@@ -260,8 +259,7 @@ public class AtomicTransferArray<E> {
         Node<E>[] getOldArray() {
             return oldArr;
         }
-        @Override
-        void postComplete(Node<E>[] arr, AtomicTransferArray<E> self) {
+        private void postComplete(Node<E>[] arr, AtomicTransferArray<E> self) {
             if (PREV.compareAndSet(this, arr, TRANSFERRED)) {
                 self.array = newArr;
                 oldArr = null; // help gc
@@ -278,7 +276,6 @@ public class AtomicTransferArray<E> {
             this.newArr = newArr;
         }
         abstract Node<E>[] getOldArray();
-        abstract void postComplete(Node<E>[] array, AtomicTransferArray<E> source);
 
         boolean handlePossibleFinish() {
             Node<E>[] o;
