@@ -57,10 +57,9 @@ public class AtomicTransferArray<E> {
     private static final int INITIAL_CAPACITY = 16;
 
     // state
+    private static final Node<?>[] TRANSFERRED = new Node[0];
     @SuppressWarnings("rawtypes")
-    private static final Node[] TRANSFERRED = new Node[0];
-    @SuppressWarnings("rawtypes")
-    private static final Node[] FINISHED    = null; // and help GC
+    private static final Node[]    FINISHED    = null; // and help GC
 
     volatile Node<E>[] array;
 
@@ -172,7 +171,7 @@ public class AtomicTransferArray<E> {
                         if (f instanceof LeftTransferNode<E>) { // finished
                             break outer;
                         }
-                        // Thread.yield(); // lost race
+                        Thread.yield(); // lost race
                         continue outer;
                     } else if (f instanceof TransferNode<E> t) {
                         helpTransfer(t);
@@ -323,8 +322,11 @@ public class AtomicTransferArray<E> {
                 if (f instanceof RightTransferNode<E> t) {
                     arr = t.newArr;
                 } else if (f instanceof LeftTransferNode<E> t) {
-                    f = arrayAt(t.newArr, i);
-                    continue;
+                    if (t.isLive()) {
+                        f = arrayAt(t.newArr, i);
+                        continue;
+                    } else
+                        arr = t.newArr;
                 }
                 break;
             }

@@ -3,9 +3,6 @@ package bench;
 import org.openjdk.jcstress.Main;
 import org.openjdk.jcstress.annotations.*;
 import org.openjdk.jcstress.infra.results.L_Result;
-import zelva.concurrent.AtomicTransferArray;
-
-import static org.openjdk.jcstress.annotations.Expect.ACCEPTABLE;
 
 public class AtomicTransferArrayTest {
 
@@ -13,7 +10,7 @@ public class AtomicTransferArrayTest {
         Main.main(args);
     }
 
-    public static class AtomicTrasformerArray extends AtomicTransferArray<Integer> {
+    public static class AtomicTrasformerArray extends AtomicArrayLockGrow<Integer> {
 
         public AtomicTrasformerArray() {
             super(2);
