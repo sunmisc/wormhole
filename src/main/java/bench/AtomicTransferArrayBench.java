@@ -8,6 +8,7 @@ import org.openjdk.jmh.runner.Runner;
 import org.openjdk.jmh.runner.RunnerException;
 import org.openjdk.jmh.runner.options.Options;
 import org.openjdk.jmh.runner.options.OptionsBuilder;
+import tests.AtomicTransferArrayTest;
 
 import java.util.concurrent.ThreadLocalRandom;
 
@@ -15,8 +16,8 @@ import java.util.concurrent.ThreadLocalRandom;
 //  3824814,499 ± 35663,373  ops/s
 @State(Scope.Benchmark)
 public class AtomicTransferArrayBench {
-    private AtomicTransferArrayTest.AtomicTrasformerArray myArray;
-    private AtomicTransferArrayTest.LockTrasformerArray   lockArray;
+    private AtomicTransferArrayTest.MyAtomicResizeArray myArray;
+    private AtomicTransferArrayTest.LockResizeArray lockArray;
 
     public static void main(String[] args) throws RunnerException {
         Options opt = new OptionsBuilder()
@@ -32,8 +33,8 @@ public class AtomicTransferArrayBench {
 
     @Setup
     public void prepare() {
-        myArray = new AtomicTransferArrayTest.AtomicTrasformerArray();
-        lockArray = new AtomicTransferArrayTest.LockTrasformerArray();
+        myArray = new AtomicTransferArrayTest.MyAtomicResizeArray();
+        lockArray = new AtomicTransferArrayTest.LockResizeArray();
     }
 
     @Benchmark

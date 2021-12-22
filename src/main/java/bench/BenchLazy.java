@@ -5,7 +5,7 @@ import org.openjdk.jmh.runner.Runner;
 import org.openjdk.jmh.runner.RunnerException;
 import org.openjdk.jmh.runner.options.Options;
 import org.openjdk.jmh.runner.options.OptionsBuilder;
-import zelva.concurrent.Lazy;
+import zelva.utils.concurrent.Lazy;
 
 import java.util.ArrayList;
 import java.util.function.Supplier;

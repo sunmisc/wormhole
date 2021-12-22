@@ -1,4 +1,4 @@
-package zelva.nio;
+package zelva.utils.nio;
 
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;

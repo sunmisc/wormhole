@@ -1,9 +1,9 @@
-package zelva.nio;
+package zelva.utils.nio;
 
 import java.io.InputStream;
 import java.nio.BufferUnderflowException;
 
-import static zelva.nio.ByteArrayView.*;
+import static zelva.utils.nio.ByteArrayView.*;
 
 public class ReaderByteStream extends InputStream {
     private final byte[] buf;

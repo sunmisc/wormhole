@@ -1,7 +1,8 @@
-package zelva.concurrent;
+package zelva.utils.concurrent;
 
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
+import java.util.function.Consumer;
 
 /**
  * Demo Array Atomic Resize
@@ -194,12 +195,30 @@ public class AtomicTransferArray<E> {
     private static <E> boolean trySwapSlot(int i,
                                            Node<E>[] to, Node<E>[] from,
                                            Node<E> f, Node<E> t) {
-        if (f != null) setAt(from, i, f);
+        if (f != null)
+            setAt(from, i, f); // volatile ?
         return weakCasArrayAt(to, i, f, t);
     }
 
     public int size() {
         return array.length;
+    }
+    public void forEach(Consumer<E> action) {
+        Node<E>[] arr = array;
+        for (int i = 0; i < arr.length;) {
+            for (Node<E> f = arrayAt(arr, i);;) {
+                if (f instanceof RightTransferNode<E> t) {
+                    arr = t.newArr; // done array
+                    break;
+                } else if (f instanceof TransferNode<E> t) {
+                    f = arrayAt(t.newArr, i);
+                } else {
+                    if (f != null)
+                        action.accept(f.element);
+                    break;
+                }
+            }
+        }
     }
 
     // test
@@ -244,7 +263,11 @@ public class AtomicTransferArray<E> {
 
         @Override
         boolean equivalent(Node<E> tfn) {
-            return tfn == this || source == tfn;// || newArr.length == tfn.newArr.length;
+            return tfn == this || source == tfn;
+        }
+        @Override
+        public String toString() {
+            return source.toString();
         }
     }
     private static class LeftTransferNode<E> extends TransferNode<E> {
@@ -292,7 +315,7 @@ public class AtomicTransferArray<E> {
             return isLive(getOldArray());
         }
         boolean equivalent(Node<E> tfn) {
-            return this == tfn;// || newArr.length == tfn.newArr.length;
+            return this == tfn;
         }
     }
     @Deprecated
@@ -302,23 +325,22 @@ public class AtomicTransferArray<E> {
     public String toString() {
         StringBuilder sb = new StringBuilder();
         sb.append('[');
-        int i = 0;
-        for (Node<E>[] arr = array;;) {
-            Node<E> f = arrayAt(arr, i);
-            // todo: optimize
-            for (;;) {
+        Node<E>[] arr = array;
+        for (int i = 0;;) {
+            for (Node<E> f = arrayAt(arr, i);;) {
                 if (f instanceof RightTransferNode<E> t) {
-                    arr = t.newArr;
-                } else if (f instanceof LeftTransferNode<E> t) {
+                    arr = t.newArr; // filled
+                    break;
+                } else if (f instanceof TransferNode<E> t) {
                     f = arrayAt(t.newArr, i);
-                    continue;
+                } else {
+                    sb.append(f);
+                    if (++i == arr.length) // left
+                        return sb.append(']').toString();
+                    sb.append(", ");
+                    break;
                 }
-                break;
             }
-            sb.append(f);
-            if (++i >= arr.length)
-                return sb.append(']').toString();
-            sb.append(", ");
         }
     }
     @SuppressWarnings("unchecked")

@@ -1,8 +1,8 @@
-package zelva.nio;
+package zelva.utils.nio;
 
 import java.util.Arrays;
 
-import static zelva.nio.ByteArrayView.*;
+import static zelva.utils.nio.ByteArrayView.*;
 
 public class WriterByteStream {
     static final int MAX_ARRAY_LENGTH = Integer.MAX_VALUE - 8;
