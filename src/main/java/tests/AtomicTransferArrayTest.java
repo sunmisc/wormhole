@@ -47,18 +47,6 @@ public class AtomicTransferArrayTest {
             set(0, 0);
             resize(5);
         }
-        @Actor
-        public void actor2() {
-            set(1, 1);
-            resize(8);
-        }
-        @Actor
-        public void actor3() {
-            resize(10);
-            set(2, 2);
-            resize(10);
-        }
-
         @Arbiter
         public void actor4(L_Result l) {
             l.r1 = getResult();

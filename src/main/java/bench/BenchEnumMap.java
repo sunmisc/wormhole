@@ -10,7 +10,7 @@ import zelva.utils.concurrent.ConcurrentEnumMap;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
-@Threads(6)
+@Threads(4)
 @State(Scope.Benchmark)
 public class BenchEnumMap {
     private ConcurrentMap<Letter, String> hashMap;
@@ -20,28 +20,28 @@ public class BenchEnumMap {
     private Letter key;
 
     /*
-BenchEnumMap.clearAsEnum                 Z  thrpt    4  3239249942,528 ± 281957737,117  ops/s
-BenchEnumMap.clearAsHash                 Z  thrpt    4   252518722,893 ±   5042680,868  ops/s
-BenchEnumMap.computeAsEnum               Z  thrpt    4    38032901,146 ±    149339,782  ops/s
-BenchEnumMap.computeAsHash               Z  thrpt    4    15459624,543 ±     43466,130  ops/s
-BenchEnumMap.computeIfAbsentAsEnum       Z  thrpt    4   923546063,859 ±  34907228,719  ops/s
-BenchEnumMap.computeIfAbsentAsHash       Z  thrpt    4   341128986,026 ±   5445687,070  ops/s
-BenchEnumMap.computeIfPresentAsEnum      Z  thrpt    4    39709575,109 ±    100499,171  ops/s
-BenchEnumMap.computeIfPresentAsHash      Z  thrpt    4    15333622,885 ±     16163,984  ops/s
-BenchEnumMap.getAsEnum                   Z  thrpt    4   863661327,675 ±  23646823,252  ops/s
-BenchEnumMap.getAsHash                   Z  thrpt    4   463826903,556 ±  23080500,425  ops/s
-BenchEnumMap.mergeAsEnum                 Z  thrpt    4    38826371,651 ±    132353,909  ops/s
-BenchEnumMap.mergeAsHash                 Z  thrpt    4    15146730,000 ±     64064,033  ops/s
-BenchEnumMap.putAsEnum                   Z  thrpt    4    54347348,568 ±    115558,776  ops/s
-BenchEnumMap.putAsHash                   Z  thrpt    4    14805282,196 ±    250563,705  ops/s
-BenchEnumMap.putIfAbsentAsEnum           Z  thrpt    4   910119993,420 ±   6692421,508  ops/s
-BenchEnumMap.putIfAbsentAsHash           Z  thrpt    4   260719066,087 ±   1390688,013  ops/s
-BenchEnumMap.removeAsEnum                Z  thrpt    4   909635947,993 ±  30169207,358  ops/s
-BenchEnumMap.removeAsHash                Z  thrpt    4   466590443,964 ±  12343995,045  ops/s
-BenchEnumMap.removeValAsEnum             Z  thrpt    4   978397821,638 ±  26025564,419  ops/s
-BenchEnumMap.removeValAsHash             Z  thrpt    4    14800984,344 ±     67033,218  ops/s
-BenchEnumMap.replaceAsEnum               Z  thrpt    4    53803738,660 ±    524848,001  ops/s
-BenchEnumMap.replaceAsHash               Z  thrpt    4    14844581,365 ±     55100,219  ops/s
+BenchEnumMap.clearAsEnum                 Z  thrpt    4  686395736,302 ± 230608979,419  ops/s
+BenchEnumMap.clearAsHash                 Z  thrpt    4   60289261,444 ±  28201814,010  ops/s
+BenchEnumMap.computeAsEnum               Z  thrpt    4   20650947,368 ±   3778496,004  ops/s
+BenchEnumMap.computeAsHash               Z  thrpt    4    9420015,234 ±    617690,361  ops/s
+BenchEnumMap.computeIfAbsentAsEnum       Z  thrpt    4  197213163,709 ±  54999107,567  ops/s
+BenchEnumMap.computeIfAbsentAsHash       Z  thrpt    4   82471327,102 ±  49394770,034  ops/s
+BenchEnumMap.computeIfPresentAsEnum      Z  thrpt    4   22698793,879 ±    708463,226  ops/s
+BenchEnumMap.computeIfPresentAsHash      Z  thrpt    4    9473014,783 ±    259991,554  ops/s
+BenchEnumMap.getAsEnum                   Z  thrpt    4  192121543,000 ±  23857496,861  ops/s
+BenchEnumMap.getAsHash                   Z  thrpt    4  102144250,940 ± 101911570,816  ops/s
+BenchEnumMap.mergeAsEnum                 Z  thrpt    4   20710255,272 ±   5140263,144  ops/s
+BenchEnumMap.mergeAsHash                 Z  thrpt    4   10471602,776 ±   2028967,923  ops/s
+BenchEnumMap.putAsEnum                   Z  thrpt    4   26630174,673 ±   6186430,487  ops/s
+BenchEnumMap.putAsHash                   Z  thrpt    4   11838846,055 ±   4036207,895  ops/s
+BenchEnumMap.putIfAbsentAsEnum           Z  thrpt    4  166765030,384 ±  49010635,486  ops/s
+BenchEnumMap.putIfAbsentAsHash           Z  thrpt    4   71007820,881 ±   8870377,910  ops/s
+BenchEnumMap.removeAsEnum                Z  thrpt    4  197855606,182 ±  38522830,182  ops/s
+BenchEnumMap.removeAsHash                Z  thrpt    4   92593926,478 ±  59725832,578  ops/s
+BenchEnumMap.removeValAsEnum             Z  thrpt    4  222894784,537 ±  92835536,783  ops/s
+BenchEnumMap.removeValAsHash             Z  thrpt    4    8413816,697 ±    870552,493  ops/s
+BenchEnumMap.replaceAsEnum               Z  thrpt    4  232100122,163 ± 187016597,788  ops/s
+BenchEnumMap.replaceAsHash               Z  thrpt    4    9407603,460 ±    736172,444  ops/s
      */
     public static void main(String[] args) throws RunnerException {
         Options opt = new OptionsBuilder()
@@ -61,19 +61,19 @@ BenchEnumMap.replaceAsHash               Z  thrpt    4    14844581,365 ±     55
     }
 
 
-    /*@Benchmark public String putIfAbsentAsHash() {return hashMap.putIfAbsent(key, "Test-Fest");}
+    @Benchmark public String putIfAbsentAsHash() {return hashMap.putIfAbsent(key, "Test-Fest");}
     @Benchmark public String putIfAbsentAsEnum() {return enumMap.putIfAbsent(key, "Test-Fest");}
 
     @Benchmark public String putAsHash() {return hashMap.put(key, "Test-Fest");}
     @Benchmark public String putAsEnum() {return enumMap.put(key, "Test-Fest");}
 
     @Benchmark public String removeAsHash() {return hashMap.remove(key);}
-    @Benchmark public String removeAsEnum() {return enumMap.remove(key);}*/
+    @Benchmark public String removeAsEnum() {return enumMap.remove(key);}
 
     @Benchmark public boolean removeValAsHash() {return hashMap.remove(key, "T");}
     @Benchmark public boolean removeValAsEnum() {return enumMap.remove(key, "T");}
 
-    /*@Benchmark public boolean replaceAsHash() {return hashMap.replace(key, "Q", "L");}
+    @Benchmark public boolean replaceAsHash() {return hashMap.replace(key, "Q", "L");}
     @Benchmark public boolean replaceAsEnum() {return enumMap.replace(key, "Q", "L");}
 
     @Benchmark public String mergeAsHash() {return hashMap.merge(key, "Test-Fest", (k,v) -> "T");}
@@ -92,7 +92,7 @@ BenchEnumMap.replaceAsHash               Z  thrpt    4    14844581,365 ±     55
     @Benchmark public String getAsEnum() {return enumMap.get(key);}
 
     @Benchmark public void clearAsHash() {hashMap.clear();}
-    @Benchmark public void clearAsEnum() {enumMap.clear();}*/
+    @Benchmark public void clearAsEnum() {enumMap.clear();}
 
 
     public enum Letter {
