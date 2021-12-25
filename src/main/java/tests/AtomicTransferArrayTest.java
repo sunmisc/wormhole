@@ -5,6 +5,7 @@ import org.openjdk.jcstress.annotations.Actor;
 import org.openjdk.jcstress.annotations.Arbiter;
 import org.openjdk.jcstress.annotations.JCStressTest;
 import org.openjdk.jcstress.annotations.State;
+import org.openjdk.jcstress.infra.results.LL_Result;
 import org.openjdk.jcstress.infra.results.L_Result;
 import zelva.utils.concurrent.AtomicTransferArray;
 
@@ -25,6 +26,9 @@ public class AtomicTransferArrayTest {
         public synchronized void resize(int i) {
             array = Arrays.copyOf(array, i);
         }
+        public synchronized Integer get(int i) {
+            return array[i];
+        }
         public synchronized String getResult() {
             return Arrays.toString(array);
         }
@@ -41,15 +45,16 @@ public class AtomicTransferArrayTest {
     }
     @JCStressTest
     @State
-    public static class JcstressTest extends MyAtomicResizeArray {
+    public static class JcstressTest extends LockResizeArray {
         @Actor
         public void actor1() {
-            set(0, 0);
-            resize(5);
+            set(0, 1);
+            set(1, 2);
         }
-        @Arbiter
-        public void actor4(L_Result l) {
-            l.r1 = getResult();
+        @Actor
+        public void actor4(LL_Result l) {
+            l.r1 = get(0);
+            l.r2 = get(1);
         }
     }
 }

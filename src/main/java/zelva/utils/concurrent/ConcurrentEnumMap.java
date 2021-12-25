@@ -487,7 +487,7 @@ public class ConcurrentEnumMap<K extends Enum<K>,V> extends AbstractMap<K,V>
         public K next() {
             if (!hasNext())
                 throw new NoSuchElementException();
-            return map.keys[index];
+            return map.keys[index++];
         }
     }
 
