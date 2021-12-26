@@ -25,7 +25,6 @@ public class AtomicTransferArrayBench {
                 .measurementIterations(4)
                 .forks(1)
                 .threads(4)
-                .threadGroups(4)
                 .syncIterations(false)
                 .build();
         new Runner(opt).run();
@@ -44,10 +43,10 @@ public class AtomicTransferArrayBench {
         return i;
     }
 
-    @Benchmark
+   /* @Benchmark
     public Integer growLockArray() {
         int i = ThreadLocalRandom.current().nextInt(1, 8);
         lockArray.resize(i);
         return i;
-    }
+    }*/
 }

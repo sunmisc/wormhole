@@ -109,10 +109,6 @@ public class ConcurrentEnumMap<K extends Enum<K>,V> extends AbstractMap<K,V>
         counter.add(c);
     }
 
-    private long getAdderCount() {
-        return Math.max(counter.sum(), 0L);
-    }
-
     @Override
     public V get(Object key) {
         return isValidKey(key)
@@ -200,14 +196,14 @@ public class ConcurrentEnumMap<K extends Enum<K>,V> extends AbstractMap<K,V>
     @Override
     public int size() {
         // let's handle the overflow
-        long n = getAdderCount();
+        long n = Math.max(counter.sum(), 0L);
         return n >= Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) n;
 
     }
 
     @Override
     public boolean isEmpty() {
-        return getAdderCount() == 0L;
+        return counter.sum() <= 0L;
     }
 
     @Override
@@ -521,6 +517,7 @@ public class ConcurrentEnumMap<K extends Enum<K>,V> extends AbstractMap<K,V>
         }
     }
 
+    // todo: Concurrent
     private abstract static class EnumMapIterator<K extends Enum<K>,V,E>
             implements Iterator<E> {
         final ConcurrentEnumMap<K,V> map;
