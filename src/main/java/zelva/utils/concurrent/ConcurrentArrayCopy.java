@@ -35,7 +35,7 @@ import java.util.function.Consumer;
  * @author ZelvaLea
  * @param <E>
  */
-public class AtomicTransferArray<E> {
+public class ConcurrentArrayCopy<E> {
     /*
      *  [T] [1] [2] [3] [4] [5] [6] [7] [8] [9]  |  OLD ARRAY
      *   ^   ^   ^   ^   ^   ^   ^   ^   ^   ^
@@ -57,10 +57,10 @@ public class AtomicTransferArray<E> {
 
     volatile Node<E>[] array;
 
-    public AtomicTransferArray(int size) {
+    public ConcurrentArrayCopy(int size) {
         this.array = prepareArray(size);
     }
-    public AtomicTransferArray() {
+    public ConcurrentArrayCopy() {
         this(INITIAL_CAPACITY);
     }
 
@@ -121,16 +121,17 @@ public class AtomicTransferArray<E> {
     }
     public void resize(int size) {
         final Node<E>[] newArr = prepareArray(size);
-        Node<E>[] oldArr;
+        Node<E>[] crnt;
+        Node<E>[] old;
         final LeftTransferNode<E> tfn = new LeftTransferNode<>(newArr,
-                oldArr = array);
+                old = crnt = array);
         outer: for (int i = 0,
-                    len = tfn.transferBound(oldArr.length);
+                    len = tfn.transferBound(crnt.length);
                     i < len; ++i) {
-            if (tfn.handlePossibleFinish())
-                return;
+            if (!tfn.isLive())
+                break;
             for (Node<E> f; tfn.isLive(); ) {
-                if ((f = arrayAt(oldArr, i))
+                if ((f = arrayAt(crnt, i))
                         instanceof TransferNode<E> t) {
                     if (t.equivalent(tfn)) {
                         if (f instanceof RightTransferNode) { // finished
@@ -139,17 +140,17 @@ public class AtomicTransferArray<E> {
                         Thread.yield(); // lost race
                         continue outer;
                     } else {
-                        oldArr = helpTransfer(t);
+                        crnt = helpTransfer(t);
                         len = t.transferBound(size);
                     }
-                } else if (trySwapSlot(i, oldArr, newArr, f, tfn)) {
+                } else if (trySwapSlot(i, crnt, newArr, f, tfn)) {
                     break;
                 }
             }
         }
-        array = newArr;
-        tfn.oldArr = null; // help gc
+        tfn.postComplete(old, this);
     }
+    // todo: fix: remove
     Node<E>[] helpTransfer(final TransferNode<E> tfn) {
         RightTransferNode<E> rtfn;
         if (tfn instanceof LeftTransferNode<E> l) {
@@ -165,8 +166,8 @@ public class AtomicTransferArray<E> {
         if (rtfn.isLive(oldArr)) {
             outer: for (int i = rtfn.transferBound(oldArr.length) - 1;
                         i >= 0; --i) {
-                if (rtfn.handlePossibleFinish())
-                    return newArr;
+                if (!rtfn.isLive())
+                    break;
                 for (Node<E> f; rtfn.isLive(); ) {
                     if ((f = arrayAt(oldArr, i)) instanceof TransferNode<E> t) {
                         if (t.equivalent(tfn)) {
@@ -195,8 +196,7 @@ public class AtomicTransferArray<E> {
     private static <E> boolean trySwapSlot(int i,
                                            Node<E>[] to, Node<E>[] from,
                                            Node<E> f, Node<E> t) {
-        if (f != null)
-            setAt(from, i, f); // volatile ?
+        setAt(from, i, f); // volatile ?
         return weakCasArrayAt(to, i, f, t);
     }
 
@@ -257,7 +257,7 @@ public class AtomicTransferArray<E> {
         }
         @Override Node<E>[] getOldArray() { return source.getOldArray(); }
 
-        private void postComplete(Node<E>[] arr, AtomicTransferArray<E> self) {
+        private void postComplete(Node<E>[] arr, ConcurrentArrayCopy<E> self) {
             source.postComplete(arr, self);
         }
 
@@ -282,7 +282,7 @@ public class AtomicTransferArray<E> {
         Node<E>[] getOldArray() {
             return oldArr;
         }
-        private void postComplete(Node<E>[] arr, AtomicTransferArray<E> self) {
+        private void postComplete(Node<E>[] arr, ConcurrentArrayCopy<E> self) {
             if (PREV.compareAndSet(this, arr, TRANSFERRED)) {
                 self.array = newArr;
                 oldArr = null; // help gc
@@ -300,6 +300,7 @@ public class AtomicTransferArray<E> {
         }
         abstract Node<E>[] getOldArray();
 
+        // todo: optimize
         boolean handlePossibleFinish() {
             Node<E>[] o;
             while ((o = getOldArray()) == TRANSFERRED);
@@ -345,10 +346,10 @@ public class AtomicTransferArray<E> {
     }
     @SuppressWarnings("unchecked")
     static <E> Node<E> arrayAt(Node<E>[] arr, int i) {
-        return (Node<E>) AA.getAcquire(arr, i);
+        return (Node<E>) AA.getVolatile(arr, i);
     }
     static <E> void setAt(Node<E>[] arr, int i, Node<E> v) {
-        AA.setRelease(arr, i, v);
+        AA.setVolatile(arr, i, v);
     }
     static <E> boolean weakCasArrayAt(Node<E>[] arr, int i, Node<E> c, Node<E> v) {
         return AA.weakCompareAndSet(arr, i, c, v);

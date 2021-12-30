@@ -16,7 +16,7 @@ import java.util.concurrent.ThreadLocalRandom;
 //  3824814,499 ± 35663,373  ops/s
 @State(Scope.Benchmark)
 public class AtomicTransferArrayBench {
-    private AtomicTransferArrayTest.MyAtomicResizeArray myArray;
+    private AtomicTransferArrayTest.MyAtomicResizeArrayCopy myArray;
     private AtomicTransferArrayTest.LockResizeArray lockArray;
 
     public static void main(String[] args) throws RunnerException {
@@ -32,7 +32,7 @@ public class AtomicTransferArrayBench {
 
     @Setup
     public void prepare() {
-        myArray = new AtomicTransferArrayTest.MyAtomicResizeArray();
+        myArray = new AtomicTransferArrayTest.MyAtomicResizeArrayCopy();
         lockArray = new AtomicTransferArrayTest.LockResizeArray();
     }
 

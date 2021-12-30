@@ -483,7 +483,9 @@ public class ConcurrentEnumMap<K extends Enum<K>,V> extends AbstractMap<K,V>
         public K next() {
             if (!hasNext())
                 throw new NoSuchElementException();
-            return map.keys[index++];
+            int i = baseIndex;
+            advance();
+            return map.keys[i];
         }
     }
 
@@ -497,7 +499,9 @@ public class ConcurrentEnumMap<K extends Enum<K>,V> extends AbstractMap<K,V>
         public V next() {
             if (!hasNext())
                 throw new NoSuchElementException();
-            return tabAt(map.table, index++);
+            int i = baseIndex;
+            advance();
+            return tabAt(map.table, i);
         }
     }
 
@@ -510,42 +514,54 @@ public class ConcurrentEnumMap<K extends Enum<K>,V> extends AbstractMap<K,V>
         public Map.Entry<K,V> next() {
             if (!hasNext())
                 throw new NoSuchElementException();
-            int c = index;
-            V e = tabAt(map.table, c);
-            index = c + 1;
-            return new MapEntry<>(map.keys[c], e, map);
+            int i = baseIndex; V n = next;
+            advance();
+            return new MapEntry<>(map.keys[i], n, map);
         }
     }
 
-    // todo: Concurrent
     private abstract static class EnumMapIterator<K extends Enum<K>,V,E>
             implements Iterator<E> {
         final ConcurrentEnumMap<K,V> map;
-        int index;
+        V next, lastRet;
+        int baseIndex = -1;
 
         EnumMapIterator(ConcurrentEnumMap<K,V> map) {
             this.map = map;
+            advance();
         }
 
         @Override
         public boolean hasNext() {
-            V[] tab = map.table;
-            int len = tab.length;
-            for (int i = index; i < len; ++i) {
-                if (tabAt(tab, index) == null) {
-                    index++;
+            return next != null;
+        }
+        V advance() {
+            lastRet = next;
+            V[] tab = map.table; V val;
+            for (int i = baseIndex + 1, len = tab.length;
+                 i < len; ++i) {
+                if ((val = tabAt(tab, i)) != null) {
+                    baseIndex = i;
+                    return next = val;
                 }
             }
-            return index != len;
+            return next = null;
         }
 
         @Override
         public void remove() {
+            if ((lastRet) == null) {
+                throw new IllegalStateException();
+            }
             V[] tab = map.table;
-            if (tabAt(tab, index) != null &&
-                    getAndSetAt(tab, index, null) != null) {
+            int b = baseIndex - 1;
+            if (b < 0) {
+                throw new IllegalStateException();
+            } else if (tabAt(tab, b) != null &&
+                    getAndSetAt(tab, b, null) != null) {
                 map.addCount(-1L);
             }
+            lastRet = null;
         }
     }
 
