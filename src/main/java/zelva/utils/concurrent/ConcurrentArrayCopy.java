@@ -119,7 +119,7 @@ public class ConcurrentArrayCopy<E> {
             }
         }
     }
-    public void resize(int size) {
+    public synchronized void resize(int size) {
         final Node<E>[] newArr = prepareArray(size);
         Node<E>[] crnt;
         Node<E>[] old;
@@ -128,21 +128,12 @@ public class ConcurrentArrayCopy<E> {
         outer: for (int i = 0,
                     len = tfn.transferBound(crnt.length);
                     i < len; ++i) {
-            if (!tfn.isLive())
-                break;
-            for (Node<E> f; tfn.isLive(); ) {
-                if ((f = arrayAt(crnt, i))
-                        instanceof TransferNode<E> t) {
-                    if (t.equivalent(tfn)) {
-                        if (f instanceof RightTransferNode) { // finished
-                            break outer;
-                        }
-                        Thread.yield(); // lost race
-                        continue outer;
-                    } else {
-                        crnt = helpTransfer(t);
-                        len = t.transferBound(size);
-                    }
+            for (Node<E> f;; ) {
+                if (!tfn.isLive()) {
+                    break outer;
+                } else if ((f = arrayAt(crnt, i))
+                        instanceof RightTransferNode<E>) {
+                    break outer; // finished
                 } else if (trySwapSlot(i, crnt, newArr, f, tfn)) {
                     break;
                 }
@@ -150,8 +141,12 @@ public class ConcurrentArrayCopy<E> {
         }
         tfn.postComplete(old, this);
     }
-    // todo: fix: remove
     Node<E>[] helpTransfer(final TransferNode<E> tfn) {
+       // while (tfn.isLive());
+        return tfn.newArr;
+    }
+
+    Node<E>[] helpTransfe41r(final TransferNode<E> tfn) {
         RightTransferNode<E> rtfn;
         if (tfn instanceof LeftTransferNode<E> l) {
             // safe racing race will not break anything for us,
@@ -161,15 +156,48 @@ public class ConcurrentArrayCopy<E> {
         } else {
             rtfn = (RightTransferNode<E>) tfn;
         }
-        final Node<E>[] oldArr = rtfn.getOldArray(),
+        Node<E>[] oldArr = tfn.getOldArray(),
+                newArr = tfn.newArr;
+        if (tfn.isLive()) {
+            outer: for (int i = tfn.transferBound(oldArr.length) - 1;
+                       i >= 0; --i) {
+                for (Node<E> f; ; ) {
+                    if (!tfn.isLive()) {
+                        break outer;
+                    } else if ((f = arrayAt(oldArr, i))
+                            instanceof LeftTransferNode<E>) {
+                        break outer; // finished
+                    } else if (trySwapSlot(i, oldArr, newArr, f, rtfn)) {
+                        break;
+                    }
+                }
+            }
+        }
+        rtfn.postComplete(oldArr, this);
+        return newArr;
+    }
+
+    // todo: fix: remove
+    Node<E>[] helpTransfer0(final TransferNode<E> tfn) {
+        RightTransferNode<E> rtfn;
+        if (tfn instanceof LeftTransferNode<E> l) {
+            // safe racing race will not break anything for us,
+            // because the field inside the object is declared as the final
+            RightTransferNode<E> h = l.help;
+            rtfn = h == null ? l.help = new RightTransferNode<>(l) : h;
+        } else {
+            rtfn = (RightTransferNode<E>) tfn;
+        }
+        Node<E>[] oldArr = rtfn.getOldArray(),
                 newArr = rtfn.newArr;
         if (rtfn.isLive(oldArr)) {
             outer: for (int i = rtfn.transferBound(oldArr.length) - 1;
                         i >= 0; --i) {
-                if (!rtfn.isLive())
-                    break;
-                for (Node<E> f; rtfn.isLive(); ) {
-                    if ((f = arrayAt(oldArr, i)) instanceof TransferNode<E> t) {
+                for (Node<E> f;; ) {
+                    if (!rtfn.isLive()) {
+                        break outer;
+                    } else if ((f = arrayAt(oldArr, i))
+                            instanceof TransferNode<E> t) {
                         if (t.equivalent(tfn)) {
                             if (f instanceof LeftTransferNode) { // finished
                                 break outer;
@@ -177,7 +205,7 @@ public class ConcurrentArrayCopy<E> {
                             // Thread.yield(); // lost race
                             continue outer;
                         } else {
-                            helpTransfer(t);
+                            oldArr = helpTransfer0(t);
                         }
                     } else if (trySwapSlot(i,
                             oldArr, newArr, f, rtfn)) {
@@ -247,6 +275,9 @@ public class ConcurrentArrayCopy<E> {
             E e = element;
             return e == null ? "EmptyNode" : e.toString();
         }
+        boolean equivalent(Node<E> tfn) {
+            return tfn == this;
+        }
     }
     private static class RightTransferNode<E> extends TransferNode<E> {
         final LeftTransferNode<E> source;
@@ -260,10 +291,16 @@ public class ConcurrentArrayCopy<E> {
         private void postComplete(Node<E>[] arr, ConcurrentArrayCopy<E> self) {
             source.postComplete(arr, self);
         }
+        public boolean isLive(Node<E>[] a) {
+            return source.isLive(a);
+        }
+        public boolean isLive() {
+            return source.isLive();
+        }
 
         @Override
         boolean equivalent(Node<E> tfn) {
-            return tfn == this || source == tfn;
+            return super.equivalent(tfn) || tfn.equivalent(source) || source.equivalent(tfn);
         }
         @Override
         public String toString() {
@@ -272,7 +309,7 @@ public class ConcurrentArrayCopy<E> {
     }
     private static class LeftTransferNode<E> extends TransferNode<E> {
         volatile Node<E>[] oldArr;
-        RightTransferNode<E> help;
+        volatile RightTransferNode<E> help;
 
         LeftTransferNode(Node<E>[] newArr, Node<E>[] oldArr) {
             super(newArr);
@@ -315,9 +352,6 @@ public class ConcurrentArrayCopy<E> {
         boolean isLive() {
             return isLive(getOldArray());
         }
-        boolean equivalent(Node<E> tfn) {
-            return this == tfn;
-        }
     }
     @Deprecated
     private static class ArrayIterator {}
@@ -330,7 +364,7 @@ public class ConcurrentArrayCopy<E> {
         for (int i = 0;;) {
             for (Node<E> f = arrayAt(arr, i);;) {
                 if (f instanceof RightTransferNode<E> t) {
-                    arr = t.newArr; // filled
+                    arr = helpTransfer(t); // filled
                     break;
                 } else if (f instanceof TransferNode<E> t) {
                     f = arrayAt(t.newArr, i);
@@ -360,12 +394,13 @@ public class ConcurrentArrayCopy<E> {
 
     private static final VarHandle AA
             = MethodHandles.arrayElementVarHandle(Object[].class);
-    private static final VarHandle VAL, PREV;
+    private static final VarHandle VAL, PREV, HELP;
     static {
         try {
             MethodHandles.Lookup l = MethodHandles.lookup();
             VAL = l.findVarHandle(Node.class, "element", Object.class);
             PREV = l.findVarHandle(LeftTransferNode.class, "oldArr", Node[].class);
+            HELP = l.findVarHandle(LeftTransferNode.class, "help", RightTransferNode.class);
         } catch (ReflectiveOperationException e) {
             throw new ExceptionInInitializerError(e);
         }
