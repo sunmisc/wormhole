@@ -12,8 +12,12 @@ import tests.AtomicTransferArrayTest;
 
 import java.util.concurrent.ThreadLocalRandom;
 
-//  2162788,258 ± 50642,165  ops/s
-//  3824814,499 ± 35663,373  ops/s
+/*
+AtomicTransferArrayBench.growAtomicArray  thrpt    4  3777303,444 ± 5648846,663  ops/s
+AtomicTransferArrayBench.growLockArray    thrpt    4  7080428,068 ± 5849378,647  ops/s
+
+
+ */
 @State(Scope.Benchmark)
 public class AtomicTransferArrayBench {
     private AtomicTransferArrayTest.MyAtomicResizeArrayCopy myArray;
@@ -24,7 +28,7 @@ public class AtomicTransferArrayBench {
                 .include(AtomicTransferArrayBench.class.getSimpleName())
                 .measurementIterations(4)
                 .forks(1)
-                .threads(4)
+                .threads(8)
                 .syncIterations(false)
                 .build();
         new Runner(opt).run();
@@ -43,10 +47,10 @@ public class AtomicTransferArrayBench {
         return i;
     }
 
-   /* @Benchmark
+    @Benchmark
     public Integer growLockArray() {
         int i = ThreadLocalRandom.current().nextInt(1, 8);
         lockArray.resize(i);
         return i;
-    }*/
+    }
 }

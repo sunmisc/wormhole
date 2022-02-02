@@ -23,15 +23,12 @@ public class AtomicTransferArrayTest {
         public synchronized Integer set(int i, Integer s) {
             return array[i] = s;
         }
-        public void resize(int size) {
+        public synchronized void resize(int size) {
             Integer[] newArr = prepareArray(size);
-            synchronized (this) {
-                for (int i = 0; i < Math.min(size, array.length); ++i) {
-                    Integer d = array[i];
-                    newArr[i] = d == null ? 0 : d;
-                }
-                array = newArr;
+            for (int i = 0; i < Math.min(size, array.length); ++i) {
+                newArr[i] = array[i];
             }
+            array = newArr;
         }
         public synchronized Integer get(int i) {
             return array[i];
@@ -59,12 +56,12 @@ public class AtomicTransferArrayTest {
         @Actor
         public void actor1() {
             set(0, 1);
-            resize(3);
+            resize(9);
         }
         @Actor
         public void actor2() {
             set(2, 3);
-            resize(5);
+            resize(13);
             set(2, null);
         }
         @Actor
