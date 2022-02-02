@@ -23,12 +23,14 @@ public class AtomicTransferArrayTest {
         public synchronized Integer set(int i, Integer s) {
             return array[i] = s;
         }
-        public synchronized void resize(int size) {
+        public void resize(int size) {
             Integer[] newArr = prepareArray(size);
-            for (int i = 0; i < Math.min(size, array.length); ++i) {
-                newArr[i] = array[i];
+            synchronized (this) {
+                for (int i = 0; i < Math.min(size, array.length); ++i) {
+                    newArr[i] = array[i];
+                }
+                array = newArr;
             }
-            array = newArr;
         }
         public synchronized Integer get(int i) {
             return array[i];
@@ -55,22 +57,21 @@ public class AtomicTransferArrayTest {
     public static class JcstressTest extends MyAtomicResizeArrayCopy {
         @Actor
         public void actor1() {
-            set(0, 1);
-            resize(9);
+            set(0, 0);
+            resize(4);
+            set(2, 2);
+            resize(16);
         }
+
         @Actor
         public void actor2() {
-            set(2, 3);
-            resize(13);
-            set(2, null);
-        }
-        @Actor
-        public void actor3() {
-            set(1, 2);
-            resize(7);
+            set(1, 1);
+            resize(4);
+            set(3, 3);
+            resize(16);
         }
         @Arbiter
-        public void actor4(L_Result l) {
+        public void result(L_Result l) {
             l.r1 = getResult();
         }
     }

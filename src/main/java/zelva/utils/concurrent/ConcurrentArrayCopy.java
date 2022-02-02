@@ -56,7 +56,6 @@ public class ConcurrentArrayCopy<E> {
     private static final int INITIAL_CAPACITY = 16;
 
     volatile Node<E>[] array;
-    volatile int shiftIndex;
 
     public ConcurrentArrayCopy(int size) {
         this.array = prepareArray(size);
@@ -81,14 +80,14 @@ public class ConcurrentArrayCopy<E> {
             } else {
                 if (needRemove) {
                     synchronized (f) {
-                        if (f != arrayAt(arr, i)) { // for optimize
-                            continue;
-                        } else if (casArrayAt(arr, i, f, null)) {
+                        if (f == arrayAt(arr, i)) {
+                            setAt(arr, i, null);
                             return true;
                         }
                     }
+                } else {
+                    return VAL.compareAndSet(f, e, v);
                 }
-                return VAL.compareAndSet(f, e, v);
             }
         }
     }
@@ -107,18 +106,16 @@ public class ConcurrentArrayCopy<E> {
             } else if (f instanceof TransferNode<E> t) {
                 arr = helpTransfer(t);
             } else {
-                E e = f.element;
+                final E e = f.element;
                 if (needRemove) {
                     synchronized (f) {
-                        if (f == arrayAt(arr, i) && // for optimize
-                                casArrayAt(
-                                        arr, i,
-                                        f, null)
-                        ) { return e; }
+                        if (f == arrayAt(arr, i)) {
+                            setAt(arr, i, null);
+                            return e;
+                        }
                     }
-                } else {
-                    return element != e
-                            ? f.element = element : e;
+                } else if (element != e) {
+                    return f.element = element;
                 }
             }
         }
@@ -140,7 +137,8 @@ public class ConcurrentArrayCopy<E> {
     public synchronized void resize(int size) {
         final Node<E>[] newArr = prepareArray(size);
         Node<E>[] old;
-        final LeftTransferNode<E> ltfn = new LeftTransferNode<>(newArr,
+        final LeftTransferNode<E> ltfn = new LeftTransferNode<>(
+                newArr,
                 old = array);
         outer: for (int i = 0,
                     len = ltfn.transferBound(old.length);
@@ -169,9 +167,8 @@ public class ConcurrentArrayCopy<E> {
                             continue;
                         }
                         setAt(newArr, i, f);
-                        if (casArrayAt(old, i, f, ltfn)) {
-                            continue outer;
-                        }
+                        setAt(old, i, ltfn); // no cas
+                        continue outer;
                     }
                 }
             }
@@ -215,19 +212,12 @@ public class ConcurrentArrayCopy<E> {
                                 continue;
                             }
                             setAt(newArr, i, f);
-                            if (casArrayAt(oldArr, i, f, rtfn)) {
-                                continue outer;
-                            }
+                            setAt(oldArr, i, rtfn); // no cas
+                            continue outer;
                         }
                     }
                 }
             }
-            /*StringBuilder builder = new StringBuilder();
-            for (int i = 0; i < oldArr.length; ++i) {
-                Object o = arrayAt(oldArr, i);
-                builder.append(o == null ? "null" : o.getClass().getSimpleName()).append(' ');
-            }
-            System.out.println(builder);*/
             rtfn.postComplete();
             array = newArr;
         }
