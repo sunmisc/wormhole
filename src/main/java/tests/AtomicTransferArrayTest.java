@@ -54,7 +54,7 @@ public class AtomicTransferArrayTest {
     }
     @JCStressTest
     @State
-    public static class JcstressTest extends MyAtomicResizeArrayCopy {
+    public static class JcstressTest extends LockResizeArray {
         @Actor
         public void actor1() {
             set(0, 0);
@@ -69,6 +69,8 @@ public class AtomicTransferArrayTest {
             resize(4);
             set(3, 3);
             resize(16);
+            set(2, null);
+            resize(17);
         }
         @Arbiter
         public void result(L_Result l) {
