@@ -52,8 +52,8 @@ public class ConcurrentArrayCopy<E> {
      *      /
      *   (F)
      */
-    private static final int MIN_CAPACITY = 1;
-    private static final int INITIAL_CAPACITY = 16; // todo : 0 or 1?
+    private static final int MIN_CAPACITY = 1; // todo : 0 or 1?
+    private static final int INITIAL_CAPACITY = 16;
 
     volatile Node<E>[] array;
 
@@ -141,21 +141,21 @@ public class ConcurrentArrayCopy<E> {
         // todo : handle the exception
         final Node<E>[] newArr = prepareArray(size);
         Node<E>[] old;
-        final LeftTransferNode<E> ltfn = new LeftTransferNode<>(
+        final LeftTransferNode<E> ltf = new LeftTransferNode<>(
                 newArr, old = array);
         outer: for (int i = 0,
-                    len = ltfn.transferBound(old.length);
+                    len = ltf.transferBound(old.length);
                     i < len; ++i) {
             for (Node<E> f; ; ) {
-                if (!ltfn.isLive()) {
+                if (!ltf.isLive()) {
                     break outer;
                 } else if ((f = arrayAt(old, i)) == null) {
                     if (weakCasArrayAt(old, i,
-                            null, ltfn)) {
+                            null, ltf)) {
                         continue outer;
                     }
                 } else if (f instanceof TransferNode<E> t) {
-                    if (t.equivalent(ltfn)) {
+                    if (t.equivalent(ltf)) {
                         if (f instanceof RightTransferNode) { // finished
                             break outer;
                         }
@@ -170,13 +170,13 @@ public class ConcurrentArrayCopy<E> {
                             continue;
                         }
                         setAt(newArr, i, f);
-                        setAt(old, i, ltfn); // no cas
+                        setAt(old, i, ltf); // no cas
                         continue outer;
                     }
                 }
             }
         }
-        ltfn.postComplete();
+        ltf.postComplete();
         array = newArr;
     }
 
@@ -185,8 +185,8 @@ public class ConcurrentArrayCopy<E> {
         if (tfn instanceof LeftTransferNode<E> l) {
             // safe racing race will not break anything for us,
             // because the field inside the object is declared as the final
-            RightTransferNode<E> h = l.help;
-            rtf = h == null ? l.help = new RightTransferNode<>(l) : h;
+            RightTransferNode<E> h = l.helper;
+            rtf = h == null ? l.helper = new RightTransferNode<>(l) : h;
         } else {
             rtf = (RightTransferNode<E>) tfn;
         }
@@ -204,11 +204,13 @@ public class ConcurrentArrayCopy<E> {
                             continue outer;
                         }
                     } else if (f instanceof TransferNode<E> t) {
-                        if (t.equivalent(tfn)) {
-                            break outer;
+                        if (t.equivalent(rtf)) {
+                            if (f instanceof LeftTransferNode<E>) { // finished
+                                break outer;
+                            }
+                            Thread.yield();
+                            continue outer;
                         }
-                        Thread.yield(); // lost race
-                        continue outer;
                     } else {
                         synchronized (f) {
                             if (arrayAt(oldArr, i) != f) {
@@ -307,7 +309,7 @@ public class ConcurrentArrayCopy<E> {
     }
     static class LeftTransferNode<E> extends TransferNode<E> {
         volatile Node<E>[] oldArr;
-        RightTransferNode<E> help;
+        RightTransferNode<E> helper;
 
         LeftTransferNode(Node<E>[] newArr, Node<E>[] oldArr) {
             super(newArr);

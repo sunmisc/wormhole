@@ -1,10 +1,7 @@
 package tests;
 
 import org.openjdk.jcstress.Main;
-import org.openjdk.jcstress.annotations.Actor;
-import org.openjdk.jcstress.annotations.Arbiter;
-import org.openjdk.jcstress.annotations.JCStressTest;
-import org.openjdk.jcstress.annotations.State;
+import org.openjdk.jcstress.annotations.*;
 import org.openjdk.jcstress.infra.results.L_Result;
 import zelva.utils.concurrent.ConcurrentArrayCopy;
 
@@ -18,7 +15,7 @@ public class AtomicTransferArrayTest {
 
     public static class LockResizeArray {
         private static final int MIN_CAPACITY = 1;
-        private volatile Integer[] array = new Integer[3];
+        private volatile Integer[] array = new Integer[7];
 
         public synchronized Integer set(int i, Integer s) {
             return array[i] = s;
@@ -46,31 +43,45 @@ public class AtomicTransferArrayTest {
     public static class MyAtomicResizeArrayCopy extends ConcurrentArrayCopy<Integer> {
 
         public MyAtomicResizeArrayCopy() {
-            super(3);
+            super(256);
         }
         public String getResult() {
             return super.toString();
         }
     }
     @JCStressTest
+    //@Outcome(id = {"[0, 1, 2, 3, 4, 5, null, null, null, null, null, null, null, null, null, null]"},
+    //        expect = Expect.ACCEPTABLE)
     @State
-    public static class JcstressTest extends LockResizeArray {
+    public static class JcstressTest extends MyAtomicResizeArrayCopy {
         @Actor
         public void actor1() {
             set(0, 0);
-            resize(4);
-            set(2, 2);
-            resize(16);
+            resize(259);
+            set(1, 1);
+            resize(256);
         }
 
         @Actor
         public void actor2() {
-            set(1, 1);
-            resize(4);
-            set(3, 3);
-            resize(16);
-            set(2, null);
-            resize(17);
+            set(254, 254);
+            resize(257);
+            set(255, 255);
+            resize(256);
+        }
+        @Actor
+        public void actor3() {
+            set(2, 2);
+            resize(280);
+            set(253, 253);
+            resize(256);
+        }
+        @Actor
+        public void actor4() {
+            set(150, 150);
+            resize(271);
+            set(152, 152);
+            resize(256);
         }
         @Arbiter
         public void result(L_Result l) {
