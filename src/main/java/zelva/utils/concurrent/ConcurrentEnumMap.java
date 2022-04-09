@@ -30,15 +30,14 @@ import java.util.function.Function;
  * This map differs from EnumMap in that it is thread-safe
  * and scales well
  *
- * @since 9
  * @author ZelvaLea
  *
  * Type parameters:
  * <K> – the type of keys maintained by this map
  * <V> – the type of mapped values
  */
-// НЕ ИСПОЛЬЗОВАТЬ, ЕЩЕ НЕ ПРОТЕСТИРОВАНО!!!
-public class ConcurrentEnumMap<K extends Enum<K>,V> extends AbstractMap<K,V>
+
+public final class ConcurrentEnumMap<K extends Enum<K>,V>
         implements ConcurrentMap<K,V> {
     // An object of the class for the enumeration type of all the keys of this map
     private final Class<K> keyType;
@@ -70,37 +69,29 @@ public class ConcurrentEnumMap<K extends Enum<K>,V> extends AbstractMap<K,V>
         } else {
             if (m.isEmpty())
                 throw new IllegalArgumentException("Specified map is empty");
-            this.keys = (K[]) m.keySet().toArray(new Enum[0]);
+            this.keys = (K[]) m.keySet().toArray(Enum[]::new);
             this.keyType = keys[0].getDeclaringClass();
             this.table = (V[]) new Object[keyType.getEnumConstants().length];
             this.counter = new LongAdder();
-            long delta = 0;
-            for (Map.Entry<? extends K, ? extends V> e : m.entrySet()) {
-                Enum<?> key = e.getKey(); Object val = e.getValue();
-                if (key.getDeclaringClass() != keyType)
-                    throw new IllegalArgumentException("unsuitable type");
-                if (getAndSetAt(table, key.ordinal(), val) == null)
-                    ++delta;
-            }
-            addCount(delta);
+            putAll(m);
         }
     }
     @SuppressWarnings("unchecked")
-    static <V> V tabAt(V[] tab, int i) {
+    private static <V> V tabAt(V[] tab, int i) {
         return (V) AA.getAcquire(tab, i);
     }
-    static <V> boolean casTabAt(V[] tab, int i, V c, V v) {
+    private static <V> boolean casTabAt(V[] tab, int i, V c, V v) {
         return AA.compareAndSet(tab, i, c, v);
     }
-    static <V> boolean weakCasTabAt(V[] tab, int i, V c, V v) {
+    private static <V> boolean weakCasTabAt(V[] tab, int i, V c, V v) {
         return AA.weakCompareAndSet(tab, i, c, v);
     }
     @SuppressWarnings("unchecked")
-    static <V> V caeTabAt(V[] tab, int i, V c, V v) {
+    private static <V> V caeTabAt(V[] tab, int i, V c, V v) {
         return (V) AA.compareAndExchange(tab, i, c, v);
     }
     @SuppressWarnings("unchecked")
-    static <V> V getAndSetAt(V[] tab, int i, V v) {
+    private static <V> V getAndSetAt(V[] tab, int i, V v) {
         return (V) AA.getAndSet(tab, i, v);
     }
 
@@ -128,27 +119,11 @@ public class ConcurrentEnumMap<K extends Enum<K>,V> extends AbstractMap<K,V>
 
     @Override
     public void putAll(Map<? extends K, ? extends V> m) {
-        if (m.isEmpty())
-            return;
-        long delta = 0;
-        if (m instanceof ConcurrentEnumMap<?, ?> em) {
-            if (em.keyType != keyType)
-                throw new ClassCastException(em.keyType + " not equal to " + keyType);
-            V[] tab = table;
-            for (int i = 0, len = tab.length; i < len; ++i) {
-                Object val = tabAt(em.table, i);
-                if (val != null && getAndSetAt(tab, i, val) == null) {
-                    ++delta;
-                }
-            }
-        } else {
-            for (Map.Entry<? extends K, ? extends V> e : m.entrySet()) {
-                Enum<?> key = e.getKey(); Object val = e.getValue();
-                if (key.getDeclaringClass() == keyType)
-                    continue;
-                if (getAndSetAt(table, key.ordinal(), val) == null)
-                    ++delta;
-            }
+        long delta = 0L;
+        for (Map.Entry<? extends K, ? extends V> e : m.entrySet()) {
+            Enum<?> key = e.getKey(); Object val = e.getValue();
+            if (getAndSetAt(table, key.ordinal(), val) == null)
+                ++delta;
         }
         addCount(delta);
     }
@@ -167,8 +142,7 @@ public class ConcurrentEnumMap<K extends Enum<K>,V> extends AbstractMap<K,V>
 
     @Override
     public void clear() {
-        if (isEmpty()) return;
-        long delta = 0;
+        long delta = 0L;
         V[] tab = table;
         for (int i = 0, len = tab.length; i < len; ++i) {
             if (tabAt(tab, i) != null &&
@@ -198,7 +172,6 @@ public class ConcurrentEnumMap<K extends Enum<K>,V> extends AbstractMap<K,V>
         // let's handle the overflow
         long n = Math.max(counter.sum(), 0L);
         return n >= Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) n;
-
     }
 
     @Override
@@ -378,46 +351,31 @@ public class ConcurrentEnumMap<K extends Enum<K>,V> extends AbstractMap<K,V>
         KeySetView(ConcurrentEnumMap<K,V> map) {
             this.map = map;
         }
-        @Override
-        public Iterator<K> iterator() {
-            return new KeyIterator<>(map);
-        }
-        @Override
-        public boolean contains(Object o) {
-            return map.containsKey(o);
-        }
-        @Override
-        public void clear() {
-            map.clear();
-        }
-        @Override
-        public int size() {
-            return map.size();
-        }
-        @Override
-        public boolean remove(Object o) {
-            return map.remove(o) != null;
-        }
+        @Override public final int size() {return map.size();}
+        @Override public final boolean isEmpty() {return map.isEmpty();}
+        @Override public final void clear() {map.clear();}
+
+        @Override public Iterator<K> iterator() {return new KeyIterator<>(map);}
+        @Override public boolean contains(Object o) {return map.containsKey(o);}
+        @Override public boolean remove(Object o) {return map.remove(o) != null;}
     }
 
     private static class ValuesView<K extends Enum<K>,V>
             extends AbstractCollection<V> {
+
         private final ConcurrentEnumMap<? super K, V> map;
+
         ValuesView(ConcurrentEnumMap<? super K, V> map) {
             this.map = map;
         }
-        @Override
-        public Iterator<V> iterator() {
-            return new ValueIterator<>(map);
-        }
-        @Override
-        public int size() {
-            return map.size();
-        }
-        @Override
-        public boolean contains(Object o) {
-            return map.containsValue(o);
-        }
+        @Override public final int size() {return map.size();}
+        @Override public final boolean isEmpty() {return map.isEmpty();}
+        @Override public final void clear() {map.clear();}
+
+        @Override public Iterator<V> iterator() {return new ValueIterator<>(map);}
+
+        @Override public boolean contains(Object o) {return map.containsValue(o);}
+
         @Override
         public boolean remove(Object o) {
             if (o == null)
@@ -432,10 +390,6 @@ public class ConcurrentEnumMap<K extends Enum<K>,V> extends AbstractMap<K,V>
             }
             return false;
         }
-        @Override
-        public void clear() {
-            map.clear();
-        }
     }
     private static class EntrySetView<K extends Enum<K>,V>
             extends AbstractSet<Map.Entry<K,V>> {
@@ -444,34 +398,32 @@ public class ConcurrentEnumMap<K extends Enum<K>,V> extends AbstractMap<K,V>
         EntrySetView(ConcurrentEnumMap<K,V> map) {
             this.map = map;
         }
-        @Override
-        public Iterator<Map.Entry<K,V>> iterator() {
-            return new EntryIterator<>(map);
-        }
+        @Override public final int size() {return map.size();}
+        @Override public final boolean isEmpty() {return map.isEmpty();}
+        @Override public final void clear() {map.clear();}
+
+        @Override public Iterator<Map.Entry<K,V>> iterator() {return new EntryIterator<>(map);}
 
         @Override
         public boolean contains(Object o) {
-            if (o instanceof Entry<?,?> e) {
-                return map.containsKey(e.getKey());
-            }
-            return false;
+            Object k, v, r; Map.Entry<?,?> e;
+            return ((o instanceof Map.Entry) &&
+                    (k = (e = (Map.Entry<?,?>)o).getKey()) != null &&
+                    (r = map.get(k)) != null &&
+                    (v = e.getValue()) != null &&
+                    (v == r || v.equals(r)));
         }
         @Override
         public boolean remove(Object o) {
-            if (o instanceof Entry<?,?> e) {
-                return map.remove(e.getKey(), e.getValue());
-            }
-            return false;
+            Object k, v; Map.Entry<?,?> e;
+            return ((o instanceof Map.Entry) &&
+                    (k = (e = (Map.Entry<?,?>)o).getKey()) != null &&
+                    (v = e.getValue()) != null &&
+                    map.remove(k, v));
         }
-
         @Override
-        public int size() {
-            return map.size();
-        }
-
-        @Override
-        public void clear() {
-            map.clear();
+        public boolean add(Entry<K,V> e) {
+            return map.put(e.getKey(), e.getValue()) == null;
         }
     }
     private static class KeyIterator<K extends Enum<K>,V>
@@ -483,9 +435,7 @@ public class ConcurrentEnumMap<K extends Enum<K>,V> extends AbstractMap<K,V>
         public K next() {
             if (!hasNext())
                 throw new NoSuchElementException();
-            int i = baseIndex;
-            advance();
-            return map.keys[i];
+            return map.keys[lastReturnedIndex = index++];
         }
     }
 
@@ -499,9 +449,7 @@ public class ConcurrentEnumMap<K extends Enum<K>,V> extends AbstractMap<K,V>
         public V next() {
             if (!hasNext())
                 throw new NoSuchElementException();
-            int i = baseIndex;
-            advance();
-            return tabAt(map.table, i);
+            return tabAt(map.table, lastReturnedIndex = index++);
         }
     }
 
@@ -514,54 +462,42 @@ public class ConcurrentEnumMap<K extends Enum<K>,V> extends AbstractMap<K,V>
         public Map.Entry<K,V> next() {
             if (!hasNext())
                 throw new NoSuchElementException();
-            int i = baseIndex; V n = next;
-            advance();
-            return new MapEntry<>(map.keys[i], n, map);
+            int i = lastReturnedIndex = index++;
+            return new MapEntry<>(
+                    map.keys[i], tabAt(map.table, i),
+                    map);
         }
     }
 
     private abstract static class EnumMapIterator<K extends Enum<K>,V,E>
             implements Iterator<E> {
         final ConcurrentEnumMap<K,V> map;
-        V next, lastRet;
-        int baseIndex = -1;
+        int index, lastReturnedIndex = -1;
 
         EnumMapIterator(ConcurrentEnumMap<K,V> map) {
             this.map = map;
-            advance();
         }
 
         @Override
         public boolean hasNext() {
-            return next != null;
-        }
-        V advance() {
-            lastRet = next;
-            V[] tab = map.table; V val;
-            for (int i = baseIndex + 1, len = tab.length;
-                 i < len; ++i) {
-                if ((val = tabAt(tab, i)) != null) {
-                    baseIndex = i;
-                    return next = val;
-                }
-            }
-            return next = null;
+            final V[] tab = map.table;
+            final int len = tab.length;
+            while (index < len && tabAt(tab, index) == null)
+                index++;
+            return index != len;
         }
 
         @Override
         public void remove() {
-            if ((lastRet) == null) {
+            final int l = lastReturnedIndex;
+            if (l < 0)
                 throw new IllegalStateException();
-            }
-            V[] tab = map.table;
-            int b = baseIndex - 1;
-            if (b < 0) {
-                throw new IllegalStateException();
-            } else if (tabAt(tab, b) != null &&
-                    getAndSetAt(tab, b, null) != null) {
+            final V[] tab = map.table;
+            if (tabAt(tab, l) != null &&
+                    getAndSetAt(tab, l, null) != null) {
                 map.addCount(-1L);
             }
-            lastRet = null;
+            lastReturnedIndex = -1;
         }
     }
 
@@ -611,44 +547,37 @@ public class ConcurrentEnumMap<K extends Enum<K>,V> extends AbstractMap<K,V>
     @Override
     public int hashCode() {
         int h = 0;
-        if (!isEmpty()) {
-            V[] tab = table;
-            for (int i = 0, len = tab.length; i < len; i++) {
-                V val;
-                if ((val = tabAt(tab, i)) == null)
-                    continue;
-                h += keys[i].hashCode() ^ val.hashCode();
-            }
+        V[] tab = table;
+        for (int i = 0, len = tab.length; i < len; ++i) {
+            V val;
+            if ((val = tabAt(tab, i)) == null)
+                continue;
+            h += keys[i].hashCode() ^ val.hashCode();
         }
         return h;
     }
     @Override
     public boolean equals(Object o) {
-        if (this == o)
+        if (o == this)
             return true;
-        if (o instanceof ConcurrentEnumMap<?,?> em)  {
-            if (keyType != em.keyType || em.size() != size())
-                return false;
-            V[] tab = table;
-            for (int i = 0, len = tab.length; i < len; i++) {
-                Object e1 = tabAt(tab, i), e2 = tabAt(em.table, i);
-                if (!Objects.equals(e1, e2)) {
-                    return false;
-                }
-            }
-            return true;
-        } else if (!(o instanceof Map)) {
+        if (!(o instanceof Map<?,?> m))
             return false;
+        V[] tab = table;
+        for (int i = 0, len = tab.length; i < len; ++i) {
+            Object v1, v2;
+            if ((v1 = m.get(keys[i])) == null) {
+                return false;
+            } else if (v1 != (v2 = tabAt(tab, i)) && !v1.equals(v2)) {
+                return false;
+            }
         }
-        Map<?,?> m = (Map<?,?>)o;
-        if (size() != m.size())
-            return false;
-        for (Map.Entry<?,?> e : m.entrySet()) {
-            Object mv = e.getValue();
-            V v = get(e.getKey());
-            if (v == null || !v.equals(mv)) {
+        for (Map.Entry<?, ?> e : m.entrySet()) {
+            Object mk, mv, v;
+            if ((mk = e.getKey()) == null ||
+                    (mv = e.getValue()) == null ||
+                    (v = get(mk)) == null ||
+                    (mv != v && !mv.equals(v)))
                 return false;
-            }
         }
         return true;
     }
