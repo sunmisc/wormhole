@@ -133,7 +133,7 @@ public class ConcurrentArrayCopy<E> {
                         }
                         break;
                     } else {
-                        shared = helpTransfer(t); // todo: cleanup
+                        shared = helpTransfer(t); // todo: cleanup and fix
                         len = t.transferBound(size);
                     }
                 } else {
