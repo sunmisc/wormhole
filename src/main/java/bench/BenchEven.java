@@ -11,14 +11,13 @@ import org.openjdk.jmh.runner.options.OptionsBuilder;
 import zelva.utils.MathUtils;
 
 @State(Scope.Thread)
-public class BinTest {
+public class BenchEven {
 
     @Param({"5", "88", "154754"})
     int a;
     public static void main(String[] args) throws RunnerException {
         Options opt = new OptionsBuilder()
-                .include(BinTest.class.getSimpleName())
-                .measurementIterations(4)
+                .include(BenchEven.class.getSimpleName())
                 .forks(1)
                 .syncIterations(true)
                 .build();

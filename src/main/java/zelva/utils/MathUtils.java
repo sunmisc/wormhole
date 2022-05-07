@@ -19,10 +19,11 @@ public final class MathUtils {
 
     // jni is slow, please wait for update
     // https://openjdk.java.net/jeps/419
-    public static float _sin(float value) {
+
+    public static float _sin(double value) {
         return SINE_TABLE[_N & ((int)(value*_H))];
     }
-    public static float _cos(float value) {
+    public static float _cos(double value) {
         return SINE_TABLE[_N & ((int)(value*_H+_COS))];
     }
 

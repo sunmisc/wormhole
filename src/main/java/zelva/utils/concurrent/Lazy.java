@@ -1,53 +1,38 @@
 package zelva.utils.concurrent;
 
-import java.lang.invoke.MethodHandles;
-import java.lang.invoke.VarHandle;
-import java.util.function.Function;
+import java.util.Objects;
 import java.util.function.Supplier;
 
 public class Lazy<V> {
-    private volatile V value;
-    private final Supplier<? extends V> supplier;
+    static final Object NIL = new Object();
+    /*
+     * Perhaps, one of the most surprising JMM behaviors is that volatile fields do not include
+     * the final field semantics. That is, if we publish the reference to the object racily,
+     * then we can see the default value for the "volatile" field! This is mostly because the
+     *
+     * It can be seen on some platforms
+     */
+    @SuppressWarnings("unchecked")
+    private volatile V value = (V) NIL;
+    private final Supplier<V> supplier;
 
-    public Lazy(Supplier<? extends V> supplier) {
-        this.supplier = supplier;
+    public Lazy(Supplier<V> supplier) {
+        this.supplier = Objects.requireNonNull(supplier);
     }
     public V get() {
-        return value;
-    }
-
-    @SuppressWarnings("unchecked")
-    public V getOrLoad() {
         V val;
-        if ((val = value) == null) {
-            Object witness = VAL.compareAndExchange(this, null,
-                    val = supplier.get());
-            return witness == null ? val : (V) witness;
+        if ((val = value) == NIL) {
+            synchronized (this) {
+                // no need for volatile-read here
+                if ((val = value)
+                        == NIL) {
+                    return value = supplier.get();
+                }
+            }
         }
         return val;
     }
-
-    public V getOrDefault(V def) {
-        V val;
-        return (val = get()) == null ? def : val;
-    }
-
-    public <R> R compute(Function<? super V, R> function) {
-        return function.apply(get());
-    }
-
-    public <R> R merge(Function<? super V, ? extends R> function, R def) {
-        V val;
-        return (val = get()) == null ? def : function.apply(val);
-    }
-
-    private static final VarHandle VAL;
-    static {
-        try {
-            MethodHandles.Lookup l = MethodHandles.lookup();
-            VAL = l.findVarHandle(Lazy.class, "value", Object.class);
-        } catch (ReflectiveOperationException e) {
-            throw new ExceptionInInitializerError(e);
-        }
+    public boolean isDone() {
+        return value != NIL;
     }
 }

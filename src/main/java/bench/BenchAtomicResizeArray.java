@@ -10,26 +10,19 @@ import org.openjdk.jmh.runner.options.Options;
 import org.openjdk.jmh.runner.options.OptionsBuilder;
 import tests.AtomicTransferArrayTest;
 
+import java.util.Arrays;
 import java.util.concurrent.ThreadLocalRandom;
 
-/*
-AtomicTransferArrayBench.growAtomicArray  thrpt    4  3777303,444 ± 5648846,663  ops/s
-AtomicTransferArrayBench.growLockArray    thrpt    4  7080428,068 ± 5849378,647  ops/s
-
-
- */
 @State(Scope.Benchmark)
-public class AtomicTransferArrayBench {
+public class BenchAtomicResizeArray {
     private AtomicTransferArrayTest.MyAtomicResizeArrayCopy myArray;
-    private AtomicTransferArrayTest.LockResizeArray lockArray;
+    volatile Integer[] array;
 
     public static void main(String[] args) throws RunnerException {
         Options opt = new OptionsBuilder()
-                .include(AtomicTransferArrayBench.class.getSimpleName())
-                .measurementIterations(4)
-                .forks(1)
-                .threads(8)
+                .include(BenchAtomicResizeArray.class.getSimpleName())
                 .syncIterations(false)
+                .forks(1)
                 .build();
         new Runner(opt).run();
     }
@@ -37,20 +30,22 @@ public class AtomicTransferArrayBench {
     @Setup
     public void prepare() {
         myArray = new AtomicTransferArrayTest.MyAtomicResizeArrayCopy();
-        lockArray = new AtomicTransferArrayTest.LockResizeArray();
+        array = new Integer[2];
     }
 
     @Benchmark
     public Integer growAtomicArray() {
-        int i = ThreadLocalRandom.current().nextInt(1, 8);
+        int i = ThreadLocalRandom.current().nextInt(1, 12);
         myArray.resize(i);
         return i;
     }
 
     @Benchmark
-    public Integer growLockArray() {
-        int i = ThreadLocalRandom.current().nextInt(1, 8);
-        lockArray.resize(i);
+    public Integer growArrayIntrinsic() {
+        int i = ThreadLocalRandom.current().nextInt(1, 12);
+        synchronized (this) {
+            array = Arrays.copyOf(array, i);
+        }
         return i;
     }
 }

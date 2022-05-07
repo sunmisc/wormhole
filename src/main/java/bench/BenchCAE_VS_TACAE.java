@@ -30,8 +30,6 @@ public class BenchCAE_VS_TACAE {
         Options opt = new OptionsBuilder()
                 .include(BenchCAE_VS_TACAE.class.getSimpleName())
                 .forks(1)
-                .measurementIterations(4)
-                .syncIterations(false)
                 .build();
         new Runner(opt).run();
     }
