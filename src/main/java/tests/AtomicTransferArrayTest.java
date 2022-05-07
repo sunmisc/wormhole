@@ -57,7 +57,7 @@ public class AtomicTransferArrayTest {
     @JCStressTest
     @Outcome(id = {
             "[0, 1, 2, 3, null, null, null, null, null, null, null, null, null, null, null, null]",
-            "[0, 1, 2, 3, null, null, null, null, null, null, null, null, null]"
+            "[0, 1, 2, 3, null, null, null, null, null, null, null, null, null]0"
     }, expect = Expect.ACCEPTABLE, desc = "yees")
     @State
     public static class JcstressTest extends MyAtomicResizeArrayCopy {

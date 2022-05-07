@@ -15,16 +15,21 @@ import java.util.concurrent.ThreadLocalRandom;
 
 @State(Scope.Benchmark)
 public class BenchAtomicResizeArray {
-    private AtomicTransferArrayTest.MyAtomicResizeArrayCopy myArray;
+    AtomicTransferArrayTest.MyAtomicResizeArrayCopy myArray;
     volatile Integer[] array;
 
     public static void main(String[] args) throws RunnerException {
-        Options opt = new OptionsBuilder()
+        BenchAtomicResizeArray benchAtomicResizeArray = new BenchAtomicResizeArray();
+        benchAtomicResizeArray.prepare();
+        benchAtomicResizeArray.myArray.set(0, 0);
+        benchAtomicResizeArray.myArray.resize(10);
+        System.out.println(benchAtomicResizeArray.myArray.toString());
+/*        Options opt = new OptionsBuilder()
                 .include(BenchAtomicResizeArray.class.getSimpleName())
                 .syncIterations(false)
                 .forks(1)
                 .build();
-        new Runner(opt).run();
+        new Runner(opt).run();*/
     }
 
     @Setup
@@ -35,14 +40,14 @@ public class BenchAtomicResizeArray {
 
     @Benchmark
     public Integer growAtomicArray() {
-        int i = ThreadLocalRandom.current().nextInt(1, 12);
+        int i = ThreadLocalRandom.current().nextInt(1, 128);
         myArray.resize(i);
         return i;
     }
 
     @Benchmark
     public Integer growArrayIntrinsic() {
-        int i = ThreadLocalRandom.current().nextInt(1, 12);
+        int i = ThreadLocalRandom.current().nextInt(1, 128);
         synchronized (this) {
             array = Arrays.copyOf(array, i);
         }
