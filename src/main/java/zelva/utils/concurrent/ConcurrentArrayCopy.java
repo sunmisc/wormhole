@@ -30,11 +30,8 @@ public class ConcurrentArrayCopy<E> {
                 arr = helpTransfer(t);
             } else {
                 if (needRemove) {
-                    synchronized (f) {
-                        if (f == arrayAt(arr, i)) {
-                            setAt(arr, i, null);
-                            return true;
-                        }
+                    if (casArrayAt(arr, i, f, null)) {
+                        return true;
                     }
                 } else {
                     return VAL.compareAndSet(f, e, v);
@@ -58,17 +55,10 @@ public class ConcurrentArrayCopy<E> {
                 arr = helpTransfer(t);
             } else {
                 if (needRemove) {
-                    synchronized (f) {
-                        if (f == arrayAt(arr, i)) {
-                            setAt(arr, i, null);
-                            return f.element;
-                        }
-                    }
+                    Node<E> e = caeArrayAt(arr, i, f, null);
+                    return e.element;
                 } else {
-                    if (f.element != element) {
-                        f.element = element;
-                    }
-                    return element;
+                    return (E) VAL.getAndSet(f, element);
                 }
             }
         }
@@ -354,6 +344,10 @@ public class ConcurrentArrayCopy<E> {
     }
     static <E> boolean casArrayAt(Node<E>[] arr, int i, Node<E> c, Node<E> v) {
         return AA.compareAndSet(arr, i, c, v);
+    }
+
+    static <E> Node<E> caeArrayAt(Node<E>[] arr, int i, Node<E> c, Node<E> v) {
+        return (Node<E>) AA.compareAndExchange(arr, i, c, v);
     }
 
     private static final VarHandle AA

@@ -55,7 +55,7 @@ public class AtomicTransferArrayTest {
         }
     }
 
-    @JCStressTest
+    /*@JCStressTest
     @Outcome(id = {
             "[0, 1, 2, 3, null, null, null, null, null, null, null, null, null, null, null, null]",
             "[0, 1, 2, 3, null, null, null, null, null, null, null, null, null]"
@@ -78,7 +78,7 @@ public class AtomicTransferArrayTest {
 
             l.r1 = sb;
         }
-    }
+    }*/
     /*@JCStressTest
     @Outcome(id = {
             "[0, 1, 2, 3, null, null, null, null, null, null, null, null, null, null, null, null]",
@@ -113,4 +113,22 @@ public class AtomicTransferArrayTest {
             l.r1 = getResult();
         }
     }*/
+
+    @JCStressTest
+    @Outcome(id = {
+            "1", "null"
+    }, expect = Expect.ACCEPTABLE, desc = "yees")
+    @State
+    public static class JcstressTest extends MyAtomicResizeArrayCopy {
+        @Actor
+        public void actor1() {
+            set(0, 1);
+            resize(12);
+        }
+
+        @Actor
+        public void actor2(L_Result l) {
+            l.r1 = set(0, null);
+        }
+    }
 }
