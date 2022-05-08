@@ -86,7 +86,8 @@ public class ConcurrentArrayCopy<E> {
         src.left.transfer();
         array = prepare;
     }
-    private Node<E>[] helpTransfer(TransferNode<E> t) {
+
+    private static <E> Node<E>[] helpTransfer(TransferNode<E> t) {
         TransferSourceNode<E> src = t.source;
         if (src.rightHelper == null) {
             (src.rightHelper = new RightTransferNode<>(src)).transfer();
