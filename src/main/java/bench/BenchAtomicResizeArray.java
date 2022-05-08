@@ -7,6 +7,7 @@ import org.openjdk.jmh.runner.options.Options;
 import org.openjdk.jmh.runner.options.OptionsBuilder;
 import tests.AtomicTransferArrayTest;
 import zelva.utils.MathUtils;
+import zelva.utils.concurrent.ConcurrentArrayCopy;
 
 import java.util.Arrays;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -17,14 +18,15 @@ public class BenchAtomicResizeArray {
     volatile Integer[] array;
 
 
-    public static void main7(String[] args) {
-        Integer[] array = new Integer[]{1,2,3};
-        Integer[] array1 = new Integer[]{1,2,3};
-        int s = 0, d = 1;
-        inflate(array, s, array, d, array.length-1);
-        inflateInvert(array1, s, array1, d, array1.length-1);
-        System.out.println(Arrays.toString(array)); // [1, 1, 2]
-        System.out.println(Arrays.toString(array1)); // [1, 1, 2]
+    public static void main(String[] args) {
+        ConcurrentArrayCopy<Integer> array = new ConcurrentArrayCopy<>(2);
+        array.set(0, 0);
+        array.set(1, 1);
+        System.out.println(array.toString());
+
+        array.resize(0);
+
+        System.out.println(array.toString());
     }
     public static void inflate(Object[] src, int srcOff, Object[] dst, int dstOff, int len) {
         for (int i = 0; i < len; i++) {

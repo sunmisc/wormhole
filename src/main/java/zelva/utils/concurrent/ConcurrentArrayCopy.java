@@ -2,10 +2,11 @@ package zelva.utils.concurrent;
 
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 
 public class ConcurrentArrayCopy<E> {
-    private static final int MIN_CAPACITY = 1;
+    private static final int MIN_CAPACITY = 0;
     private static final Object MOVED = new Object();
 
     volatile Node<E>[] array;
@@ -75,19 +76,15 @@ public class ConcurrentArrayCopy<E> {
     public void resize(int length) {
         resize(0, 0, length);
     }
-    volatile int transferSize;
 
     public void resize(int srcOff, int dstOff, int length) {
-        if (transferSize != length) {
-            transferSize = length;
-            Node<E>[] prepare = prepareArray(length);
+        Node<E>[] prepare = prepareArray(length);
 
-            TransferSourceNode<E> src = new TransferSourceNode<>(
-                    array, srcOff,
-                    prepare, dstOff);
-            src.left.transfer();
-            array = prepare;
-        }
+        TransferSourceNode<E> src = new TransferSourceNode<>(
+                array, srcOff,
+                prepare, dstOff);
+        src.left.transfer();
+        array = prepare;
     }
     private Node<E>[] helpTransfer(TransferNode<E> t) {
         TransferSourceNode<E> src = t.source;
@@ -109,12 +106,7 @@ public class ConcurrentArrayCopy<E> {
             }
         }
     }
-    public void arrayCopy(int src, int desk) {
 
-    }
-
-
-    // ------------- test ------------- //
     private static <E> Node<E>[] prepareArray(int size) {
         return new Node[Math.max(MIN_CAPACITY, size)];
     }
@@ -122,20 +114,24 @@ public class ConcurrentArrayCopy<E> {
     public int size() {
         return array.length;
     }
-    public void forEach(Consumer<E> action) {
+
+    public void forEach(Consumer<? super E> action) { // todo: java heap
         Node<E>[] arr = array;
-        for (int i = 0; i < arr.length; ++i) {
+        for (int i = 0; ;) {
             for (Node<E> f = arrayAt(arr, i);;) {
-                if (f instanceof TransferNode<E>) {
-                    if (f instanceof RightTransferNode<E> c) {
-                        arr = c.source.next; // filled
-                        break;
-                    } else {
-                        f = arrayAt(arr, i);
-                    }
+                if (f instanceof RightTransferNode<E> c) {
+                    arr = c.source.next; // filled
+                    break;
+                } else if (f instanceof TransferNode<E> t) { // left
+                    f = arrayAt(t.source.next, i);
                 } else {
-                    if (f != null)
-                        action.accept(f.element);
+                    if (f != null) {
+                        E val = f.element;
+                        if (val != null)
+                            action.accept(val);
+                    }
+                    if (++i == arr.length) // left
+                        return;
                     break;
                 }
             }
@@ -323,9 +319,11 @@ public class ConcurrentArrayCopy<E> {
 
     @Override
     public String toString() {
+        Node<E>[] arr = array;
+        if (arr.length == 0)
+            return "[]";
         StringBuilder sb = new StringBuilder();
         sb.append('[');
-        Node<E>[] arr = array;
         for (int i = 0;;) {
             for (Node<E> f = arrayAt(arr, i);;) {
                 if (f instanceof RightTransferNode<E> t) {
@@ -335,7 +333,7 @@ public class ConcurrentArrayCopy<E> {
                     f = arrayAt(t.source.next, i);
                 } else {
                     sb.append(f);
-                    if (++i == arr.length) // left
+                    if (++i == arr.length) // last
                         return sb.append(']').toString();
                     sb.append(", ");
                     break;

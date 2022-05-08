@@ -48,13 +48,38 @@ public class AtomicTransferArrayTest {
     public static class MyAtomicResizeArrayCopy extends ConcurrentArrayCopy<Integer> {
 
         public MyAtomicResizeArrayCopy() {
-            super(2);
+            super(3);
         }
         public String getResult() {
             return super.toString();
         }
     }
+
     @JCStressTest
+    @Outcome(id = {
+            "[0, 1, 2, 3, null, null, null, null, null, null, null, null, null, null, null, null]",
+            "[0, 1, 2, 3, null, null, null, null, null, null, null, null, null]"
+    }, expect = Expect.ACCEPTABLE, desc = "yees")
+    @State
+    public static class JcstressTest extends MyAtomicResizeArrayCopy {
+        @Actor
+        public void actor3() {
+            set(0, 0);
+            resize(11);
+        }
+        @Actor
+        public void result(L_Result l) {
+            StringBuilder sb = new StringBuilder();
+
+            forEach(x -> {
+                if (x != null)
+                    sb.append(x).append(", ");
+            });
+
+            l.r1 = sb;
+        }
+    }
+    /*@JCStressTest
     @Outcome(id = {
             "[0, 1, 2, 3, null, null, null, null, null, null, null, null, null, null, null, null]",
             "[0, 1, 2, 3, null, null, null, null, null, null, null, null, null]"
@@ -76,9 +101,16 @@ public class AtomicTransferArrayTest {
             set(3, 3);
             resize(13);
         }
+        @Actor
+        public void actor3() {
+            set(2, 2);
+            resize(11);
+            set(4, 4);
+            resize(16);
+        }
         @Arbiter
         public void result(L_Result l) {
             l.r1 = getResult();
         }
-    }
+    }*/
 }
