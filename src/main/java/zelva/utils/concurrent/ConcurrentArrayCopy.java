@@ -144,7 +144,7 @@ public class ConcurrentArrayCopy<E> {
         }
     }
 
-    static class Node<E> {
+    static class Node<E> { // extends Lock ?
         volatile E element;
         Node(E element) {
             this.element = element;
