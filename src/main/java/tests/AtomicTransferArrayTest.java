@@ -54,35 +54,29 @@ public class AtomicTransferArrayTest {
             return super.toString();
         }
     }
-
     /*@JCStressTest
     @Outcome(id = {
-            "[0, 1, 2, 3, null, null, null, null, null, null, null, null, null, null, null, null]",
-            "[0, 1, 2, 3, null, null, null, null, null, null, null, null, null]"
+            "[0, 1, 2, 3, 4, null, null, null, null, null, null, null, null, null, null, null]",
+            "[0, 1, 2, 3, 4, null, null, null, null, null, null, null, null]"
     }, expect = Expect.ACCEPTABLE, desc = "yees")
     @State
     public static class JcstressTest extends MyAtomicResizeArrayCopy {
+
         @Actor
-        public void actor3() {
-            set(0, 0);
-            resize(11);
+        public void actor1() {
+            set(0, null);
         }
-        @Actor
+        @Arbiter
         public void result(L_Result l) {
-            StringBuilder sb = new StringBuilder();
-
-            forEach(x -> {
-                if (x != null)
-                    sb.append(x).append(", ");
-            });
-
-            l.r1 = sb;
+            set(0, 1);
+            l.r1 = getResult();
         }
-    }*/
-    /*@JCStressTest
+    }
+*/
+    @JCStressTest
     @Outcome(id = {
-            "[0, 1, 2, 3, null, null, null, null, null, null, null, null, null, null, null, null]",
-            "[0, 1, 2, 3, null, null, null, null, null, null, null, null, null]"
+            "[0, 1, 2, 3, 4, null, null, null, null, null, null, null, null, null, null, null]",
+            "[0, 1, 2, 3, 4, null, null, null, null, null, null, null, null]"
     }, expect = Expect.ACCEPTABLE, desc = "yees")
     @State
     public static class JcstressTest extends MyAtomicResizeArrayCopy {
@@ -112,9 +106,9 @@ public class AtomicTransferArrayTest {
         public void result(L_Result l) {
             l.r1 = getResult();
         }
-    }*/
+    }
 
-    @JCStressTest
+    /*@JCStressTest
     @Outcome(id = {
             "1", "null"
     }, expect = Expect.ACCEPTABLE, desc = "yees")
@@ -130,5 +124,5 @@ public class AtomicTransferArrayTest {
         public void actor2(L_Result l) {
             l.r1 = set(0, null);
         }
-    }
+    }*/
 }

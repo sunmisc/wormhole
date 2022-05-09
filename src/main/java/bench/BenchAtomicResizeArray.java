@@ -9,21 +9,26 @@ import tests.AtomicTransferArrayTest;
 import zelva.utils.MathUtils;
 import zelva.utils.concurrent.ConcurrentArrayCopy;
 
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.atomic.AtomicReferenceArray;
 
 @State(Scope.Thread)
 public class BenchAtomicResizeArray {
     AtomicTransferArrayTest.MyAtomicResizeArrayCopy myArray;
     volatile Integer[] array;
+    // BenchAtomicResizeArray.set  thrpt    5   93841235,124 ± 878131,067  ops/s  // mutable
+    // BenchAtomicResizeArray.set  thrpt    5   54845025,267 ± 3116677,827  ops/s // sync
+    // BenchAtomicResizeArray.set  thrpt    5  158724090,183 ± 9466292,903  ops/s // field
 
-
-    public static void main(String[] args) {
+    public static void mai2n(String[] args) {
         ConcurrentArrayCopy<Integer> array = new ConcurrentArrayCopy<>(2);
         array.set(0, 0);
         array.set(1, 1);
         System.out.println(array.toString());
-
         array.resize(0);
 
         System.out.println(array.toString());
@@ -50,7 +55,7 @@ public class BenchAtomicResizeArray {
 
     }
 
-    public static void main02(String[] args) throws RunnerException {
+    public static void main(String[] args) throws RunnerException {
         Options opt = new OptionsBuilder()
                 .include(BenchAtomicResizeArray.class.getSimpleName())
                 .syncIterations(false)
@@ -58,6 +63,7 @@ public class BenchAtomicResizeArray {
                 .build();
         new Runner(opt).run();
     }
+
     final AtomicInteger i1 = new AtomicInteger();
     final AtomicInteger i2 = new AtomicInteger();
 
@@ -65,9 +71,24 @@ public class BenchAtomicResizeArray {
     public void prepare() {
         myArray = new AtomicTransferArrayTest.MyAtomicResizeArrayCopy();
         array = new Integer[2];
+        myArray.set(0, 1);
     }
 
+    // old
+    // BenchAtomicResizeArray.get  thrpt    5  812247899,768 ± 57885402,982  ops/s
+    // BenchAtomicResizeArray.set  thrpt    5  155875138,773 ± 20086582,317  ops/s
+
     @Benchmark
+    public Integer set() {
+        return myArray.set(0, 2);
+    }
+    @Benchmark
+    public Integer get() {
+        return myArray.get(0);
+    }
+
+
+    /*@Benchmark
     public Integer growAtomicArray() {
         int i = size(i1);
         myArray.resize(i);
@@ -81,7 +102,7 @@ public class BenchAtomicResizeArray {
             array = Arrays.copyOf(array, i);
         }
         return i;
-    }
+    }*/
     private static int size(AtomicInteger a) {
         int i = a.getAndIncrement();
         return (int) ((MathUtils._cos(i) + 2) * 10);
