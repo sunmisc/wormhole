@@ -78,17 +78,17 @@ public class BenchAtomicResizeArray {
     // BenchAtomicResizeArray.get  thrpt    5  812247899,768 ± 57885402,982  ops/s
     // BenchAtomicResizeArray.set  thrpt    5  155875138,773 ± 20086582,317  ops/s
 
-    @Benchmark
+    /*@Benchmark
     public Integer set() {
         return myArray.set(0, 2);
     }
     @Benchmark
     public Integer get() {
         return myArray.get(0);
-    }
+    }*/
 
 
-    /*@Benchmark
+    @Benchmark
     public Integer growAtomicArray() {
         int i = size(i1);
         myArray.resize(i);
@@ -102,7 +102,7 @@ public class BenchAtomicResizeArray {
             array = Arrays.copyOf(array, i);
         }
         return i;
-    }*/
+    }
     private static int size(AtomicInteger a) {
         int i = a.getAndIncrement();
         return (int) ((MathUtils._cos(i) + 2) * 10);

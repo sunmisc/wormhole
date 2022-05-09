@@ -164,14 +164,9 @@ public class ConcurrentArrayCopy<E> {
                                 break;
                             }
                         } else {
-                            synchronized (f) {
-                                if (arrayAt(prev, srcPos) != f) {
-                                    continue;
-                                }
-                                setAt(next, destPos, f);
-                                setAt(prev, srcPos, this); // no cas
+                            setAt(next, destPos, f);
+                            if (сasArrayAt(prev, srcPos, f, this))
                                 break;
-                            }
                         }
                     }
                 }
@@ -218,14 +213,9 @@ public class ConcurrentArrayCopy<E> {
                                 len = t.transferBound(nz);
                             }
                         } else {
-                            synchronized (f) {
-                                if (arrayAt(shared, srcPos) != f) {
-                                    continue;
-                                }
-                                setAt(next, destPos, f);
-                                setAt(shared, srcPos, this); // no cas
+                            setAt(next, destPos, f);
+                            if (сasArrayAt(shared, srcPos, f, this))
                                 break;
-                            }
                         }
                     }
                 }
@@ -271,6 +261,9 @@ public class ConcurrentArrayCopy<E> {
     }
     static boolean weakCasArrayAt(Object[] arr, int i, Object c, Object v) {
         return AA.weakCompareAndSet(arr, i, c, v);
+    }
+    static boolean сasArrayAt(Object[] arr, int i, Object c, Object v) {
+        return AA.compareAndSet(arr, i, c, v);
     }
 
     private static final VarHandle AA
