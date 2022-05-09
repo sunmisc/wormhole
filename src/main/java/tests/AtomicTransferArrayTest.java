@@ -20,7 +20,9 @@ public class AtomicTransferArrayTest {
 
         public Integer set(int i, Integer s) {
             synchronized (lock) {
-                return array[i] = s;
+                Integer d = array[i];
+                array[i] = s;
+                return d;
             }
         }
         public void resize(int size) {
@@ -54,25 +56,8 @@ public class AtomicTransferArrayTest {
             return super.toString();
         }
     }
-    /*@JCStressTest
-    @Outcome(id = {
-            "[0, 1, 2, 3, 4, null, null, null, null, null, null, null, null, null, null, null]",
-            "[0, 1, 2, 3, 4, null, null, null, null, null, null, null, null]"
-    }, expect = Expect.ACCEPTABLE, desc = "yees")
-    @State
-    public static class JcstressTest extends MyAtomicResizeArrayCopy {
 
-        @Actor
-        public void actor1() {
-            set(0, null);
-        }
-        @Arbiter
-        public void result(L_Result l) {
-            set(0, 1);
-            l.r1 = getResult();
-        }
-    }
-*/
+
     @JCStressTest
     @Outcome(id = {
             "[0, 1, 2, 3, 4, null, null, null, null, null, null, null, null, null, null, null]",
