@@ -3,6 +3,13 @@ package zelva.utils.concurrent;
 import java.util.Objects;
 import java.util.function.Supplier;
 
+/**
+ * Lazy initialization respecting happens-before,
+ * value can be any object including null
+ *
+ * The lock mechanism refers to the current object,
+ * so we can write our own wrappers for the Lazy class
+ */
 public class Lazy<V> {
     static final Object NIL = new Object();
     /*
