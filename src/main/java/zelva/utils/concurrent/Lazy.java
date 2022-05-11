@@ -6,9 +6,11 @@ import java.util.function.Supplier;
 public class Lazy<V> {
     static final Object NIL = new Object();
     /*
-     * Perhaps, one of the most surprising JMM behaviors is that volatile fields do not include
-     * the final field semantics. That is, if we publish the reference to the object racily,
-     * then we can see the default value for the "volatile" field! This is mostly because the
+     * Perhaps, one of the most surprising JMM behaviors
+     * is that volatile fields do not include
+     * the final field semantics. That is,
+     * if we publish the reference to the object racily,
+     * then we can see the null for the "volatile" field!
      *
      * It can be seen on some platforms
      */
