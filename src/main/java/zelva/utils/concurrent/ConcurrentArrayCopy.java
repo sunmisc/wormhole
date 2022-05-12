@@ -52,7 +52,7 @@ public class ConcurrentArrayCopy<E> {
                     == element) {
                 return element;
             } else if (f instanceof TransferNode t) {
-                arr = t.source.next;//helpTransfer(t);
+                arr = helpTransfer(t);
             } else if (weakCasArrayAt(arr, i, f, element)) {
                 return (E) f;
             }
@@ -80,24 +80,21 @@ public class ConcurrentArrayCopy<E> {
     public void resize(int length) {
         resize(0, 0, length);
     }
-
-    public void resize(int srcOff, int dstOff, int length) {
-        Object[] next = new Object[length], old;
+    private void resize(int srcOff, int dstOff, int length) {
+        Object[] prepare = new Object[length], old;
         var r = new TransferSourceNode(
                 old = array, srcOff,
-                next, dstOff,
-                length = Math.min(old.length-srcOff, length-dstOff)
+                prepare, dstOff,
+                Math.min(old.length-srcOff, length-dstOff)
         );
-        r.left.transfer();
-        int sum = r.modCount;
-/*        if (sum > length)
-            System.out.println(sum - length);*/
-        ARR.compareAndSet(this, old, r.next);
+        ARR.compareAndSet(this, old, r.leftHelper().transfer());
     }
 
     private static Object[] helpTransfer(TransferNode t) {
         TransferSourceNode src = t.source;
-        src.right.transfer();
+        if (src.right == null) {
+            return (src.right = new RightTransferNode(src)).transfer();
+        }
         return src.next;
     }
 
@@ -119,16 +116,20 @@ public class ConcurrentArrayCopy<E> {
             this.source = source;
         }
 
-        abstract void transfer();
+        Object[] transfer() {
+           return help(0);
+        }
+
+        abstract Object[] help(int start);
     }
 
     private static class TransferSourceNode {
-        int modCount;
-        final int srcPos, destPos, length;
-        Object[] prev, next;
+        final int srcPos, destPos, length; // todo
+        final Object[] next;
+        volatile Object[] prev;
 
         final LeftTransferNode left; // main
-        final RightTransferNode right;
+        RightTransferNode right;
 
         TransferSourceNode(Object[] prev, int srcPos,
                            Object[] next, int destPos,
@@ -139,7 +140,16 @@ public class ConcurrentArrayCopy<E> {
             this.destPos = destPos;
             this.length = length;
             this.left = new LeftTransferNode(this);
-            this.right = new RightTransferNode(this);
+        }
+
+        RightTransferNode rightHelper() {
+            RightTransferNode r;
+            return (r = right) == null
+                    ? right = new RightTransferNode(this)
+                    : r;
+        }
+        LeftTransferNode leftHelper() {
+            return left;
         }
 
         boolean isDone() {
@@ -147,6 +157,9 @@ public class ConcurrentArrayCopy<E> {
         }
         void postCompleted() {
             prev = null;
+        }
+        void heldLock() {
+            while (!isDone());
         }
     }
 
@@ -156,25 +169,15 @@ public class ConcurrentArrayCopy<E> {
         }
 
         @Override
-        public void transfer() {
-            final TransferSourceNode src = source;
-             help(0, src.length, src.srcPos, src.destPos, src, this);
-           // helpRight(src.length-1, src, new RightTransferNode(src));
-        }
-        // teeesttt
-        private Object[] help(int start, int end, int srcPos, int destPos,
-                          TransferSourceNode src,
-                          LeftTransferNode tn) {
-            final Object[] shared = src.prev, next = src.next;
-            outer : for (int i = start, len = src.length;
-                         i < end;
-                         ++i, ++srcPos, ++destPos) {
+        public Object[] help(int i) {
+            TransferSourceNode src = source;
+            Object[] shared = src.prev, next = src.next;
+            outer:
+            for (int len = src.length; i < len; ++i) {
                 for (Object f; ; ) {
                     if (src.isDone()) {
                         return next;
-                    }
-                    source.modCount++;
-                    if ((f = arrayAt(shared, srcPos))
+                    } else if ((f = arrayAt(shared, i))
                             instanceof TransferNode t) {
                         TransferSourceNode ctn = t.source;
 
@@ -185,62 +188,15 @@ public class ConcurrentArrayCopy<E> {
                             Thread.yield();
                             break;
                         } else {
-                            if (t instanceof LeftTransferNode) {
-                                helpRight(ctn.length-1, i, ctn, ctn.right);
-                            } else
-                                help(i, ctn.length, srcPos, destPos, ctn, ctn.left);
-                            src.next = ctn.next;
-                           // helpRight(i, ctn, t);
-                          //  src.next = ctn.next;
-                            break outer;
-                        }
-                    } else {
-                        if (f != null)
-                            setAt(next, destPos, f);
-                        if (weakCasPlainArrayAt(shared, srcPos, f, tn)) {
-                            break;
-                        }
-                    }
-                }
-            }
-            src.postCompleted();
-            return next;
-        }
-        private Object[] helpRight(int start, int end,
-                                   TransferSourceNode src,
-                                   RightTransferNode tn) {
-            final Object[] shared = src.prev, next = src.next;
-            outer: for (int i = start;
-                        i >= end; --i) {
-                for (Object f; ; ) {
-                    if (src.isDone()) {
-                        return next;
-                    }
-                    source.modCount++;
-                    if ((f = arrayAt(shared, i))
-                            instanceof TransferNode t) {
-                        TransferSourceNode ctn = t.source;
-
-                        if (ctn == src) {
-                            if (t instanceof LeftTransferNode) {
-                                 break outer;
-                            }
-                            Thread.yield();
-                            break;
-                        } else {
-                            // src.next = help(s, srcPos, destPos, ctn, t);
-                            if (t instanceof LeftTransferNode) {
-                                helpRight(ctn.length-1, i, ctn, ctn.right);
-                            } else {
-                                help(i, ctn.length, i, i, ctn, ctn.left);
-                            }
-                            src.next = ctn.next;
+                            next = t instanceof LeftTransferNode
+                                    ? ctn.rightHelper().help(i)
+                                    : ctn.leftHelper().help(i);
                             break outer;
                         }
                     } else {
                         if (f != null)
                             setAt(next, i, f);
-                        if (weakCasPlainArrayAt(shared, i, f, tn)) {
+                        if (weakCasPlainArrayAt(shared, i, f, this)) {
                             break;
                         }
                     }
@@ -250,6 +206,7 @@ public class ConcurrentArrayCopy<E> {
             return next;
         }
     }
+
     // helper
     static final class RightTransferNode extends TransferNode {
 
@@ -257,42 +214,42 @@ public class ConcurrentArrayCopy<E> {
             super(source);
         }
 
+
         @Override
-        void transfer() {
-            final TransferSourceNode src = source;
-
-            Object[] next = src.next, old = src.prev;
-
-            outer: for (int i = src.length-1,
-                        srcPos = src.srcPos + i, destPos = src.destPos + i;
-                        i >= 0; --i, --srcPos, --destPos) {
-                Object[] shared = old;
+        public Object[] help(int q) {
+            TransferSourceNode src = source;
+            Object[] shared = src.prev, next = src.next;
+            outer: for (int i = src.length-1; i >= q; --i) {
                 for (Object f; ; ) {
                     if (src.isDone()) {
-                        return;
-                    }
-                    src.modCount++;
-                    if ((f = arrayAt(shared, srcPos))
+                        return next;
+                    } else if ((f = arrayAt(shared, i))
                             instanceof TransferNode t) {
                         TransferSourceNode ctn = t.source;
+
                         if (ctn == src) {
                             if (t instanceof LeftTransferNode) {
                                 break outer;
                             }
                             Thread.yield();
-                            return;
+                            break;
+                        } else {
+                            next = t instanceof LeftTransferNode
+                                    ? ctn.rightHelper().help(i)
+                                    : ctn.leftHelper().help(i);
+                            break outer;
                         }
-                        shared = ctn.next;
                     } else {
                         if (f != null)
-                            setAt(next, destPos, f);
-                        if (weakCasPlainArrayAt(shared, srcPos, f, this)) {
+                            setAt(next, i, f);
+                        if (weakCasPlainArrayAt(shared, i, f, this)) {
                             break;
                         }
                     }
                 }
             }
             src.postCompleted();
+            return next;
         }
     }
 
