@@ -3,6 +3,7 @@ package zelva.utils.concurrent;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.Arrays;
+import java.util.concurrent.atomic.LongAdder;
 
 /*
  * The operation of transferring data from one array to another is thread-safe,
@@ -51,7 +52,7 @@ public class ConcurrentArrayCopy<E> {
                     == element) {
                 return element;
             } else if (f instanceof TransferNode t) {
-                arr = helpTransfer(t);
+                arr = t.source.next;//helpTransfer(t);
             } else if (weakCasArrayAt(arr, i, f, element)) {
                 return (E) f;
             }
@@ -89,17 +90,14 @@ public class ConcurrentArrayCopy<E> {
         );
         r.left.transfer();
         int sum = r.modCount;
-        //if (sum > length)
-           // System.out.println(sum - length);
+/*        if (sum > length)
+            System.out.println(sum - length);*/
         ARR.compareAndSet(this, old, r.next);
     }
 
     private static Object[] helpTransfer(TransferNode t) {
         TransferSourceNode src = t.source;
-        if (src.right == null) {
-            (src.right = new RightTransferNode(src))
-                    .transfer();
-        }
+        src.right.transfer();
         return src.next;
     }
 
@@ -130,7 +128,7 @@ public class ConcurrentArrayCopy<E> {
         Object[] prev, next;
 
         final LeftTransferNode left; // main
-        RightTransferNode right;
+        final RightTransferNode right;
 
         TransferSourceNode(Object[] prev, int srcPos,
                            Object[] next, int destPos,
@@ -141,6 +139,7 @@ public class ConcurrentArrayCopy<E> {
             this.destPos = destPos;
             this.length = length;
             this.left = new LeftTransferNode(this);
+            this.right = new RightTransferNode(this);
         }
 
         boolean isDone() {
@@ -159,18 +158,20 @@ public class ConcurrentArrayCopy<E> {
         @Override
         public void transfer() {
             final TransferSourceNode src = source;
-            help(0, src.srcPos, src.destPos, src, this);
+             help(0, src.length, src.srcPos, src.destPos, src, this);
+           // helpRight(src.length-1, src, new RightTransferNode(src));
         }
-        private void help(int s, int srcPos, int destPos,
+        // teeesttt
+        private Object[] help(int start, int end, int srcPos, int destPos,
                           TransferSourceNode src,
-                          TransferNode tn) {
+                          LeftTransferNode tn) {
             final Object[] shared = src.prev, next = src.next;
-            outer : for (int i = s, len = src.length;
-                         i < len;
+            outer : for (int i = start, len = src.length;
+                         i < end;
                          ++i, ++srcPos, ++destPos) {
                 for (Object f; ; ) {
                     if (src.isDone()) {
-                        return;
+                        return next;
                     }
                     source.modCount++;
                     if ((f = arrayAt(shared, srcPos))
@@ -178,13 +179,19 @@ public class ConcurrentArrayCopy<E> {
                         TransferSourceNode ctn = t.source;
 
                         if (ctn == src) {
-                            if (t instanceof RightTransferNode)
+                            if (t instanceof RightTransferNode) {
                                 break outer;
+                            }
                             Thread.yield();
                             break;
                         } else {
-                            help(s, srcPos, destPos, ctn, t); // todo : src dest
+                            if (t instanceof LeftTransferNode) {
+                                helpRight(ctn.length-1, i, ctn, ctn.right);
+                            } else
+                                help(i, ctn.length, srcPos, destPos, ctn, ctn.left);
                             src.next = ctn.next;
+                           // helpRight(i, ctn, t);
+                          //  src.next = ctn.next;
                             break outer;
                         }
                     } else {
@@ -197,6 +204,50 @@ public class ConcurrentArrayCopy<E> {
                 }
             }
             src.postCompleted();
+            return next;
+        }
+        private Object[] helpRight(int start, int end,
+                                   TransferSourceNode src,
+                                   RightTransferNode tn) {
+            final Object[] shared = src.prev, next = src.next;
+            outer: for (int i = start;
+                        i >= end; --i) {
+                for (Object f; ; ) {
+                    if (src.isDone()) {
+                        return next;
+                    }
+                    source.modCount++;
+                    if ((f = arrayAt(shared, i))
+                            instanceof TransferNode t) {
+                        TransferSourceNode ctn = t.source;
+
+                        if (ctn == src) {
+                            if (t instanceof LeftTransferNode) {
+                                 break outer;
+                            }
+                            Thread.yield();
+                            break;
+                        } else {
+                            // src.next = help(s, srcPos, destPos, ctn, t);
+                            if (t instanceof LeftTransferNode) {
+                                helpRight(ctn.length-1, i, ctn, ctn.right);
+                            } else {
+                                help(i, ctn.length, i, i, ctn, ctn.left);
+                            }
+                            src.next = ctn.next;
+                            break outer;
+                        }
+                    } else {
+                        if (f != null)
+                            setAt(next, i, f);
+                        if (weakCasPlainArrayAt(shared, i, f, tn)) {
+                            break;
+                        }
+                    }
+                }
+            }
+            src.postCompleted();
+            return next;
         }
     }
     // helper
