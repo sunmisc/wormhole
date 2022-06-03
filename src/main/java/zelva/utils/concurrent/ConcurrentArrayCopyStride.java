@@ -7,28 +7,27 @@ import java.util.Arrays;
 public class ConcurrentArrayCopyStride<E> {
     static final int NCPU = Runtime.getRuntime().availableProcessors();
     static final int MIN_TRANSFER_STRIDE = 16;
-    volatile Cells last;
+    volatile Cells cells;
 
     public ConcurrentArrayCopyStride(int size) {
-        this.last = new Cells(new Object[size]);
+        this.cells = new QCells(new Object[size]);
     }
     public ConcurrentArrayCopyStride(Object[] array) {
-        this.last = new Cells(Arrays.copyOf(array, array.length, Object[].class));
-    }
-    static class Cells { // value type
-        final Object[] array;
-        final int fence;
-        Cells(Object[] array) {
-            this(array, array.length);
-        }
-        Cells(Object[] array, int fence) {
-            this.array = array;
-            this.fence = fence;
-        }
+        this.cells = new QCells(Arrays.copyOf(
+                array, array.length, Object[].class)
+        );
     }
 
+    @FunctionalInterface
+    interface Cells {
+        Object[] array();
+        default int fence() {return array().length;}
+    }
+
+    record QCells(Object[] array) implements Cells {} // value type
+
     public E get(int i) {
-        for (Object[] arr = last.array;;) {
+        for (Object[] arr = cells.array();;) {
             Object o = arrayAt(arr, i);
             if (o instanceof ForwardingPointer t) {
                 arr = t.nextArr;
@@ -39,7 +38,7 @@ public class ConcurrentArrayCopyStride<E> {
     }
 
     public E set(int i, E element) {
-        Object[] arr = last.array;
+        Object[] arr = cells.array();
         for (Object o; ; ) {
             if ((o = arrayAt(arr, i))
                     == element) {
@@ -52,28 +51,33 @@ public class ConcurrentArrayCopyStride<E> {
         }
     }
     public void resize(int cap) {
-        Object[] nextArray = new Object[cap];
-        ForwardingPointer fwd; Cells p;
-        while (!LAST.weakCompareAndSet(this,
-                p = last,
-                fwd = new ForwardingPointer(p, nextArray))
-        );
-        LAST.compareAndSet(this, fwd, new Cells(transfer(fwd)));
+        final Object[] nextArray = new Object[cap];
+        ForwardingPointer fwd;
+        for (Cells p;;) {
+            if (((p = cells) instanceof QCells) &&
+                    p.fence() == cap) {
+                return;
+            } else if (CELLS.weakCompareAndSet(this, p,
+                    fwd = new ForwardingPointer(p.array(), nextArray))) {
+                break;
+            }
+        }
+        CELLS.compareAndSet(this, fwd, new QCells(transfer(fwd)));
     }
 
     private Object[] transfer(ForwardingPointer a) {
         for (int i;;) {
-            if ((i = a.transferIndex) >= a.fence) {
+            if ((i = a.strideIndex) >= a.fence()) {
                 // recheck before commit and help
                 a.transferChunk(0, i);
             } else {
                 int ls;
-                if (!TRANSFERINDEX.weakCompareAndSet(a, i,
+                if (!STRIDEINDEX.weakCompareAndSet(a, i,
                         ls = i + a.stride)) {
                     continue;
                 }
                 a.transferChunk(i, ls);
-                if (last instanceof ForwardingPointer f) {
+                if (cells instanceof ForwardingPointer f) {
                     a = f;
                     continue;
                 }
@@ -82,26 +86,29 @@ public class ConcurrentArrayCopyStride<E> {
         }
     }
     public int size() {
-        return last.array.length;
+        return cells.array().length;
     }
 
-    static final class ForwardingPointer extends Cells {
-        final int stride;
-        final Object[] nextArr;
-        volatile int transferIndex, sizeCtl;
+    static final class ForwardingPointer implements Cells {
+        final int fence, stride;
+        final Object[] oldArr, nextArr;
+        volatile int strideIndex, sizeCtl;
 
-        ForwardingPointer(Cells prev, Object[] nextArr) {
-            super(prev.array, Math.min(prev.fence, nextArr.length));
+        ForwardingPointer(Object[] oldArr, Object[] nextArr) {
+            this.oldArr = oldArr;
             this.nextArr = nextArr;
-            int n = fence;
+            int n = Math.min(oldArr.length, nextArr.length);
+            this.fence = n;
             // threshold
             this.stride = Math.max((n >> 2) / NCPU, Math.min(n, MIN_TRANSFER_STRIDE));
         }
-        // 0-5 5-10 10-12..15
+        @Override public Object[] array() {return oldArr;}
+        @Override public int fence() {return fence;}
+
         void transferChunk(int start, int end) {
             int i = start;
             for (; i < end && i < fence; ++i) {
-                Object[] shared = array;
+                Object[] shared = array();
                 for (Object o; ; ) {
                     if (sizeCtl >= fence)
                         return;
@@ -113,6 +120,7 @@ public class ConcurrentArrayCopyStride<E> {
                     } else {
                         if (o != null)
                             setAt(nextArr, i, o);
+                        // VarHandle.fullFence();
                         if (casArrayAt(shared, i, o, this)) {
                             break;
                         }
@@ -130,7 +138,7 @@ public class ConcurrentArrayCopyStride<E> {
 
     @Override
     public String toString() {
-        Object[] arr = last.array;
+        Object[] arr = cells.array();
         if (arr.length == 0)
             return "[]";
         StringBuilder sb = new StringBuilder();
@@ -161,17 +169,16 @@ public class ConcurrentArrayCopyStride<E> {
     }
     private static final VarHandle AA
             = MethodHandles.arrayElementVarHandle(Object[].class);
-
-    private static final VarHandle TRANSFERINDEX;
+    private static final VarHandle CELLS;
+    private static final VarHandle STRIDEINDEX;
     private static final VarHandle SIZECTL;
-    private static final VarHandle LAST;
 
     static {
         try {
             MethodHandles.Lookup l = MethodHandles.lookup();
-            TRANSFERINDEX = l.findVarHandle(ForwardingPointer.class, "transferIndex", int.class);
+            STRIDEINDEX = l.findVarHandle(ForwardingPointer.class, "strideIndex", int.class);
             SIZECTL = l.findVarHandle(ForwardingPointer.class, "sizeCtl", int.class);
-            LAST = l.findVarHandle(ConcurrentArrayCopyStride.class, "last", Cells.class);
+            CELLS = l.findVarHandle(ConcurrentArrayCopyStride.class, "cells", Cells.class);
         } catch (ReflectiveOperationException e) {
             throw new ExceptionInInitializerError(e);
         }
