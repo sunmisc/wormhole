@@ -24,7 +24,11 @@ public class ConcurrentArrayCopyStride<E> {
         default int fence() {return array().length;}
     }
 
-    record QCells(Object[] array) implements Cells {} // value type
+    record QCells(Object[] array) implements Cells {} // inline type
+
+    public int size() {
+        return cells.array().length;
+    }
 
     public E get(int i) {
         for (Object[] arr = cells.array();;) {
@@ -50,6 +54,7 @@ public class ConcurrentArrayCopyStride<E> {
             }
         }
     }
+
     public void resize(int cap) {
         final Object[] nextArray = new Object[cap];
         ForwardingPointer fwd;
@@ -85,9 +90,6 @@ public class ConcurrentArrayCopyStride<E> {
             return a.nextArr;
         }
     }
-    public int size() {
-        return cells.array().length;
-    }
 
     static final class ForwardingPointer implements Cells {
         final int fence, stride;
@@ -95,12 +97,11 @@ public class ConcurrentArrayCopyStride<E> {
         volatile int strideIndex, sizeCtl;
 
         ForwardingPointer(Object[] oldArr, Object[] nextArr) {
-            this.oldArr = oldArr;
-            this.nextArr = nextArr;
+            this.oldArr = oldArr; this.nextArr = nextArr;
             int n = Math.min(oldArr.length, nextArr.length);
             this.fence = n;
             // threshold
-            this.stride = Math.max((n >> 2) / NCPU, Math.min(n, MIN_TRANSFER_STRIDE));
+            this.stride = Math.max((n >>> 2) / NCPU, Math.min(n, MIN_TRANSFER_STRIDE));
         }
         @Override public Object[] array() {return oldArr;}
         @Override public int fence() {return fence;}
@@ -167,6 +168,7 @@ public class ConcurrentArrayCopyStride<E> {
     static boolean casArrayAt(Object[] arr, int i, Object c, Object v) {
         return AA.weakCompareAndSet(arr, i, c, v);
     }
+
     private static final VarHandle AA
             = MethodHandles.arrayElementVarHandle(Object[].class);
     private static final VarHandle CELLS;
