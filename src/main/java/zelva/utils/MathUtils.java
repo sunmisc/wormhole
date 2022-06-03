@@ -26,11 +26,4 @@ public final class MathUtils {
     public static float _cos(double value) {
         return SINE_TABLE[_N & ((int)(value*_H+_COS))];
     }
-
-    public static boolean isEven(int a) {
-        return (a & 1) == 0;
-    }
-    public static boolean isEven(long a) {
-        return (a & 1) == 0;
-    }
 }
