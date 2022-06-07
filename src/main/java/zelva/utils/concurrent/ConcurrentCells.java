@@ -53,10 +53,6 @@ public class ConcurrentCells {
         boolean casAt(int i, Object c, Object v) {
             return AA.compareAndSet(array, i, c, v);
         }
-        @Override
-        public String toString() {
-            return Arrays.toString(array);
-        }
         private static final VarHandle AA
                 = MethodHandles.arrayElementVarHandle(Object[].class);
     }
