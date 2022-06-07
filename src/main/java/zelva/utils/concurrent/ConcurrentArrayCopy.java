@@ -5,7 +5,6 @@ import java.lang.invoke.VarHandle;
 import java.util.Objects;
 
 public class ConcurrentArrayCopy<E> {
-
     static final FIndex DEAD = new FIndex(null); // todo:
     static final int NCPU = Runtime.getRuntime().availableProcessors();
     static final int MIN_TRANSFER_STRIDE = 16;
@@ -22,36 +21,6 @@ public class ConcurrentArrayCopy<E> {
         }
         this.levels = new QLevels(nodes);
     }
-
-    @FunctionalInterface
-    interface Levels {
-        Object[] array();
-        default int fence() {return array().length;}
-    }
-    interface Index {
-        Object getValue();
-
-        Object setValue(Object val);
-    }
-
-    record FIndex(Index main) implements Index {
-        @Override public Object getValue() {return main.getValue();}
-        @Override public Object setValue(Object val) {return main.setValue(val);}
-
-        @Override public String toString() {return Objects.toString(getValue());}
-    }
-    static class Cell implements Index {
-        volatile Object val;
-        Cell(Object val) {
-            this.val = val;
-        }
-        @Override public Object getValue() {return val;}
-        @Override public Object setValue(Object val) {return VAL.getAndSet(this, val);}
-
-        @Override public String toString() {return Objects.toString(val);}
-    }
-
-    record QLevels(Object[] array) implements Levels {} // inline type
 
     public int size() {
         return levels.array().length;
@@ -72,8 +41,7 @@ public class ConcurrentArrayCopy<E> {
     public Object set(int i, Object element) {
         Object[] arr = levels.array();
         for (Object o; ; ) {
-            if ((o = arrayAt(arr, i))
-                    == element) {
+            if ((o = arrayAt(arr, i)) == element) {
                 return element;
             } else if (o == null || o == DEAD) {
                 if (casArrayAt(arr, i, o,
@@ -83,7 +51,7 @@ public class ConcurrentArrayCopy<E> {
             } else if (o instanceof ForwardingPointer f) {
                 arr = transfer(f);
             } else if (element == null) {
-                if (!(o instanceof ConcurrentArrayCopy.FIndex) &&
+                if (!(o instanceof FIndex) &&
                         casArrayAt(arr, i, o, null)) {
                     return null;
                 }
@@ -213,6 +181,36 @@ public class ConcurrentArrayCopy<E> {
     static Object caeArrayAt(Object[] arr, int i, Object c, Object v) {
         return AA.compareAndExchange(arr,i,c,v);
     }
+
+    @FunctionalInterface
+    interface Levels {
+        Object[] array();
+        default int fence() {return array().length;}
+    }
+    interface Index {
+        Object getValue();
+
+        Object setValue(Object val);
+    }
+
+    record FIndex(Index main) implements Index {
+        @Override public Object getValue() {return main.getValue();}
+        @Override public Object setValue(Object val) {return main.setValue(val);}
+
+        @Override public String toString() {return Objects.toString(getValue());}
+    }
+    static class Cell implements Index {
+        volatile Object val;
+        Cell(Object val) {
+            this.val = val;
+        }
+        @Override public Object getValue() {return val;}
+        @Override public Object setValue(Object val) {return VAL.getAndSet(this, val);}
+
+        @Override public String toString() {return Objects.toString(val);}
+    }
+
+    record QLevels(Object[] array) implements Levels {} // inline type
 
     private static final VarHandle AA
             = MethodHandles.arrayElementVarHandle(Object[].class);

@@ -4,48 +4,52 @@ import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.Scope;
 import org.openjdk.jmh.annotations.Setup;
 import org.openjdk.jmh.annotations.State;
+import org.openjdk.jmh.runner.Runner;
 import org.openjdk.jmh.runner.RunnerException;
+import org.openjdk.jmh.runner.options.Options;
+import org.openjdk.jmh.runner.options.OptionsBuilder;
 import zelva.utils.concurrent.ConcurrentArrayCopy;
-import zelva.utils.concurrent.ConcurrentCells;
+
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 @State(Scope.Thread)
 public class BenchCells {
 
     public static void main(String[] args) throws RunnerException {
-        ConcurrentArrayCopy<Integer> arrayCopy = new ConcurrentArrayCopy<>(12);
-        System.out.println(arrayCopy.set(0, 1));
-        System.out.println(arrayCopy.set(0, 1));
-
-        arrayCopy.resize(13);
-        /*Options opt = new OptionsBuilder()
+        Options opt = new OptionsBuilder()
                 .include(BenchCells.class.getSimpleName())
                 .measurementIterations(3)
                 .forks(1)
                 .build();
-        new Runner(opt).run();*/
+        new Runner(opt).run();
     }
 
     static final int MAX_NODES = 10_000;
-    final ConcurrentCells cells = new ConcurrentCells();
-    final ConcurrentArrayCopy<Integer> arrayCopy = new ConcurrentArrayCopy<>(MAX_NODES);
+    final Set<Integer> chm = ConcurrentHashMap.newKeySet(MAX_NODES);
+    final ConcurrentArrayCopy<Integer> cac = new ConcurrentArrayCopy<>(MAX_NODES);
 
     @Setup
     public void prepare() {
         for (int i = 0; i < MAX_NODES; ++i) {
-            //cells.set(i,i);
-            arrayCopy.set(i,i);
+            chm.add(i);
+            cac.set(i,i);
         }
     }
     @Benchmark
-    public Object lookupCells() {
-        return cells.get(MAX_NODES-1);
+    public boolean readCHM() {
+        return chm.contains(MAX_NODES-1);
     }
     @Benchmark
-    public Object lookupCAC() {
-        return arrayCopy.get(MAX_NODES-1);
+    public boolean readCAC() {
+        return cac.get(MAX_NODES-1) != null;
     }
     @Benchmark
-    public Object setHashMap() {
-        return arrayCopy.set(4, 2);
+    public Object writeCHM() {
+        return chm.add(4);
+    }
+    @Benchmark
+    public Object writeCAC() {
+        return cac.set(4, 2);
     }
 }
