@@ -3,13 +3,13 @@ package zelva.utils.concurrent;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.Arrays;
-import java.util.function.Function;
 
 /**
  * @see ConcurrentArrayCopy
+ * @author ZelvaLea
  */
 public class ConcurrentCells {
-    volatile QCells[] levels = {QCells.of()};
+    volatile QCells[] levels = new QCells[0];
     static final int MIN_CHUNK = 8;
 
     public Object get(int i) {
@@ -18,7 +18,14 @@ public class ConcurrentCells {
         return q.arrayAt(index);
     }
     public boolean cas(int i, Object c, Object v) {
-        int level = i / MIN_CHUNK, index = i % MIN_CHUNK;
+        int lvl = i / MIN_CHUNK, idx = i % MIN_CHUNK;
+        return tryGrow(lvl).casAt(idx,c,v);
+    }
+    public Object set(int i, Object c) {
+        int lvl = i / MIN_CHUNK, idx = i % MIN_CHUNK;
+        return tryGrow(lvl).getAndSet(idx,c);
+    }
+    QCells tryGrow(int level) {
         for (QCells[] lvs;;) {
             if (level >= (lvs = levels).length - 1) {
                 if (!LEVELS.compareAndSet(this,
@@ -26,24 +33,7 @@ public class ConcurrentCells {
                     continue;
                 }
             }
-            return lvs[level].casAt(index,c,v);
-        }
-    }
-    public Object merge(int i, Function<Object,Object> function) {
-        int level = i / MIN_CHUNK, index = i % MIN_CHUNK;
-        for (QCells[] lvs;;) {
-            if (level >= (lvs = levels).length-1) {
-                if (!LEVELS.compareAndSet(this,
-                        lvs, lvs = newLevels(lvs, level + 4))) {
-                    continue;
-                }
-            }
-            for (QCells q = lvs[level];;) {
-                Object v = q.arrayAt(index);
-                if (q.casAt(i,v,function.apply(v))) {
-                    return v;
-                }
-            }
+            return lvs[level];
         }
     }
     public int length() {
@@ -56,9 +46,6 @@ public class ConcurrentCells {
         }
         Object arrayAt(int i) {
             return AA.getAcquire(array, i);
-        }
-        void setAt(int i, Object v) {
-            AA.setRelease(array, i, v);
         }
         Object getAndSet(int i, Object v) {
             return AA.getAndSet(array, i, v);
@@ -85,16 +72,22 @@ public class ConcurrentCells {
 
     @Override
     public String toString() {
-        QCells[] lvs = levels;
-        if (lvs.length == 0)
+        QCells[] lvs = levels; int n;
+        if ((n = lvs.length) == 0)
             return "[]";
-        StringBuilder builder = new StringBuilder();
+        n *= MIN_CHUNK;
+        StringBuilder sb = new StringBuilder();
+        sb.append('[');
         for (QCells q : lvs) {
             for (int i = 0; i < MIN_CHUNK; ++i) {
-                builder.append(q.arrayAt(i)).append(", ");
+                Object f = q.arrayAt(i);
+                sb.append(f);
+                if (n-- == 1)
+                    return sb.append(']').toString();
+                sb.append(", ");
             }
         }
-        return builder.toString();
+        return sb.toString();
     }
 
     private static final VarHandle LEVELS;

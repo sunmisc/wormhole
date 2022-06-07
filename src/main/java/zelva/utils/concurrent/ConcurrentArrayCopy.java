@@ -4,6 +4,9 @@ import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.Objects;
 
+/**
+ * @author ZelvaLea
+ */
 public class ConcurrentArrayCopy<E> {
     static final FIndex DEAD = new FIndex(null); // todo:
     static final int NCPU = Runtime.getRuntime().availableProcessors();
@@ -212,9 +215,10 @@ public class ConcurrentArrayCopy<E> {
 
     record QLevels(Object[] array) implements Levels {} // inline type
 
+
+    // VarHandle mechanics
     private static final VarHandle AA
             = MethodHandles.arrayElementVarHandle(Object[].class);
-
     private static final VarHandle VAL;
     private static final VarHandle LEVELS;
     private static final VarHandle STRIDEINDEX;
