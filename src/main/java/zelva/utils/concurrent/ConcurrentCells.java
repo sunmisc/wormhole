@@ -5,17 +5,31 @@ import java.lang.invoke.VarHandle;
 import java.util.Arrays;
 import java.util.function.Function;
 
+/**
+ * @see ConcurrentArrayCopy
+ */
 public class ConcurrentCells {
     volatile QCells[] levels = {QCells.of()};
-    static final int MIN_CHUNK = 4;
+    static final int MIN_CHUNK = 8;
 
     public Object get(int i) {
         int level = i / MIN_CHUNK, index = i % MIN_CHUNK;
         QCells q = levels[level];
         return q.arrayAt(index);
     }
-
-    public Object set(int i, Object o) {
+    public boolean cas(int i, Object c, Object v) {
+        int level = i / MIN_CHUNK, index = i % MIN_CHUNK;
+        for (QCells[] lvs;;) {
+            if (level >= (lvs = levels).length - 1) {
+                if (!LEVELS.compareAndSet(this,
+                        lvs, lvs = newLevels(lvs, level + 4))) {
+                    continue;
+                }
+            }
+            return lvs[level].casAt(index,c,v);
+        }
+    }
+    public Object merge(int i, Function<Object,Object> function) {
         int level = i / MIN_CHUNK, index = i % MIN_CHUNK;
         for (QCells[] lvs;;) {
             if (level >= (lvs = levels).length-1) {
@@ -24,26 +38,18 @@ public class ConcurrentCells {
                     continue;
                 }
             }
-            return lvs[level].getAndSet(index, o);
+            for (QCells q = lvs[level];;) {
+                Object v = q.arrayAt(index);
+                if (q.casAt(i,v,function.apply(v))) {
+                    return v;
+                }
+            }
         }
+    }
+    public int length() {
+        return levels.length * MIN_CHUNK;
     }
 
-    Object update(int i, Function<Object, Object> updater) {
-        int level = i / MIN_CHUNK, index = i % MIN_CHUNK;
-        QCells[] lvs;
-        while (level >= (lvs = levels).length) {
-            if (LEVELS.compareAndSet(this, lvs,
-                    lvs = newLevels(lvs, level + 2))) {
-                break;
-            }
-        }
-        for (QCells q = lvs[level]; ; ) {
-            Object f = q.arrayAt(index), o = updater.apply(f);
-            if (f == o || q.casAt(index, f, o)) {
-                return o;
-            }
-        }
-    }
     record QCells(Object[] array) {
         static QCells of() {
             return new QCells(new Object[MIN_CHUNK]);
