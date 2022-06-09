@@ -8,7 +8,12 @@ import java.util.Objects;
  * @author ZelvaLea
  */
 public class ConcurrentArrayCopy<E> {
-    static final FIndex DEAD = new FIndex(null); // todo:
+    static final Index<?> DEAD_NIL = new Index<>() {
+        @Override public Object getValue() {return null;}
+        @Override public Object setValue(Object val) {return null;}
+        @Override public boolean cas(Object c, Object v) {return true;}
+        @Override public String toString() {return "null";}
+    };
     static final int NCPU = Runtime.getRuntime().availableProcessors();
     static final int MIN_TRANSFER_STRIDE = 16;
     volatile Levels levels;
@@ -16,11 +21,12 @@ public class ConcurrentArrayCopy<E> {
     public ConcurrentArrayCopy(int size) {
         this.levels = new QLevels(new Object[size]);
     }
-    public ConcurrentArrayCopy(Object[] array) {
-        int n = array.length;
-        Object[] nodes = new Cell[n];
+    public ConcurrentArrayCopy(E[] array) {
+        int n; Object o;
+        Object[] nodes = new Cell[n = array.length];
         for (int i = 0; i < n; ++i) {
-            nodes[i] = new Cell(array[i]);
+            if ((o = array[i]) != null)
+                nodes[i] = new Cell(o);
         }
         this.levels = new QLevels(nodes);
     }
@@ -32,7 +38,7 @@ public class ConcurrentArrayCopy<E> {
     public E get(int i) {
         for (Object[] arr = levels.array();;) {
             Object o = arrayAt(arr, i);
-            if (o == null || o == DEAD) {
+            if (o == null) {
                 return null;
             } else if (o instanceof ForwardingPointer t) {
                 arr = t.newCells;
@@ -41,25 +47,53 @@ public class ConcurrentArrayCopy<E> {
             }
         }
     }
-    public Object set(int i, Object element) {
+    public E set(int i, Object element) {
+        Objects.requireNonNull(element);
         Object[] arr = levels.array();
         for (Object o; ; ) {
-            if ((o = arrayAt(arr, i)) == element) {
-                return element;
-            } else if (o == null || o == DEAD) {
-                if (casArrayAt(arr, i, o,
+            if ((o = arrayAt(arr, i)) == null) {
+                if (casArrayAt(arr, i, null,
                         new Cell(element))) {
                     return null;
                 }
+            } else if (o == DEAD_NIL) {
             } else if (o instanceof ForwardingPointer f) {
                 arr = transfer(f);
-            } else if (element == null) {
-                if (!(o instanceof FIndex) &&
-                        casArrayAt(arr, i, o, null)) {
-                    return null;
-                }
             } else if (o instanceof Index n) {
-                return n.setValue(element);
+                return (E) n.setValue(element);
+            }
+        }
+    }
+    public E remove(int i) {
+        Object[] arr = levels.array();
+        for (Object o; ; ) {
+            if ((o = arrayAt(arr, i)) == null
+                    || o == DEAD_NIL) {
+                return null;
+            } else if (o instanceof ForwardingPointer f) {
+                arr = transfer(f);
+            } else if (o instanceof Cell n &&
+                    casArrayAt(arr, i, o, null)) {
+                return (E) n.getValue();
+            }
+        }
+    }
+    public boolean cas(int i, Object c, Object v) {
+        Object[] arr = levels.array();
+        for (Object o; ; ) {
+            if ((o = arrayAt(arr, i)) == null) {
+                if (c == null) {
+                    if (v == null) {
+                        return true;
+                    } else if (casArrayAt(arr, i, o, new Cell(v))) {
+                        return true;
+                    }
+                }
+            } else if (o == DEAD_NIL) {
+            } else if (o instanceof ForwardingPointer f) {
+                arr = transfer(f);
+            } else if (o instanceof Index n) {
+                return n.getValue() == c && n.cas(c, v);
             }
         }
     }
@@ -82,6 +116,7 @@ public class ConcurrentArrayCopy<E> {
         for (int i, ls; ; ) {
             if ((i = a.strideIndex) >= a.fence) {
                 // recheck before commit and help
+                Thread.yield();
                 a.transferChunk(0, i);
                 return a.newCells;
             } else if (STRIDEINDEX.weakCompareAndSet(a, i,
@@ -117,8 +152,8 @@ public class ConcurrentArrayCopy<E> {
                 for (Object o; ; ) {
                     if (sizeCtl >= fence) {
                         return;
-                    } else if ((o = arrayAt(shared, i))
-                            instanceof FIndex) {
+                    } else if ((o = arrayAt(shared, i)) == DEAD_NIL
+                            || o instanceof DeadIndex) {
                     } else if (o instanceof
                             ForwardingPointer f) {
                         if (f == this)
@@ -141,14 +176,32 @@ public class ConcurrentArrayCopy<E> {
         boolean trySwapSlot(Object o, int i,
                             Object[] oldCells, Object[] newCells) {
             Object c;
-            if ((c = caeArrayAt(oldCells, i, o, new FIndex(
-                    o instanceof Cell n ? n : DEAD))) == o) {
+            if ((c = caeArrayAt(oldCells, i, o,
+                    o instanceof Cell n ? new DeadIndex(n) : DEAD_NIL))
+                    == o) {
                 // full fence
                 setAt(newCells, i, o);
                 setAt(oldCells, i, this);
                 return true;
             } else return c == this;
         }
+    }
+    @Override
+    public int hashCode() {
+        Object[] arr = levels.array();
+        int result = 1, n = arr.length;
+        for (int i = 0; i < n; i++) {
+            for (Object f = arrayAt(arr, i); ; ) {
+                if (f instanceof ForwardingPointer t) {
+                    f = arrayAt(t.newCells, i);
+                } else if (f instanceof Index o) {
+                    Object val = o.getValue();
+                    result = 31 * result + (val == null ? 0 : val.hashCode());
+                    break;
+                }
+            }
+        }
+        return result;
     }
 
     @Override
@@ -190,27 +243,43 @@ public class ConcurrentArrayCopy<E> {
         Object[] array();
         default int fence() {return array().length;}
     }
-    interface Index {
-        Object getValue();
+    interface Index<E> {
+        E getValue();
 
-        Object setValue(Object val);
+        E setValue(E val);
+
+        boolean cas(E c, E v);
     }
 
-    record FIndex(Index main) implements Index {
-        @Override public Object getValue() {return main.getValue();}
-        @Override public Object setValue(Object val) {return main.setValue(val);}
+    record DeadIndex<E>(Index<E>main) implements Index<E> {
+        @Override public E getValue() {return main.getValue();}
+        @Override public E setValue(E val) {return main.setValue(val);}
+
+        @Override public boolean cas(E c, E v) {return main.cas(c,v);}
 
         @Override public String toString() {return Objects.toString(getValue());}
     }
-    static class Cell implements Index {
-        volatile Object val;
-        Cell(Object val) {
+    static class Cell<E> implements Index<E> {
+        volatile E val;
+        Cell(E val) {
             this.val = val;
         }
-        @Override public Object getValue() {return val;}
-        @Override public Object setValue(Object val) {return VAL.getAndSet(this, val);}
+        @Override public E getValue() {return val;}
+        @Override public E setValue(E val) {return (E) VAL.getAndSet(this, val);}
+
+        @Override public boolean cas(E c, E v) {return VAL.compareAndSet(this, c,v);}
 
         @Override public String toString() {return Objects.toString(val);}
+
+        private static final VarHandle VAL;
+        static {
+            try {
+                MethodHandles.Lookup l = MethodHandles.lookup();
+                VAL = l.findVarHandle(Cell.class, "val", Object.class);
+            } catch (ReflectiveOperationException e) {
+                throw new ExceptionInInitializerError(e);
+            }
+        }
     }
 
     record QLevels(Object[] array) implements Levels {} // inline type
@@ -219,7 +288,6 @@ public class ConcurrentArrayCopy<E> {
     // VarHandle mechanics
     private static final VarHandle AA
             = MethodHandles.arrayElementVarHandle(Object[].class);
-    private static final VarHandle VAL;
     private static final VarHandle LEVELS;
     private static final VarHandle STRIDEINDEX;
     private static final VarHandle SIZECTL;
@@ -230,7 +298,6 @@ public class ConcurrentArrayCopy<E> {
             STRIDEINDEX = l.findVarHandle(ForwardingPointer.class, "strideIndex", int.class);
             SIZECTL = l.findVarHandle(ForwardingPointer.class, "sizeCtl", int.class);
             LEVELS = l.findVarHandle(ConcurrentArrayCopy.class, "levels", Levels.class);
-            VAL = l.findVarHandle(Cell.class, "val", Object.class);
         } catch (ReflectiveOperationException e) {
             throw new ExceptionInInitializerError(e);
         }
