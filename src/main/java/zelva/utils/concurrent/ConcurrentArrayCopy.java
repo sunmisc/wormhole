@@ -116,7 +116,6 @@ public class ConcurrentArrayCopy<E> {
         for (int i, ls; ; ) {
             if ((i = a.strideIndex) >= a.fence) {
                 // recheck before commit and help
-                Thread.yield();
                 a.transferChunk(0, i);
                 return a.newCells;
             } else if (STRIDEINDEX.weakCompareAndSet(a, i,
@@ -145,12 +144,12 @@ public class ConcurrentArrayCopy<E> {
         @Override public int fence() {return fence;}
 
         void transferChunk(int start, int end) {
-            int i = start;
+            int i = start, bound = fence;
             Object[] prev = oldCells;
-            for (; i < end && i < fence; ++i) {
+            for (; i < end && i < bound; ++i) {
                 Object[] shared = prev;
                 for (Object o; ; ) {
-                    if (sizeCtl >= fence) {
+                    if (sizeCtl >= bound) {
                         return;
                     } else if ((o = arrayAt(shared, i)) == DEAD_NIL
                             || o instanceof DeadIndex) {
@@ -159,8 +158,10 @@ public class ConcurrentArrayCopy<E> {
                         if (f == this)
                             break;
                         shared = f.newCells;
-                        if (f.sizeCtl > f.fence)
+                        if (f.sizeCtl > f.fence) {
                             prev = shared;
+                            bound = Math.min(bound, f.fence);
+                        }
                     } else if (trySwapSlot(o, i, shared, newCells)) {
                         break;
                     }
@@ -168,7 +169,7 @@ public class ConcurrentArrayCopy<E> {
             }
             int c = i - start, sz;
             do {
-                if ((sz = sizeCtl) >= fence) {
+                if ((sz = sizeCtl) >= bound) {
                     return;
                 }
             } while(!SIZECTL.weakCompareAndSet(this, sz, sz + c));
