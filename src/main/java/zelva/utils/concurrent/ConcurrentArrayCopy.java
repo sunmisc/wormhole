@@ -26,7 +26,7 @@ public class ConcurrentArrayCopy<E> {
         Object[] nodes = new Cell[n = array.length];
         for (int i = 0; i < n; ++i) {
             if ((o = array[i]) != null)
-                nodes[i] = new Cell(o);
+                nodes[i] = new Cell<>(o);
         }
         this.levels = new QLevels(nodes);
     }
@@ -98,12 +98,12 @@ public class ConcurrentArrayCopy<E> {
         }
     }
 
-    public void resize(int cap) {
-        final Object[] nextArray = new Object[cap];
+    public void resize(int length) {
+        final Object[] nextArray = new Object[length];
         ForwardingPointer fwd;
         for (Levels p;;) {
             if (((p = levels) instanceof QLevels) &&
-                    p.fence() == cap) {
+                    p.fence() == length) {
                 return;
             } else if (LEVELS.weakCompareAndSet(this, p,
                     fwd = new ForwardingPointer(p, nextArray))) {
