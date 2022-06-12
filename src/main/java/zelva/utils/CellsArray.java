@@ -27,11 +27,12 @@ public class CellsArray<E> implements Cells<E> {
     }
 
     @Override
-    public boolean cas(int i, E c, E v) {
-        if (array[i] != c)
-            return false;
+    public E cae(int i, E c, E v) {
+        E p = array[i];
+        if (p != c)
+            return p;
         array[i] = v;
-        return true;
+        return c;
     }
 
     @Override

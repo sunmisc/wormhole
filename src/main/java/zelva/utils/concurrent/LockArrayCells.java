@@ -36,13 +36,14 @@ public class LockArrayCells<E> implements Cells<E> {
     }
 
     @Override
-    public boolean cas(int i, E c, E v) {
+    public E cae(int i, E c, E v) {
         w.lock();
         try {
-            if (array[i] != c)
-                return false;
+            E p = array[i];
+            if (p != c)
+                return p;
             array[i] = v;
-            return true;
+            return c;
         } finally {
             w.unlock();
         }

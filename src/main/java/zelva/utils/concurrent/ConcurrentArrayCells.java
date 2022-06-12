@@ -50,8 +50,10 @@ public class ConcurrentArrayCells<E> implements Cells<E> {
     // Dead node for null elements when wrapping
     static final Index<?> DEAD_NIL = new Index<>() {
         @Override public Object getValue() {return null;}
-        @Override public Object getAndSet(Object val) {return null;}
-        @Override public boolean cas(Object c, Object v) {return true;}
+        @Override public Object getAndSet(Object val) {
+            throw new UnsupportedOperationException();}
+        @Override public Object cae(Object c, Object v) {
+            throw new UnsupportedOperationException();}
         @Override public String toString() {return "null";}
     };
     /**
@@ -90,11 +92,17 @@ public class ConcurrentArrayCells<E> implements Cells<E> {
         return levels.array().length;
     }
 
+    /**
+     * Returns the current value of the element at index {@code i}
+     *
+     * @param i the index
+     * @return the current value
+     */
     @Override
     public E get(int i) {
-        for (Object[] arr = levels.array();;) {
-            Object o = arrayAt(arr, i);
-            if (o == null) {
+        Object[] arr = levels.array();
+        for (Object o;;) {
+            if ((o = arrayAt(arr, i)) == null) {
                 return null;
             } else if (o instanceof ForwardingPointer t) {
                 arr = t.newCells;
@@ -103,24 +111,39 @@ public class ConcurrentArrayCells<E> implements Cells<E> {
             }
         }
     }
+
+    /**
+     * Sets the element at index {@code i} to {@code newValue}
+     *
+     * @param i the index
+     * @param newValue the new value
+     * @return the previous value
+     */
     @Override
-    public E set(int i, Object element) {
-        Objects.requireNonNull(element);
+    public E set(int i, Object newValue) {
+        Objects.requireNonNull(newValue);
         Object[] arr = levels.array();
         for (Object o; ; ) {
             if ((o = arrayAt(arr, i)) == null) {
-                if (casArrayAt(arr, i, null,
-                        new Cell<>(element))) {
+                if (weakCasArrayAt(arr, i, null,
+                        new Cell<>(newValue))) {
                     return null;
                 }
             } else if (o == DEAD_NIL) {
             } else if (o instanceof ForwardingPointer f) {
                 arr = transfer(f);
             } else if (o instanceof Index n) {
-                return (E) n.getAndSet(element);
+                return (E) n.getAndSet(newValue);
             }
         }
     }
+
+    /**
+     * Remove a cell from the index {@code i}
+     *
+     * @param i the index
+     * @return the previous value
+     */
     @Override
     public E remove(int i) {
         Object[] arr = levels.array();
@@ -131,31 +154,48 @@ public class ConcurrentArrayCells<E> implements Cells<E> {
             } else if (o instanceof ForwardingPointer f) {
                 arr = transfer(f);
             } else if (o instanceof Cell n &&
-                    casArrayAt(arr, i, o, null)) {
+                    weakCasArrayAt(arr, i, o, null)) {
                 return (E) n.getValue();
             }
         }
     }
+
+    /**
+     * Atomically sets the element at index {@code i} to {@code newValue}
+     * if the element's current value {@code == expectedValue},
+     * @param i the index
+     * @param expectedValue the expected value
+     * @param newValue the new value
+     * @return {@code true} if successful. False return indicates that
+     * the actual value was not equal to the expected value.
+     */
     @Override
-    public boolean cas(int i, Object c, Object v) {
+    public E cae(int i, E expectedValue, E newValue) {
         Object[] arr = levels.array();
         for (Object o; ; ) {
             if ((o = arrayAt(arr, i)) == null) {
-                if (c == null) {
-                    if (v == null) {
-                        return true;
-                    } else if (casArrayAt(arr, i, null, new Cell<>(v))) {
-                        return true;
-                    }
+                if (expectedValue == null &&
+                        (newValue == null || weakCasArrayAt(arr, i,
+                                null,
+                                new Cell<>(newValue)))) {
+                    return null;
                 }
             } else if (o == DEAD_NIL) {
             } else if (o instanceof ForwardingPointer f) {
                 arr = transfer(f);
             } else if (o instanceof Index n) {
-                return n.getValue() == c && n.cas(c, v);
+                Object p = n.getValue();
+                return (E) (p == expectedValue
+                        ? n.cae(expectedValue, newValue)
+                        : p);
             }
         }
     }
+
+    /**
+     * resize array to {@code i} length
+     * @param length new array length
+     */
     @Override
     public void resize(int length) {
         final Object[] nextArray = new Object[length];
@@ -249,7 +289,7 @@ public class ConcurrentArrayCells<E> implements Cells<E> {
                 // store fence
                 setAt(oldCells, i, this);
                 return true;
-            } else return c == this;
+            } else return c == this; // finished
         }
     }
     @Override
@@ -291,13 +331,17 @@ public class ConcurrentArrayCells<E> implements Cells<E> {
             }
         }
     }
+    /*
+     * Atomic access methods are used for array elements as well
+     * as elements of in-progress next array while resizing
+     */
     static Object arrayAt(Object[] arr, int i) {
         return AA.getAcquire(arr, i);
     }
     static void setAt(Object[] arr, int i, Object v) {
         AA.setRelease(arr,i,v);
     }
-    static boolean casArrayAt(Object[] arr, int i, Object c, Object v) {
+    static boolean weakCasArrayAt(Object[] arr, int i, Object c, Object v) {
         return AA.weakCompareAndSet(arr,i,c,v);
     }
     static Object caeArrayAt(Object[] arr, int i, Object c, Object v) {
@@ -314,14 +358,14 @@ public class ConcurrentArrayCells<E> implements Cells<E> {
 
         E getAndSet(E val);
 
-        boolean cas(E c, E v);
+        E cae(E c, E v);
     }
 
     record DeadIndex<E>(Index<E>main) implements Index<E> {
         @Override public E getValue() {return main.getValue();}
         @Override public E getAndSet(E val) {return main.getAndSet(val);}
 
-        @Override public boolean cas(E c, E v) {return main.cas(c,v);}
+        @Override public E cae(E c, E v) {return main.cae(c,v);}
 
         @Override public String toString() {return Objects.toString(getValue());}
     }
@@ -333,7 +377,7 @@ public class ConcurrentArrayCells<E> implements Cells<E> {
         @Override public E getValue() {return val;}
         @Override public E getAndSet(E val) {return (E) VAL.getAndSet(this, val);}
 
-        @Override public boolean cas(E c, E v) {return VAL.compareAndSet(this, c,v);}
+        @Override public E cae(E c, E v) {return (E) VAL.compareAndExchange(this, c,v);}
 
         @Override public String toString() {return Objects.toString(val);}
 

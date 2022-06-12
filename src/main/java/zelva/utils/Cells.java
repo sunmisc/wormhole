@@ -7,7 +7,7 @@ public interface Cells<E> {
 
     E remove(int i);
 
-    boolean cas(int i, E c, E v);
+    E cae(int i, E c, E v);
 
     void resize(int size);
 
