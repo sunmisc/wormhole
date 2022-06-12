@@ -1,16 +1,53 @@
 package zelva.utils.concurrent;
 
+import zelva.utils.Cells;
+
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.Objects;
 
 /**
+ * An array that supports full concurrency retrievals
+ * and high expected update concurrency.
+ * This array is based entirely on the free-lock mechanism.
+ *
  * @author ZelvaLea
  */
-public class ConcurrentArrayCopy<E> {
+public class ConcurrentArrayCells<E> implements Cells<E> {
+    /*
+     * Overview:
+     * The purpose of this array is not only to quickly read/write
+     * to different slots of the array, but also
+     * to atomically change the array with possible parallelization
+     *
+     * An array can be parallelized if another thread arrives
+     * at the moment of transferring elements from one array to
+     * another marking the moved slots in the old array as ForwardingPointer,
+     * we update the values through a special object that stores
+     * a volatile value field, this is necessary in order
+     * to read the object without blocking
+     *
+     * At the moment when moving from one array to another,
+     * we divide the array into chunks, each thread works with its own chunk
+     * but at the same time, we can forget about the new array,
+     * if it is found that a new array has appeared,
+     * it depends on the sizes of the chunks themselves
+     *
+     * For this we have strideIndex and sizeCtl field strideIndex
+     * divides the array into chunks and gives to the streams,
+     * and sizeCtl is the total number of chunks that are already filled
+     *
+     * the memory problem is solved by a partial spin lock,
+     * in cases of deleting an element, for this we use a redirect node,
+     * which allows us to read/update the value,
+     * but does not allow us to remove the node from the array,
+     * this is a unique case of deletion and resize
+     *
+     *
+     */
     static final Index<?> DEAD_NIL = new Index<>() {
         @Override public Object getValue() {return null;}
-        @Override public Object setValue(Object val) {return null;}
+        @Override public Object getAndSet(Object val) {return null;}
         @Override public boolean cas(Object c, Object v) {return true;}
         @Override public String toString() {return "null";}
     };
@@ -18,10 +55,10 @@ public class ConcurrentArrayCopy<E> {
     static final int MIN_TRANSFER_STRIDE = 16;
     volatile Levels levels;
 
-    public ConcurrentArrayCopy(int size) {
+    public ConcurrentArrayCells(int size) {
         this.levels = new QLevels(new Object[size]);
     }
-    public ConcurrentArrayCopy(E[] array) {
+    public ConcurrentArrayCells(E[] array) {
         int n; Object o;
         Object[] nodes = new Cell[n = array.length];
         for (int i = 0; i < n; ++i) {
@@ -30,11 +67,12 @@ public class ConcurrentArrayCopy<E> {
         }
         this.levels = new QLevels(nodes);
     }
-
+    @Override
     public int size() {
         return levels.array().length;
     }
 
+    @Override
     public E get(int i) {
         for (Object[] arr = levels.array();;) {
             Object o = arrayAt(arr, i);
@@ -47,23 +85,25 @@ public class ConcurrentArrayCopy<E> {
             }
         }
     }
+    @Override
     public E set(int i, Object element) {
         Objects.requireNonNull(element);
         Object[] arr = levels.array();
         for (Object o; ; ) {
             if ((o = arrayAt(arr, i)) == null) {
                 if (casArrayAt(arr, i, null,
-                        new Cell(element))) {
+                        new Cell<>(element))) {
                     return null;
                 }
             } else if (o == DEAD_NIL) {
             } else if (o instanceof ForwardingPointer f) {
                 arr = transfer(f);
             } else if (o instanceof Index n) {
-                return (E) n.setValue(element);
+                return (E) n.getAndSet(element);
             }
         }
     }
+    @Override
     public E remove(int i) {
         Object[] arr = levels.array();
         for (Object o; ; ) {
@@ -78,6 +118,7 @@ public class ConcurrentArrayCopy<E> {
             }
         }
     }
+    @Override
     public boolean cas(int i, Object c, Object v) {
         Object[] arr = levels.array();
         for (Object o; ; ) {
@@ -97,7 +138,7 @@ public class ConcurrentArrayCopy<E> {
             }
         }
     }
-
+    @Override
     public void resize(int length) {
         final Object[] nextArray = new Object[length];
         ForwardingPointer fwd;
@@ -247,14 +288,14 @@ public class ConcurrentArrayCopy<E> {
     interface Index<E> {
         E getValue();
 
-        E setValue(E val);
+        E getAndSet(E val);
 
         boolean cas(E c, E v);
     }
 
     record DeadIndex<E>(Index<E>main) implements Index<E> {
         @Override public E getValue() {return main.getValue();}
-        @Override public E setValue(E val) {return main.setValue(val);}
+        @Override public E getAndSet(E val) {return main.getAndSet(val);}
 
         @Override public boolean cas(E c, E v) {return main.cas(c,v);}
 
@@ -266,7 +307,7 @@ public class ConcurrentArrayCopy<E> {
             this.val = val;
         }
         @Override public E getValue() {return val;}
-        @Override public E setValue(E val) {return (E) VAL.getAndSet(this, val);}
+        @Override public E getAndSet(E val) {return (E) VAL.getAndSet(this, val);}
 
         @Override public boolean cas(E c, E v) {return VAL.compareAndSet(this, c,v);}
 
@@ -298,7 +339,7 @@ public class ConcurrentArrayCopy<E> {
             MethodHandles.Lookup l = MethodHandles.lookup();
             STRIDEINDEX = l.findVarHandle(ForwardingPointer.class, "strideIndex", int.class);
             SIZECTL = l.findVarHandle(ForwardingPointer.class, "sizeCtl", int.class);
-            LEVELS = l.findVarHandle(ConcurrentArrayCopy.class, "levels", Levels.class);
+            LEVELS = l.findVarHandle(ConcurrentArrayCells.class, "levels", Levels.class);
         } catch (ReflectiveOperationException e) {
             throw new ExceptionInInitializerError(e);
         }

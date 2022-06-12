@@ -5,7 +5,7 @@ import java.lang.invoke.VarHandle;
 import java.util.Arrays;
 
 /**
- * @see ConcurrentArrayCopy
+ * @see ConcurrentArrayCells
  * @author ZelvaLea
  */
 public class ConcurrentCells {

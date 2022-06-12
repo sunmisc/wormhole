@@ -1,10 +1,12 @@
 package zelva.utils.concurrent;
 
+import zelva.utils.Cells;
+
 import java.util.Arrays;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
-class LockArrayCopy<E> {
+public class LockArrayCopy<E> implements Cells<E> {
     private final ReentrantReadWriteLock rwl = new ReentrantReadWriteLock();
     private final Lock r = rwl.readLock();
     private final Lock w = rwl.writeLock();
@@ -27,6 +29,13 @@ class LockArrayCopy<E> {
             w.unlock();
         }
     }
+
+    @Override
+    public E remove(int i) {
+        return set(i, null);
+    }
+
+    @Override
     public boolean cas(int i, E c, E v) {
         w.lock();
         try {
@@ -38,6 +47,7 @@ class LockArrayCopy<E> {
             w.unlock();
         }
     }
+    @Override
     public void resize(int size) {
         E[] newArr = (E[]) new Object[size];
         w.lock();
@@ -53,6 +63,17 @@ class LockArrayCopy<E> {
         }
     }
 
+    @Override
+    public int size() {
+        r.lock();
+        try {
+            return array.length;
+        } finally {
+            r.unlock();
+        }
+    }
+
+    @Override
     public E get(int i) {
         r.lock();
         try {
