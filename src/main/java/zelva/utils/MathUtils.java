@@ -6,7 +6,10 @@ public final class MathUtils {
     private static final int _N             = MAX_PRECISION - 1;
     private static final int _COS           = MAX_PRECISION >> 2;
     private static final double _H          = MAX_PRECISION/_2PI;
-    // aka hash table
+    /** @see todo:
+     * @author coderbot16   Author of the original (and very clever) implementation in Rust:
+     *  <a href="https://gitlab.com/coderbot16/i73/-/tree/master/i73-trig/src">...</a>
+     */
     private static final float[] SINE_TABLE = new float[MAX_PRECISION];
     static {
         int i = 0;

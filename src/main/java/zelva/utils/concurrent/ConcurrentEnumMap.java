@@ -1,5 +1,7 @@
 package zelva.utils.concurrent;
 
+import java.io.Serial;
+import java.io.Serializable;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.*;
@@ -344,33 +346,39 @@ public final class ConcurrentEnumMap<K extends Enum<K>,V>
 
     /* --------------------- Views --------------------- */
 
-    private static class KeySetView<K extends Enum<K>,V>
-            extends AbstractSet<K> {
-        private final ConcurrentEnumMap<K,V> map;
+    static final class KeySetView<K extends Enum<K>,V>
+            extends AbstractSet<K>
+            implements Serializable {
+        @Serial
+        private static final long serialVersionUID = 3978011019563538907L;
+        final ConcurrentEnumMap<K,V> map;
 
         KeySetView(ConcurrentEnumMap<K,V> map) {
             this.map = map;
         }
-        @Override public final int size() {return map.size();}
-        @Override public final boolean isEmpty() {return map.isEmpty();}
-        @Override public final void clear() {map.clear();}
+        @Override public int size() {return map.size();}
+        @Override public boolean isEmpty() {return map.isEmpty();}
+        @Override public void clear() {map.clear();}
 
         @Override public Iterator<K> iterator() {return new KeyIterator<>(map);}
         @Override public boolean contains(Object o) {return map.containsKey(o);}
         @Override public boolean remove(Object o) {return map.remove(o) != null;}
     }
 
-    private static class ValuesView<K extends Enum<K>,V>
-            extends AbstractCollection<V> {
+    static final class ValuesView<K extends Enum<K>,V>
+            extends AbstractCollection<V>
+            implements Serializable {
 
-        private final ConcurrentEnumMap<? super K, V> map;
+        @Serial
+        private static final long serialVersionUID = 3274140860495273601L;
+        final ConcurrentEnumMap<? super K, V> map;
 
         ValuesView(ConcurrentEnumMap<? super K, V> map) {
             this.map = map;
         }
-        @Override public final int size() {return map.size();}
-        @Override public final boolean isEmpty() {return map.isEmpty();}
-        @Override public final void clear() {map.clear();}
+        @Override public int size() {return map.size();}
+        @Override public boolean isEmpty() {return map.isEmpty();}
+        @Override public void clear() {map.clear();}
 
         @Override public Iterator<V> iterator() {return new ValueIterator<>(map);}
 
@@ -391,16 +399,19 @@ public final class ConcurrentEnumMap<K extends Enum<K>,V>
             return false;
         }
     }
-    private static class EntrySetView<K extends Enum<K>,V>
-            extends AbstractSet<Map.Entry<K,V>> {
-        private final ConcurrentEnumMap<K,V> map;
+    static final class EntrySetView<K extends Enum<K>,V>
+            extends AbstractSet<Map.Entry<K,V>>
+            implements Serializable {
+        @Serial
+        private static final long serialVersionUID = 1663475809857555708L;
+        final ConcurrentEnumMap<K,V> map;
 
         EntrySetView(ConcurrentEnumMap<K,V> map) {
             this.map = map;
         }
-        @Override public final int size() {return map.size();}
-        @Override public final boolean isEmpty() {return map.isEmpty();}
-        @Override public final void clear() {map.clear();}
+        @Override public int size() {return map.size();}
+        @Override public boolean isEmpty() {return map.isEmpty();}
+        @Override public void clear() {map.clear();}
 
         @Override public Iterator<Map.Entry<K,V>> iterator() {return new EntryIterator<>(map);}
 
@@ -419,14 +430,14 @@ public final class ConcurrentEnumMap<K extends Enum<K>,V>
             return ((o instanceof Map.Entry) &&
                     (k = (e = (Map.Entry<?,?>)o).getKey()) != null &&
                     (v = e.getValue()) != null &&
-                    map.remove(k, v));
+                    map.remove(k,v));
         }
         @Override
         public boolean add(Entry<K,V> e) {
             return map.put(e.getKey(), e.getValue()) == null;
         }
     }
-    private static class KeyIterator<K extends Enum<K>,V>
+    static final class KeyIterator<K extends Enum<K>,V>
             extends EnumMapIterator<K,V,K> {
         KeyIterator(ConcurrentEnumMap<K,V> map) {
             super(map);
@@ -439,7 +450,7 @@ public final class ConcurrentEnumMap<K extends Enum<K>,V>
         }
     }
 
-    private static class ValueIterator<K extends Enum<K>,V>
+    static final class ValueIterator<K extends Enum<K>,V>
             extends EnumMapIterator<K,V,V> {
         ValueIterator(ConcurrentEnumMap<K,V> map) {
             super(map);
@@ -453,7 +464,7 @@ public final class ConcurrentEnumMap<K extends Enum<K>,V>
         }
     }
 
-    private static class EntryIterator<K extends Enum<K>,V>
+    static final class EntryIterator<K extends Enum<K>,V>
             extends EnumMapIterator<K,V,Map.Entry<K,V>> {
         EntryIterator(ConcurrentEnumMap<K,V> map) {
             super(map);
@@ -469,8 +480,9 @@ public final class ConcurrentEnumMap<K extends Enum<K>,V>
         }
     }
 
-    private abstract static class EnumMapIterator<K extends Enum<K>,V,E>
-            implements Iterator<E> {
+    abstract static sealed class EnumMapIterator<K extends Enum<K>,V,E>
+            implements Iterator<E>
+            permits KeyIterator, ValueIterator, EntryIterator {
         final ConcurrentEnumMap<K,V> map;
         int index, lastReturnedIndex = -1;
 
@@ -501,7 +513,7 @@ public final class ConcurrentEnumMap<K extends Enum<K>,V>
         }
     }
 
-    private static final class MapEntry<K extends Enum<K>,V>
+    static final class MapEntry<K extends Enum<K>,V>
             implements Map.Entry<K,V> {
         final K key; // non-null
         V val;       // non-null
@@ -513,17 +525,10 @@ public final class ConcurrentEnumMap<K extends Enum<K>,V>
         }
 
         @Override public K getKey() {return key;}
-
         @Override public V getValue() {return val;}
+        @Override public int hashCode() {return key.hashCode() ^ val.hashCode();}
+        @Override public String toString() {return key.toString() + ' ' + val.toString();}
 
-        @Override
-        public int hashCode() {
-            return key.hashCode() ^ val.hashCode();
-        }
-        @Override
-        public String toString() {
-            return key.toString() + ' ' + val.toString();
-        }
         @Override
         public boolean equals(Object o) {
             Object k, v, v1; Map.Entry<?,?> e;
@@ -564,7 +569,7 @@ public final class ConcurrentEnumMap<K extends Enum<K>,V>
             return false;
         V[] tab = table;
         for (int i = 0, len = tab.length; i < len; ++i) {
-            Object v1, v2;
+            Object v1,v2;
             if ((v1 = m.get(keys[i])) == null) {
                 return false;
             } else if (v1 != (v2 = tabAt(tab, i)) && !v1.equals(v2)) {
@@ -584,7 +589,8 @@ public final class ConcurrentEnumMap<K extends Enum<K>,V>
 
     private boolean isValidKey(Object key) {
         if (key == null)
-            throw new NullPointerException();
+            return false;
+        // Cheaper than instanceof Enum followed by getDeclaringClass
         Class<?> keyClass = key.getClass();
         return keyClass == keyType || keyClass.getSuperclass() == keyType;
     }

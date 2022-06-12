@@ -10,26 +10,25 @@ import org.openjdk.jmh.runner.options.Options;
 import org.openjdk.jmh.runner.options.OptionsBuilder;
 import zelva.utils.MathUtils;
 
+import java.util.concurrent.ConcurrentHashMap;
+
 @State(Scope.Thread)
 public class BenchSinCos {
-
-    @Param({"121.545454"})
-    double val;
     public static void main(String[] args) throws RunnerException {
         Options opt = new OptionsBuilder()
                 .include(BenchSinCos.class.getSimpleName())
-                .measurementIterations(4)
                 .forks(1)
-                .syncIterations(true)
                 .build();
         new Runner(opt).run();
     }
+    @Param({"121.545454", "0.322"})
+    float val;
     @Benchmark
     public float fastSin()   {
-        return MathUtils._sin((float) val);
+        return MathUtils._sin(val);
     }
     @Benchmark
     public double javaSin() {
-        return Math.sin((float) val);
+        return Math.sin(val);
     }
 }

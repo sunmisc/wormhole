@@ -21,21 +21,12 @@ public class BenchEnumMap {
         new Runner(opt).run();
     }
 
-    private Map<Letter, String> hashMap;
-    private Map<Letter,String> enumMap;
+    final Map<Letter, String> hashMap = new ConcurrentHashMap<>();
+    final Map<Letter,String> enumMap = new ConcurrentEnumMap<>(Letter.class);
 
     @Param("U")
     private Letter key;
 
-    @Setup
-    public void prepare() {
-        hashMap = new ConcurrentHashMap<>();
-        enumMap = new ConcurrentEnumMap<>(Letter.class);
-        for (Letter l : Letter.values()) {
-            hashMap.put(l, l.toString()); // init table
-            enumMap.put(l, l.toString());
-        }
-    }
     @Benchmark
     public Map.Entry<Letter, String> enumMapIterator() {
         Iterator<Map.Entry<Letter, String>> iterator
@@ -96,31 +87,4 @@ public class BenchEnumMap {
     public enum Letter {
         A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R,S,T,U,V,W,X,Y,Z
     }
-    /*
-Benchmark                            (key)   Mode  Cnt           Score          Error  Units
-BenchEnumMap.clearAsEnum                 U  thrpt   25  1684565858,025 ± 48338460,812  ops/s
-BenchEnumMap.clearAsHash                 U  thrpt   25   127489353,028 ±  3131787,264  ops/s
-BenchEnumMap.computeAsEnum               U  thrpt   25    34689377,057 ±  1806263,450  ops/s
-BenchEnumMap.computeAsHash               U  thrpt   25    20486702,812 ±  4880777,546  ops/s
-BenchEnumMap.computeIfAbsentAsEnum       U  thrpt   25  1083314169,607 ± 66665836,254  ops/s
-BenchEnumMap.computeIfAbsentAsHash       U  thrpt   25   107502277,033 ± 63683693,185  ops/s
-BenchEnumMap.computeIfPresentAsEnum      U  thrpt   25  1189788644,096 ± 41484304,277  ops/s
-BenchEnumMap.computeIfPresentAsHash      U  thrpt   25   243902898,901 ± 72992321,249  ops/s
-BenchEnumMap.getAsEnum                   U  thrpt   25  1202570594,607 ± 34709252,956  ops/s
-BenchEnumMap.getAsHash                   U  thrpt   25   698349844,237 ±  5852891,447  ops/s
-BenchEnumMap.hashCodeEnumMap             U  thrpt   25    45200463,952 ± 12206506,510  ops/s
-BenchEnumMap.hashCodeHashMap             U  thrpt   25    55710232,462 ± 11431933,201  ops/s
-BenchEnumMap.mergeAsEnum                 U  thrpt   25    37109448,818 ±   613758,458  ops/s
-BenchEnumMap.mergeAsHash                 U  thrpt   25    20496422,089 ±  3939457,806  ops/s
-BenchEnumMap.putAsEnum                   U  thrpt   25    52365556,626 ±  4444423,267  ops/s
-BenchEnumMap.putAsHash                   U  thrpt   25    15114803,764 ±  2754930,848  ops/s
-BenchEnumMap.putIfAbsentAsEnum           U  thrpt   25  1096425067,656 ± 28378588,866  ops/s
-BenchEnumMap.putIfAbsentAsHash           U  thrpt   25   122415506,410 ± 40183092,216  ops/s
-BenchEnumMap.removeAsEnum                U  thrpt   25  1152279540,882 ± 51121553,044  ops/s
-BenchEnumMap.removeAsHash                U  thrpt   25   170387907,609 ± 44107568,919  ops/s
-BenchEnumMap.removeValAsEnum             U  thrpt   25  1258469355,987 ± 33560087,243  ops/s
-BenchEnumMap.removeValAsHash             U  thrpt   25   201538575,584 ±  3587739,653  ops/s
-BenchEnumMap.replaceAsEnum               U  thrpt   25  1309242394,289 ± 30249610,603  ops/s
-BenchEnumMap.replaceAsHash               U  thrpt   25   199651182,445 ±  4575851,093  ops/s
-     */
 }

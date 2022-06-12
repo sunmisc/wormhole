@@ -10,19 +10,19 @@ import java.util.Arrays;
  */
 public class ConcurrentCells {
     volatile QCells[] levels = new QCells[0];
-    static final int MIN_CHUNK = 8;
+    static final int SIZE_CHUNK = 8;
 
     public Object get(int i) {
-        int level = i / MIN_CHUNK, index = i % MIN_CHUNK;
+        int level = i / SIZE_CHUNK, index = i % SIZE_CHUNK;
         QCells q = levels[level];
         return q.arrayAt(index);
     }
     public boolean cas(int i, Object c, Object v) {
-        int lvl = i / MIN_CHUNK, idx = i % MIN_CHUNK;
+        int lvl = i / SIZE_CHUNK, idx = i % SIZE_CHUNK;
         return tryGrow(lvl).casAt(idx,c,v);
     }
     public Object set(int i, Object c) {
-        int lvl = i / MIN_CHUNK, idx = i % MIN_CHUNK;
+        int lvl = i / SIZE_CHUNK, idx = i % SIZE_CHUNK;
         return tryGrow(lvl).getAndSet(idx,c);
     }
     QCells tryGrow(int level) {
@@ -37,12 +37,12 @@ public class ConcurrentCells {
         }
     }
     public int length() {
-        return levels.length * MIN_CHUNK;
+        return levels.length * SIZE_CHUNK;
     }
 
     record QCells(Object[] array) {
         static QCells of() {
-            return new QCells(new Object[MIN_CHUNK]);
+            return new QCells(new Object[SIZE_CHUNK]);
         }
         Object arrayAt(int i) {
             return AA.getAcquire(array, i);
@@ -71,11 +71,11 @@ public class ConcurrentCells {
         QCells[] lvs = levels; int n;
         if ((n = lvs.length) == 0)
             return "[]";
-        n *= MIN_CHUNK;
+        n *= SIZE_CHUNK;
         StringBuilder sb = new StringBuilder();
         sb.append('[');
         for (QCells q : lvs) {
-            for (int i = 0; i < MIN_CHUNK; ++i) {
+            for (int i = 0; i < SIZE_CHUNK; ++i) {
                 Object f = q.arrayAt(i);
                 sb.append(f);
                 if (n-- == 1)

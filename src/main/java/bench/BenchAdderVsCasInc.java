@@ -9,7 +9,6 @@ import org.openjdk.jmh.runner.options.OptionsBuilder;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.LongAdder;
 
-@Threads(2)
 @State(Scope.Benchmark)
 public class BenchAdderVsCasInc {
 
@@ -18,23 +17,14 @@ public class BenchAdderVsCasInc {
     public static void main(String[] args) throws RunnerException {
         Options opt = new OptionsBuilder()
                 .include(BenchAdderVsCasInc.class.getSimpleName())
-                .measurementIterations(4)
-                .forks(1)
-                .syncIterations(false)
                 .build();
         new Runner(opt).run();
     }
-    private LongAdder adder;
-    private AtomicInteger atomic;
-
-    @Setup
-    public void prepare() {
-        adder = new LongAdder();
-        atomic = new AtomicInteger();
-    }
+    final LongAdder adder = new LongAdder();
+    final AtomicInteger atomic = new AtomicInteger();
 
     @Benchmark
-    public int add(){
+    public int incrementLongAdder(){
         adder.add(a);
         return a;
     }

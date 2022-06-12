@@ -33,23 +33,23 @@ public class BenchCAE_VS_TACAE {
                 .build();
         new Runner(opt).run();
     }
+    static final String VAl = "Test-Fest";
 
-    private String lazy;
-    private AtomicRef<String> ref;
+    volatile String lazy;
+    final AtomicRef<String> ref = new AtomicRef<>(VAl);
 
     @Setup
     public void prepare() {
-        ref = new AtomicRef<>("Test-Fest");
-        lazy = "Test-Fest";
+        lazy = VAl;
     }
 
     @Benchmark
     public String ttas() { // witness
-        return ref.testAndCompareAndExchange("Test-Fest", "Test-Fest");
+        return ref.testAndCompareAndExchange(VAl, VAl);
     }
     @Benchmark
     public String cae() {
-        return (String) VAL.compareAndExchange(this, "Test-Fest", "Test-Fest");
+        return (String) VAL.compareAndExchange(this, VAl, VAl);
     }
     private static final VarHandle VAL;
     static {

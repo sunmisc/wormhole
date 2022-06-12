@@ -85,7 +85,7 @@ public class ConcurrentArrayCopy<E> {
                 if (c == null) {
                     if (v == null) {
                         return true;
-                    } else if (casArrayAt(arr, i, o, new Cell(v))) {
+                    } else if (casArrayAt(arr, i, o, new Cell<>(v))) {
                         return true;
                     }
                 }
@@ -180,8 +180,8 @@ public class ConcurrentArrayCopy<E> {
             if ((c = caeArrayAt(oldCells, i, o,
                     o instanceof Cell n ? new DeadIndex(n) : DEAD_NIL))
                     == o) {
-                // full fence
                 setAt(newCells, i, o);
+                // store fence
                 setAt(oldCells, i, this);
                 return true;
             } else return c == this;
@@ -227,10 +227,10 @@ public class ConcurrentArrayCopy<E> {
         }
     }
     static Object arrayAt(Object[] arr, int i) {
-        return AA.getVolatile(arr, i);
+        return AA.getAcquire(arr, i);
     }
     static void setAt(Object[] arr, int i, Object v) {
-        AA.setVolatile(arr,i,v);
+        AA.setRelease(arr,i,v);
     }
     static boolean casArrayAt(Object[] arr, int i, Object c, Object v) {
         return AA.weakCompareAndSet(arr,i,c,v);
@@ -260,7 +260,7 @@ public class ConcurrentArrayCopy<E> {
 
         @Override public String toString() {return Objects.toString(getValue());}
     }
-    static class Cell<E> implements Index<E> {
+    static final class Cell<E> implements Index<E> {
         volatile E val;
         Cell(E val) {
             this.val = val;

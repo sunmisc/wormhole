@@ -22,10 +22,12 @@ public class Lazy<V> {
      * It can be seen on some platforms
      */
     @SuppressWarnings("unchecked")
-    private volatile V value = (V) NIL;
+    private volatile V value;
     private final Supplier<V> supplier;
 
     public Lazy(Supplier<V> supplier) {
+        this.value = (V) NIL;
+        // fence ?
         this.supplier = Objects.requireNonNull(supplier);
     }
     public V get() {

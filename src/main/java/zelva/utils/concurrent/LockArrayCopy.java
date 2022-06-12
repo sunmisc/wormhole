@@ -4,7 +4,7 @@ import java.util.Arrays;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
-public class LockArrayCopy<E> {
+class LockArrayCopy<E> {
     private final ReentrantReadWriteLock rwl = new ReentrantReadWriteLock();
     private final Lock r = rwl.readLock();
     private final Lock w = rwl.writeLock();
@@ -23,6 +23,17 @@ public class LockArrayCopy<E> {
             E d = array[i];
             array[i] = s;
             return d;
+        } finally {
+            w.unlock();
+        }
+    }
+    public boolean cas(int i, E c, E v) {
+        w.lock();
+        try {
+            if (array[i] != c)
+                return false;
+            array[i] = v;
+            return true;
         } finally {
             w.unlock();
         }
