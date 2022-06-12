@@ -162,12 +162,12 @@ public class ConcurrentArrayCells<E> implements Cells<E> {
 
     /**
      * Atomically sets the element at index {@code i} to {@code newValue}
-     * if the element's current value {@code == expectedValue},
+     * if the element's current value, referred to as the <em>witness
      * @param i the index
      * @param expectedValue the expected value
      * @param newValue the new value
-     * @return {@code true} if successful. False return indicates that
-     * the actual value was not equal to the expected value.
+     * @return the witness value, which will be the same as the
+     * expected value if successful
      */
     @Override
     public E cae(int i, E expectedValue, E newValue) {
