@@ -131,7 +131,7 @@ public class ConcurrentArrayCells<E> implements Cells<E> {
                 }
             } else if (o == DEAD_NIL) {
             } else if (o instanceof ForwardingPointer f) {
-                arr = transfer(f);
+                arr = transfer(f).newCells;
             } else if (o instanceof Index n) {
                 return (E) n.getAndSet(newValue);
             }
@@ -152,7 +152,7 @@ public class ConcurrentArrayCells<E> implements Cells<E> {
                     || o == DEAD_NIL) {
                 return null;
             } else if (o instanceof ForwardingPointer f) {
-                arr = transfer(f);
+                arr = transfer(f).newCells;
             } else if (o instanceof Cell n &&
                     weakCasArrayAt(arr, i, o, null)) {
                 return (E) n.getValue();
@@ -182,7 +182,7 @@ public class ConcurrentArrayCells<E> implements Cells<E> {
                 }
             } else if (o == DEAD_NIL) {
             } else if (o instanceof ForwardingPointer f) {
-                arr = transfer(f);
+                arr = transfer(f).newCells;
             } else if (o instanceof Index n) {
                 Object p = n.getValue();
                 return (E) (p == expectedValue
@@ -209,14 +209,16 @@ public class ConcurrentArrayCells<E> implements Cells<E> {
                 break;
             }
         }
-        LEVELS.compareAndSet(this, fwd, new QLevels(transfer(fwd)));
+        LEVELS.compareAndSet(this,
+                fwd = transfer(fwd),
+                new QLevels(fwd.newCells));
     }
-    private Object[] transfer(ForwardingPointer a) {
+    private ForwardingPointer transfer(ForwardingPointer a) {
         for (int i, ls; ; ) {
             if ((i = a.strideIndex) >= a.fence) {
                 // recheck before commit and help
                 a.transferChunk(0, i);
-                return a.newCells;
+                return a;
             } else if (STRIDEINDEX.weakCompareAndSet(a, i,
                     ls = i + a.stride)) {
                 a.transferChunk(i, ls);

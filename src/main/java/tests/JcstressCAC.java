@@ -11,8 +11,14 @@ public class JcstressCAC {
 
 
     static class Array extends ConcurrentArrayCells<Integer> {
-        public Array() {super(2);}
+        public Array() {
+            super(2);
+        }
+        public void put(int i) {
+            set(i,i);
+        }
     }
+
 
     @JCStressTest
     @Outcome(
