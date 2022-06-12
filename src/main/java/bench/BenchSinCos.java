@@ -10,8 +10,6 @@ import org.openjdk.jmh.runner.options.Options;
 import org.openjdk.jmh.runner.options.OptionsBuilder;
 import zelva.utils.MathUtils;
 
-import java.util.concurrent.ConcurrentHashMap;
-
 @State(Scope.Thread)
 public class BenchSinCos {
     public static void main(String[] args) throws RunnerException {

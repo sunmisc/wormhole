@@ -1,6 +1,9 @@
 package bench;
 
-import org.openjdk.jmh.annotations.*;
+import org.openjdk.jmh.annotations.Benchmark;
+import org.openjdk.jmh.annotations.Param;
+import org.openjdk.jmh.annotations.Scope;
+import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.runner.Runner;
 import org.openjdk.jmh.runner.RunnerException;
 import org.openjdk.jmh.runner.options.Options;
@@ -21,11 +24,11 @@ public class BenchEnumMap {
         new Runner(opt).run();
     }
 
-    final Map<Letter, String> hashMap = new ConcurrentHashMap<>();
-    final Map<Letter,String> enumMap = new ConcurrentEnumMap<>(Letter.class);
-
     @Param("U")
     private Letter key;
+
+    final Map<Letter, String> hashMap = new ConcurrentHashMap<>();
+    final Map<Letter,String> enumMap = new ConcurrentEnumMap<>(Letter.class);
 
     @Benchmark
     public Map.Entry<Letter, String> enumMapIterator() {
