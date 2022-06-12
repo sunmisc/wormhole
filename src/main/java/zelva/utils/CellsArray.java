@@ -40,7 +40,7 @@ public class CellsArray<E> implements Cells<E> {
     }
 
     @Override
-    public int size() {
+    public int length() {
         return array.length;
     }
     @Override

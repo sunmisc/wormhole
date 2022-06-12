@@ -64,7 +64,7 @@ public class LockArrayCopy<E> implements Cells<E> {
     }
 
     @Override
-    public int size() {
+    public int length() {
         r.lock();
         try {
             return array.length;

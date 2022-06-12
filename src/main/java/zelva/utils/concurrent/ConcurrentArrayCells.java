@@ -16,6 +16,7 @@ import java.util.Objects;
 public class ConcurrentArrayCells<E> implements Cells<E> {
     /*
      * Overview:
+     *
      * The purpose of this array is not only to quickly read/write
      * to different slots of the array, but also
      * to atomically change the array with possible parallelization
@@ -42,24 +43,37 @@ public class ConcurrentArrayCells<E> implements Cells<E> {
      * which allows us to read/update the value,
      * but does not allow us to remove the node from the array,
      * this is a unique case of deletion and resize
-     *
-     *
      */
+
+    /* ---------------- Constants -------------- */
+
+    // Dead node for null elements when wrapping
     static final Index<?> DEAD_NIL = new Index<>() {
         @Override public Object getValue() {return null;}
         @Override public Object getAndSet(Object val) {return null;}
         @Override public boolean cas(Object c, Object v) {return true;}
         @Override public String toString() {return "null";}
     };
+    /**
+     * Number of CPUS, to place bounds on some sizing's
+     */
     static final int NCPU = Runtime.getRuntime().availableProcessors();
+
+    /**
+     * The minimum number of beginnings per transfer step
+     * Ranges are subdivided to allow multiple resizing threads
+     */
     static final int MIN_TRANSFER_STRIDE = 16;
-    volatile Levels levels;
+
+    /* ---------------- Field -------------- */
+    volatile Levels levels; // current array claimant
 
     public ConcurrentArrayCells(int size) {
         this.levels = new QLevels(new Object[size]);
     }
     public ConcurrentArrayCells(E[] array) {
         int n; Object o;
+        // parallelize copy using Stream API?
         Object[] nodes = new Cell[n = array.length];
         for (int i = 0; i < n; ++i) {
             if ((o = array[i]) != null)
@@ -67,8 +81,12 @@ public class ConcurrentArrayCells<E> implements Cells<E> {
         }
         this.levels = new QLevels(nodes);
     }
+
+    /**
+     * @return the current length of the array
+     */
     @Override
-    public int size() {
+    public int length() {
         return levels.array().length;
     }
 
@@ -126,7 +144,7 @@ public class ConcurrentArrayCells<E> implements Cells<E> {
                 if (c == null) {
                     if (v == null) {
                         return true;
-                    } else if (casArrayAt(arr, i, o, new Cell<>(v))) {
+                    } else if (casArrayAt(arr, i, null, new Cell<>(v))) {
                         return true;
                     }
                 }
@@ -170,12 +188,15 @@ public class ConcurrentArrayCells<E> implements Cells<E> {
     }
 
     static final class ForwardingPointer implements Levels {
-        final int fence, stride;
+        final int fence; // last index of elements from old to new
+        final int stride; // the size of the transfer chunk can be from 1 to fence
         final Object[] oldCells, newCells;
-        volatile int strideIndex, sizeCtl;
+        volatile int strideIndex; // current transfer chunk
+        volatile int sizeCtl; // total number of transferred chunks
 
         ForwardingPointer(Levels prev, Object[] newCells) {
             this.oldCells = prev.array(); this.newCells = newCells;
+            // calculate the last index
             int n = Math.min(prev.fence(), newCells.length);
             this.fence = n;
             // threshold
@@ -199,7 +220,10 @@ public class ConcurrentArrayCells<E> implements Cells<E> {
                         if (f == this)
                             break;
                         shared = f.newCells;
-                        if (f.sizeCtl > f.fence) {
+                        // we read a more up-to-date array
+                        // since it is already filled in order
+                        // to avoid unnecessary cycles
+                        if (f.sizeCtl >= f.fence) {
                             prev = shared;
                             bound = Math.min(bound, f.fence);
                         }

@@ -11,5 +11,5 @@ public interface Cells<E> {
 
     void resize(int size);
 
-    int size();
+    int length();
 }
