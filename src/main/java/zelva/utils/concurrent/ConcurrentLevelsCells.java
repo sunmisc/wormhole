@@ -8,7 +8,7 @@ import java.util.Arrays;
  * @see ConcurrentArrayCells
  * @author ZelvaLea
  */
-public class ConcurrentCells {
+public class ConcurrentLevelsCells {
     volatile QCells[] levels = new QCells[0];
     static final int SIZE_CHUNK = 8;
 
@@ -90,7 +90,7 @@ public class ConcurrentCells {
     static {
         try {
             MethodHandles.Lookup l = MethodHandles.lookup();
-            LEVELS = l.findVarHandle(ConcurrentCells.class, "levels", QCells[].class);
+            LEVELS = l.findVarHandle(ConcurrentLevelsCells.class, "levels", QCells[].class);
         } catch (ReflectiveOperationException e) {
             throw new ExceptionInInitializerError(e);
         }

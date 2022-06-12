@@ -6,17 +6,17 @@ import java.util.Arrays;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
-public class LockArrayCopy<E> implements Cells<E> {
+public class LockArrayCells<E> implements Cells<E> {
     private final ReentrantReadWriteLock rwl = new ReentrantReadWriteLock();
     private final Lock r = rwl.readLock();
     private final Lock w = rwl.writeLock();
     private E[] array;
 
-    public LockArrayCopy(int cap) {
+    public LockArrayCells(int cap) {
         this.array = (E[]) new Object[cap];
     }
 
-    public LockArrayCopy(E[] array) {
+    public LockArrayCells(E[] array) {
         this.array = (E[]) Arrays.copyOf(array, array.length, Object[].class);
     }
     public E set(int i, E s) {

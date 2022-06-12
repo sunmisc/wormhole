@@ -7,7 +7,6 @@ import org.openjdk.jcstress.annotations.Outcome;
 import org.openjdk.jcstress.annotations.State;
 import org.openjdk.jcstress.infra.results.II_Result;
 
-import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 
 import static org.openjdk.jcstress.annotations.Expect.ACCEPTABLE;
