@@ -11,12 +11,12 @@ public class JcstressCAC {
 
 
     static class Array extends ConcurrentArrayCells<Integer> {
-        public Array() {super(4);}
+        public Array() {super(2);}
     }
 
     @JCStressTest
     @Outcome(
-            id = {"[0, 1]","[0, 1, null, null]"},
+            id = {"[0, 1, null]","[0, 1, null, null]"},
             expect = Expect.ACCEPTABLE,
             desc = "Both updates")
     @State
@@ -24,18 +24,13 @@ public class JcstressCAC {
         @Actor
         public void actor1() {
             set(1,1);
-            resize(12);
+            resize(4);
         }
 
         @Actor
         public void actor2() {
             set(0,0);
-            resize(8);
-        }
-        @Actor
-        public void actor3() {
-            set(3,3);
-            resize(16);
+            resize(3);
         }
 
         @Arbiter
@@ -43,9 +38,9 @@ public class JcstressCAC {
             s.r1 = super.toString();
         }
     }
-   /* @JCStressTest
+    @JCStressTest
     @Outcome(
-            id = {"[null, null]","[null, null, null, null]"},
+            id = {"[null, null, null]","[null, null, null, null]"},
             expect = Expect.ACCEPTABLE,
             desc = "Both updates"
     )
@@ -55,14 +50,14 @@ public class JcstressCAC {
         @Actor
         public void actor1() {
             set(1,1);
-            resize(8);
+            resize(4);
             remove(1);
         }
 
         @Actor
         public void actor2() {
             set(0,0);
-            resize(4);
+            resize(3);
             remove(0);
         }
 
@@ -70,5 +65,5 @@ public class JcstressCAC {
         public void arbiter(L_Result s) {
             s.r1 = super.toString();
         }
-    }*/
+    }
 }
