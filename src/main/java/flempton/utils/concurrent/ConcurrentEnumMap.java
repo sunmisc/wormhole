@@ -1,7 +1,6 @@
 package flempton.utils.concurrent;
 
-import java.io.Serial;
-import java.io.Serializable;
+import java.io.*;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.*;
@@ -40,28 +39,30 @@ import java.util.function.Function;
  */
 
 public final class ConcurrentEnumMap<K extends Enum<K>,V>
-        implements ConcurrentMap<K,V> {
+        implements ConcurrentMap<K,V>, Serializable {
+    @Serial
+    private static final long serialVersionUID = 9193424923934859345L;
     // An object of the class for the enumeration type of all the keys of this map
-    private final Class<K> keyType;
+    private transient Class<? extends K> keyType;
     // element count
-    private final LongAdder counter;
+    private transient LongAdder counter;
     // All the values comprising K
-    private final K[] keys;
+    private transient K[] keys;
     // Array representation of this map. The ith element is the value to which universe[i]
-    private final V[] table;
+    private transient V[] table;
 
     // views
-    private KeySetView<K,V> keySet;
-    private ValuesView<K,V> values;
-    private EntrySetView<K,V> entrySet;
+    private transient KeySetView<K,V> keySet;
+    private transient ValuesView<K,V> values;
+    private transient EntrySetView<K,V> entrySet;
 
-    public ConcurrentEnumMap(Class<K> keyType) {
+    public ConcurrentEnumMap(Class<? extends K> keyType) {
         this.keyType = keyType;
         this.keys = keyType.getEnumConstants();
         this.counter = new LongAdder();
         this.table = (V[]) new Object[keys.length];
     }
-    public ConcurrentEnumMap(Map<K, ? extends V> m) {
+    public ConcurrentEnumMap(Map<? extends K, ? extends V> m) {
         if (m instanceof ConcurrentEnumMap) {
             ConcurrentEnumMap<K,V> em = (ConcurrentEnumMap<K,V>)m;
             this.keys = em.keys;
@@ -77,24 +78,6 @@ public final class ConcurrentEnumMap<K extends Enum<K>,V>
             this.counter = new LongAdder();
             putAll(m);
         }
-    }
-    @SuppressWarnings("unchecked")
-    private static <V> V tabAt(V[] tab, int i) {
-        return (V) AA.getAcquire(tab, i);
-    }
-    private static <V> boolean casTabAt(V[] tab, int i, V c, V v) {
-        return AA.compareAndSet(tab, i, c, v);
-    }
-    private static <V> boolean weakCasTabAt(V[] tab, int i, V c, V v) {
-        return AA.weakCompareAndSet(tab, i, c, v);
-    }
-    @SuppressWarnings("unchecked")
-    private static <V> V caeTabAt(V[] tab, int i, V c, V v) {
-        return (V) AA.compareAndExchange(tab, i, c, v);
-    }
-    @SuppressWarnings("unchecked")
-    private static <V> V getAndSetAt(V[] tab, int i, V v) {
-        return (V) AA.getAndSet(tab, i, v);
     }
 
     private void addCount(long c) {
@@ -368,7 +351,6 @@ public final class ConcurrentEnumMap<K extends Enum<K>,V>
     static final class ValuesView<K extends Enum<K>,V>
             extends AbstractCollection<V>
             implements Serializable {
-
         @Serial
         private static final long serialVersionUID = 3274140860495273601L;
         final ConcurrentEnumMap<? super K, V> map;
@@ -587,12 +569,65 @@ public final class ConcurrentEnumMap<K extends Enum<K>,V>
         return true;
     }
 
+    @Serial
+    private void writeObject(ObjectOutputStream s) throws IOException {
+        s.writeObject(keyType);
+        forEach((k,v) -> {
+            try {
+                s.writeObject(k);
+                s.writeObject(v);
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        });
+        s.writeObject(null);
+        s.writeObject(null);
+    }
+    @Serial
+    private void readObject(ObjectInputStream s)
+            throws IOException, ClassNotFoundException {
+        this.keyType = (Class<K>) s.readObject();
+        this.keys = keyType.getEnumConstants();
+        this.counter = new LongAdder();
+        this.table = (V[]) new Object[keys.length];
+        for (long delta = 0L;;) {
+            K k = (K) s.readObject();
+            V v = (V) s.readObject();
+            if (k != null && v != null) {
+                if (getAndSetAt(table, k.ordinal(), v) == null)
+                    ++delta;
+            } else {
+                addCount(delta);
+                return;
+            }
+        }
+    }
+
     private boolean isValidKey(Object key) {
         if (key == null)
             return false;
         // Cheaper than instanceof Enum followed by getDeclaringClass
         Class<?> keyClass = key.getClass();
         return keyClass == keyType || keyClass.getSuperclass() == keyType;
+    }
+
+    /*
+     * Atomic access methods are used for array
+     */
+    private static <V> V tabAt(V[] tab, int i) {
+        return (V) AA.getAcquire(tab, i);
+    }
+    private static <V> boolean casTabAt(V[] tab, int i, V c, V v) {
+        return AA.compareAndSet(tab, i, c, v);
+    }
+    private static <V> boolean weakCasTabAt(V[] tab, int i, V c, V v) {
+        return AA.weakCompareAndSet(tab, i, c, v);
+    }
+    private static <V> V caeTabAt(V[] tab, int i, V c, V v) {
+        return (V) AA.compareAndExchange(tab, i, c, v);
+    }
+    private static <V> V getAndSetAt(V[] tab, int i, V v) {
+        return (V) AA.getAndSet(tab, i, v);
     }
 
     // VarHandle mechanics
