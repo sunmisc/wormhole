@@ -1,9 +1,9 @@
 package tests;
 
+import flempton.utils.concurrent.ConcurrentArrayCells;
 import org.openjdk.jcstress.Main;
 import org.openjdk.jcstress.annotations.*;
 import org.openjdk.jcstress.infra.results.L_Result;
-import zelva.utils.concurrent.ConcurrentArrayCells;
 
 public class JcstressCAC {
 

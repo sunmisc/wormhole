@@ -1,4 +1,4 @@
-package zelva.utils;
+package flempton.utils;
 
 public final class MathUtils {
     public static final double _2PI         = 2 * Math.PI;

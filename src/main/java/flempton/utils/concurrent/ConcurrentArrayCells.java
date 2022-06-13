@@ -1,6 +1,6 @@
-package zelva.utils.concurrent;
+package flempton.utils.concurrent;
 
-import zelva.utils.Cells;
+import flempton.utils.Cells;
 
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
@@ -11,7 +11,8 @@ import java.util.Objects;
  * and high expected update concurrency.
  * This array is based entirely on the free-lock mechanism.
  *
- * @author ZelvaLea
+ * @author Flempton
+ * @param <E> The base class of elements held in this array
  */
 public class ConcurrentArrayCells<E> implements Cells<E> {
     /*

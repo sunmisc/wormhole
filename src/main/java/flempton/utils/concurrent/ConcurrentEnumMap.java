@@ -1,4 +1,4 @@
-package zelva.utils.concurrent;
+package flempton.utils.concurrent;
 
 import java.io.Serial;
 import java.io.Serializable;
@@ -32,7 +32,7 @@ import java.util.function.Function;
  * This map differs from EnumMap in that it is thread-safe
  * and scales well
  *
- * @author ZelvaLea
+ * @author Flempton
  *
  * Type parameters:
  * <K> – the type of keys maintained by this map

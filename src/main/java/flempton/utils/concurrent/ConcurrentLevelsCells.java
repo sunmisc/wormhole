@@ -1,4 +1,4 @@
-package zelva.utils.concurrent;
+package flempton.utils.concurrent;
 
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
@@ -6,7 +6,7 @@ import java.util.Arrays;
 
 /**
  * @see ConcurrentArrayCells
- * @author ZelvaLea
+ * @author Flempton
  */
 public class ConcurrentLevelsCells {
     volatile QCells[] levels = new QCells[0];

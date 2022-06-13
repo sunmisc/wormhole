@@ -1,4 +1,4 @@
-package zelva.utils.concurrent;
+package flempton.utils.concurrent;
 
 import java.util.Objects;
 import java.util.function.Supplier;
@@ -9,6 +9,8 @@ import java.util.function.Supplier;
  *
  * The lock mechanism refers to the current object,
  * so we can write our own wrappers for the Lazy class
+ *
+ * @author Flempton
  */
 public class Lazy<V> {
     static final Object NIL = new Object();
