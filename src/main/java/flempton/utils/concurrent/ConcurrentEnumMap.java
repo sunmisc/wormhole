@@ -31,7 +31,7 @@ import java.util.function.Function;
  * This map differs from EnumMap in that it is thread-safe
  * and scales well
  *
- * @author Flempton
+ * @author ZelvaLea
  *
  * Type parameters:
  * <K> – the type of keys maintained by this map

@@ -11,7 +11,7 @@ import java.util.Objects;
  * and high expected update concurrency.
  * This array is based entirely on the free-lock mechanism.
  *
- * @author Flempton
+ * @author ZelvaLea
  * @param <E> The base class of elements held in this array
  */
 public class ConcurrentArrayCells<E> implements Cells<E> {

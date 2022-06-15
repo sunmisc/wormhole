@@ -6,7 +6,7 @@ import java.util.Arrays;
 
 /**
  * @see ConcurrentArrayCells
- * @author Flempton
+ * @author ZelvaLea
  */
 public class ConcurrentLevelsCells {
     volatile QCells[] levels = new QCells[0];

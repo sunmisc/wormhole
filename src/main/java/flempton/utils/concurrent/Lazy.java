@@ -10,7 +10,7 @@ import java.util.function.Supplier;
  * The lock mechanism refers to the current object,
  * so we can write our own wrappers for the Lazy class
  *
- * @author Flempton
+ * @author ZelvaLea
  */
 public class Lazy<V> {
     static final Object NIL = new Object();
