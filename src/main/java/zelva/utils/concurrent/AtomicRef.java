@@ -1,10 +1,9 @@
-package flempton.utils.concurrent;
+package zelva.utils.concurrent;
 
 import java.io.Serial;
 import java.util.concurrent.atomic.AtomicReference;
 
 public class AtomicRef<V> extends AtomicReference<V> {
-
     @Serial
     private static final long serialVersionUID = 7851034098732779161L;
 

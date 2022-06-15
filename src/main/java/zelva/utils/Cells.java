@@ -1,4 +1,4 @@
-package flempton.utils;
+package zelva.utils;
 
 public interface Cells<E> {
     E get(int i);

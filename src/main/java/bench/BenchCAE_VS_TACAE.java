@@ -1,6 +1,6 @@
 package bench;
 
-import flempton.utils.concurrent.AtomicRef;
+import zelva.utils.concurrent.AtomicRef;
 import org.openjdk.jmh.annotations.*;
 import org.openjdk.jmh.runner.Runner;
 import org.openjdk.jmh.runner.RunnerException;

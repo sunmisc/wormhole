@@ -1,6 +1,6 @@
 package bench;
 
-import flempton.utils.MathUtils;
+import zelva.utils.MathUtils;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.Param;
 import org.openjdk.jmh.annotations.Scope;
