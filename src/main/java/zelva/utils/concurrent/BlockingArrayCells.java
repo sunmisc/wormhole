@@ -1,22 +1,23 @@
 package zelva.utils.concurrent;
 
-import zelva.utils.Cells;
+import org.jetbrains.annotations.NotNull;
 
 import java.util.Arrays;
+import java.util.Iterator;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
-public class LockArrayCells<E> implements Cells<E> {
+public class BlockingArrayCells<E> extends ConcurrentCells<E> {
     private final ReentrantReadWriteLock rwl = new ReentrantReadWriteLock();
     private final Lock r = rwl.readLock();
     private final Lock w = rwl.writeLock();
     private E[] array;
 
-    public LockArrayCells(int cap) {
+    public BlockingArrayCells(int cap) {
         this.array = (E[]) new Object[cap];
     }
 
-    public LockArrayCells(E[] array) {
+    public BlockingArrayCells(E[] array) {
         this.array = (E[]) Arrays.copyOf(array, array.length, Object[].class);
     }
     public E set(int i, E s) {
@@ -91,5 +92,11 @@ public class LockArrayCells<E> implements Cells<E> {
         } finally {
             r.unlock();
         }
+    }
+
+    @NotNull
+    @Override
+    public Iterator<E> iterator() {
+        throw new UnsupportedOperationException();
     }
 }

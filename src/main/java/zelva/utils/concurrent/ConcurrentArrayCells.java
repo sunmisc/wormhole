@@ -1,9 +1,12 @@
 package zelva.utils.concurrent;
 
-import zelva.utils.Cells;
+import org.jetbrains.annotations.NotNull;
 
+import java.io.*;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
+import java.util.Iterator;
+import java.util.NoSuchElementException;
 import java.util.Objects;
 
 /**
@@ -14,7 +17,9 @@ import java.util.Objects;
  * @author ZelvaLea
  * @param <E> The base class of elements held in this array
  */
-public class ConcurrentArrayCells<E> implements Cells<E> {
+public class ConcurrentArrayCells<E>
+        extends ConcurrentCells<E>
+        implements Serializable {
     /*
      * Overview:
      *
@@ -48,6 +53,9 @@ public class ConcurrentArrayCells<E> implements Cells<E> {
 
     /* ---------------- Constants -------------- */
 
+    @Serial
+    private static final long serialVersionUID = -1151544938255125591L;
+
     // Dead node for null elements when wrapping
     static final Index<?> DEAD_NIL = new Index<>() {
         @Override public Object getValue() {return null;}
@@ -77,10 +85,10 @@ public class ConcurrentArrayCells<E> implements Cells<E> {
     public ConcurrentArrayCells(E[] array) {
         int n; Object o;
         // parallelize copy using Stream API?
-        Object[] nodes = new Cell[n = array.length];
+        Object[] nodes = new QCell[n = array.length];
         for (int i = 0; i < n; ++i) {
             if ((o = array[i]) != null)
-                nodes[i] = new Cell<>(o);
+                nodes[i] = new QCell<>(o);
         }
         this.levels = new QLevels(nodes);
     }
@@ -127,7 +135,7 @@ public class ConcurrentArrayCells<E> implements Cells<E> {
         for (Object o; ; ) {
             if ((o = arrayAt(arr, i)) == null) {
                 if (weakCasArrayAt(arr, i, null,
-                        new Cell<>(newValue))) {
+                        new QCell<>(newValue))) {
                     return null;
                 }
             } else if (o == DEAD_NIL) {
@@ -154,7 +162,7 @@ public class ConcurrentArrayCells<E> implements Cells<E> {
                 return null;
             } else if (o instanceof ForwardingPointer f) {
                 arr = transfer(f).newCells;
-            } else if (o instanceof Cell n &&
+            } else if (o instanceof QCell n &&
                     weakCasArrayAt(arr, i, o, null)) {
                 return (E) n.getValue();
             }
@@ -178,7 +186,7 @@ public class ConcurrentArrayCells<E> implements Cells<E> {
                 if (expectedValue == null &&
                         (newValue == null || weakCasArrayAt(arr, i,
                                 null,
-                                new Cell<>(newValue)))) {
+                                new QCell<>(newValue)))) {
                     return null;
                 }
             } else if (o == DEAD_NIL) {
@@ -230,6 +238,55 @@ public class ConcurrentArrayCells<E> implements Cells<E> {
         }
     }
 
+    @NotNull
+    @Override
+    public Iterator<E> iterator() {
+        return new Itr<>(this);
+    }
+    static final class Itr<E> implements Iterator<E> {
+        final ConcurrentArrayCells<E> array;
+        int cursor = -1;
+        E next;
+
+        Itr(ConcurrentArrayCells<E> array) {
+            this.array = array;
+        }
+        @Override
+        public boolean hasNext() {
+            Object[] arr = array.levels.array(); int i;
+            if ((i = ++cursor) == arr.length) {
+                cursor = -1;
+                return false;
+            }
+            for (Object o; ; ) {
+                if ((o = arrayAt(arr, i)) == null) {
+                    next = null;
+                    return true;
+                } else if (o instanceof ForwardingPointer t) {
+                    arr = t.newCells;
+                } else if (o instanceof Index<?> f){
+                    next = (E) f.getValue();
+                    return true;
+                }
+            }
+        }
+        @Override
+        public void remove() {
+            final int c = cursor;
+            if (c < 0)
+                throw new IllegalStateException();
+            array.remove(c);
+            next = null;
+        }
+
+        @Override
+        public E next() {
+            if (cursor >= 0)
+                return next;
+            throw new NoSuchElementException();
+        }
+    }
+
     static final class ForwardingPointer implements Levels {
         final int fence; // last index of elements from old to new
         final int stride; // the size of the transfer chunk can be from 1 to fence
@@ -247,6 +304,7 @@ public class ConcurrentArrayCells<E> implements Cells<E> {
         }
         @Override public Object[] array() {return oldCells;}
         @Override public int fence() {return fence;}
+
 
         void transferChunk(int start, int end) {
             int i = start, bound = fence;
@@ -286,7 +344,7 @@ public class ConcurrentArrayCells<E> implements Cells<E> {
                             Object[] oldCells, Object[] newCells) {
             Object c;
             if ((c = caeArrayAt(oldCells, i, o,
-                    o instanceof Cell n ? new DeadIndex(n) : DEAD_NIL))
+                    o instanceof QCell n ? new DeadIndex(n) : DEAD_NIL))
                     == o) {
                 setAt(newCells, i, o);
                 // store fence
@@ -295,44 +353,36 @@ public class ConcurrentArrayCells<E> implements Cells<E> {
             } else return c == this; // finished
         }
     }
-    @Override
-    public int hashCode() {
-        Object[] arr = levels.array();
-        int result = 1, n = arr.length;
-        for (int i = 0; i < n; i++) {
-            for (Object f = arrayAt(arr, i); ; ) {
-                if (f instanceof ForwardingPointer t) {
-                    f = arrayAt(t.newCells, i);
-                } else if (f instanceof Index o) {
-                    Object val = o.getValue();
-                    result = 31 * result + (val == null ? 0 : val.hashCode());
+
+    @Serial
+    private void writeObject(ObjectOutputStream s) throws IOException {
+        Object[] arr = levels.array(); int len;
+        s.writeInt(len = arr.length);
+        for (int i = 0; i < len; ++i) {
+            for (Object o = arrayAt(arr, i);;) {
+                if (o == null) {
+                    s.writeObject(o);
+                    break;
+                } else if (o instanceof ForwardingPointer f) {
+                    o = arrayAt(f.newCells,i);
+                } else if (o instanceof Index<?> f) {
+                    s.writeObject(f.getValue());
                     break;
                 }
             }
         }
-        return result;
     }
-
-    @Override
-    public String toString() {
-        Object[] arr = levels.array();
-        if (arr.length == 0)
-            return "[]";
-        StringBuilder sb = new StringBuilder();
-        sb.append('[');
-        for (int i = 0; ; ) {
-            for (Object f = arrayAt(arr, i); ; ) {
-                if (f instanceof ForwardingPointer t) {
-                    f = arrayAt(t.newCells, i);
-                    continue;
-                }
-                sb.append(f);
-                if (++i == arr.length) // last
-                    return sb.append(']').toString();
-                sb.append(", ");
-                break;
-            }
+    @Serial
+    private void readObject(ObjectInputStream s)
+            throws IOException, ClassNotFoundException {
+        int c = s.readInt();
+        Object[] arr = new Object[c];
+        for (int i = 0; i < c; ++i) {
+            Object o = s.readObject();
+            if (o != null)
+                arr[i] = new QCell<>(o);
         }
+        this.levels = new QLevels(arr);
     }
     /*
      * Atomic access methods are used for array elements as well
@@ -364,7 +414,7 @@ public class ConcurrentArrayCells<E> implements Cells<E> {
         E cae(E c, E v);
     }
 
-    record DeadIndex<E>(Index<E>main) implements Index<E> {
+    record DeadIndex<E>(Index<E> main) implements Index<E> {
         @Override public E getValue() {return main.getValue();}
         @Override public E getAndSet(E val) {return main.getAndSet(val);}
 
@@ -372,9 +422,9 @@ public class ConcurrentArrayCells<E> implements Cells<E> {
 
         @Override public String toString() {return Objects.toString(getValue());}
     }
-    static final class Cell<E> implements Index<E> {
+    static final class QCell<E> implements Index<E> {
         volatile E val;
-        Cell(E val) {
+        QCell(E val) {
             this.val = val;
         }
         @Override public E getValue() {return val;}
@@ -388,12 +438,13 @@ public class ConcurrentArrayCells<E> implements Cells<E> {
         static {
             try {
                 MethodHandles.Lookup l = MethodHandles.lookup();
-                VAL = l.findVarHandle(Cell.class, "val", Object.class);
+                VAL = l.findVarHandle(QCell.class, "val", Object.class);
             } catch (ReflectiveOperationException e) {
                 throw new ExceptionInInitializerError(e);
             }
         }
     }
+
 
     record QLevels(Object[] array) implements Levels {} // inline type
 
