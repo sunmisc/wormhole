@@ -115,7 +115,7 @@ public class ConcurrentArrayCells<E>
                 return null;
             } else if (o instanceof ForwardingPointer t) {
                 arr = t.newCells;
-            } else if (o instanceof Index f) {
+            } else if (o instanceof Index<?> f) {
                 return (E) f.getValue();
             }
         }
