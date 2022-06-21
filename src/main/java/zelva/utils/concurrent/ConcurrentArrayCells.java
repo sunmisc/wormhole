@@ -129,7 +129,7 @@ public class ConcurrentArrayCells<E>
      * @return the previous value
      */
     @Override
-    public E set(int i, Object newValue) {
+    public E set(int i, E newValue) {
         Objects.requireNonNull(newValue);
         Object[] arr = levels.array();
         for (Object o; ; ) {
