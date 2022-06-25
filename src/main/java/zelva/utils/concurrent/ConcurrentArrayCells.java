@@ -8,6 +8,10 @@ import java.lang.invoke.VarHandle;
 import java.util.Iterator;
 import java.util.NoSuchElementException;
 import java.util.Objects;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.atomic.LongAdder;
 
 /**
  * An array that supports full concurrency retrievals
@@ -140,7 +144,7 @@ public class ConcurrentArrayCells<E>
                 }
             } else if (o == DEAD_NIL) {
             } else if (o instanceof ForwardingPointer f) {
-                arr = transfer(f).newCells;
+                arr = helpTransfer(f);
             } else if (o instanceof Index n) {
                 return (E) n.getAndSet(newValue);
             }
@@ -161,7 +165,7 @@ public class ConcurrentArrayCells<E>
                     || o == DEAD_NIL) {
                 return null;
             } else if (o instanceof ForwardingPointer f) {
-                arr = transfer(f).newCells;
+                arr = helpTransfer(f);
             } else if (o instanceof QCell n &&
                     weakCasArrayAt(arr, i, o, null)) {
                 return (E) n.getValue();
@@ -191,12 +195,9 @@ public class ConcurrentArrayCells<E>
                 }
             } else if (o == DEAD_NIL) {
             } else if (o instanceof ForwardingPointer f) {
-                arr = transfer(f).newCells;
+                arr = helpTransfer(f);
             } else if (o instanceof Index n) {
-                Object p = n.getValue();
-                return (E) (p == expectedValue
-                        ? n.cae(expectedValue, newValue)
-                        : p);
+                return (E) n.cae(expectedValue, newValue);
             }
         }
     }
@@ -207,35 +208,62 @@ public class ConcurrentArrayCells<E>
      */
     @Override
     public void resize(int length) {
-        final Object[] nextArray = new Object[length];
-        ForwardingPointer fwd;
+        Object[] nextArray = new Object[length];
+        boolean advance = false;
         for (Levels p;;) {
             if (((p = levels) instanceof QLevels) &&
                     p.fence() == length) {
                 return;
-            } else if (LEVELS.weakCompareAndSet(this, p,
-                    fwd = new ForwardingPointer(p, nextArray))) {
-                break;
+            } else if (advance) {
+                if (p instanceof ForwardingPointer f) {
+                    p = transfer(f);
+                }
+                if (p instanceof ForwardingPointer f) {
+                    if (LEVELS.weakCompareAndSet(this, p,
+                            new QLevels((f.newCells)))) {
+                        return;
+                    }
+                } else {
+                    return;
+                }
+            } else if ((p instanceof ForwardingPointer f &&
+                    f.newCells.length == length) ||
+                    LEVELS.weakCompareAndSet(
+                            this, p,
+                            new ForwardingPointer(p, nextArray))) {
+                advance = true;
             }
         }
-        LEVELS.compareAndSet(this,
-                fwd = transfer(fwd),
-                new QLevels(fwd.newCells));
     }
-    private ForwardingPointer transfer(ForwardingPointer a) {
+    private Object[] helpTransfer(ForwardingPointer a) {
+        Levels l = transfer(a);
+        return l instanceof ForwardingPointer f ? f.newCells : l.array();
+    }
+    private Levels transfer(ForwardingPointer a) {
         for (int i, ls; ; ) {
             if ((i = a.strideIndex) >= a.fence) {
-                // recheck before commit and help
-                a.transferChunk(0, i);
-                return a;
+                break;
             } else if (STRIDEINDEX.weakCompareAndSet(a, i,
                     ls = i + a.stride)) {
                 a.transferChunk(i, ls);
+                int sz, c = a.stride;
+                do {
+                    if ((sz = a.sizeCtl) >= a.fence) {
+                        break;
+                    }
+                } while(!SIZECTL.weakCompareAndSet(a, sz, sz + c));
             }
-            if (levels instanceof ForwardingPointer f) {
+            Levels l = levels;
+            if (l instanceof ForwardingPointer f) {
                 a = f;
+            } else {
+                return l;
             }
         }
+        // recheck before commit and help
+        a.transferChunk(0, a.fence);
+        a.sizeCtl = a.fence;
+        return a;
     }
 
     @NotNull
@@ -324,21 +352,25 @@ public class ConcurrentArrayCells<E>
                         // we read a more up-to-date array
                         // since it is already filled in order
                         // to avoid unnecessary cycles
-                        if (f.sizeCtl >= f.fence) {
+                        /*if (f.sizeCtl >= f.fence) {
                             prev = shared;
-                            bound = Math.min(bound, f.fence);
-                        }
+                            bound = Math.min(newCells.length, f.fence);
+                        }*/
                     } else if (trySwapSlot(o, i, shared, newCells)) {
                         break;
                     }
                 }
             }
-            int c = i - start, sz;
+            /*int c = i - start, sz;
+            if (c >= fence) {
+                sizeCtl = c;
+                return;
+            }
             do {
                 if ((sz = sizeCtl) >= bound) {
                     return;
                 }
-            } while(!SIZECTL.weakCompareAndSet(this, sz, sz + c));
+            } while(!SIZECTL.weakCompareAndSet(this, sz, sz + c));*/
         }
         boolean trySwapSlot(Object o, int i,
                             Object[] oldCells, Object[] newCells) {
