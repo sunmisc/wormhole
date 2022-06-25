@@ -5,10 +5,7 @@ import org.jetbrains.annotations.NotNull;
 import java.io.*;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
-import java.util.Iterator;
-import java.util.NoSuchElementException;
-import java.util.Objects;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.LongAdder;
@@ -221,6 +218,7 @@ public class ConcurrentArrayCells<E>
                 if (p instanceof ForwardingPointer f) {
                     if (LEVELS.weakCompareAndSet(this, p,
                             new QLevels((f.newCells)))) {
+                        // f.sizeCtl = -1;
                         return;
                     }
                 } else {
@@ -352,25 +350,15 @@ public class ConcurrentArrayCells<E>
                         // we read a more up-to-date array
                         // since it is already filled in order
                         // to avoid unnecessary cycles
-                        /*if (f.sizeCtl >= f.fence) {
+                        if (f.sizeCtl >= f.fence && f.oldCells == prev) { // todo: or committed
                             prev = shared;
-                            bound = Math.min(newCells.length, f.fence);
-                        }*/
+                            bound = Math.min(bound, shared.length);
+                        }
                     } else if (trySwapSlot(o, i, shared, newCells)) {
                         break;
                     }
                 }
             }
-            /*int c = i - start, sz;
-            if (c >= fence) {
-                sizeCtl = c;
-                return;
-            }
-            do {
-                if ((sz = sizeCtl) >= bound) {
-                    return;
-                }
-            } while(!SIZECTL.weakCompareAndSet(this, sz, sz + c));*/
         }
         boolean trySwapSlot(Object o, int i,
                             Object[] oldCells, Object[] newCells) {
