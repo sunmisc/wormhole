@@ -5,9 +5,9 @@ import org.jetbrains.annotations.NotNull;
 import java.io.*;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
-import java.util.*;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.LongAdder;
+import java.util.Iterator;
+import java.util.NoSuchElementException;
+import java.util.Objects;
 
 /**
  * An array that supports full concurrency retrievals
@@ -217,10 +217,6 @@ public class ConcurrentArrayCells<E>
                 if (p instanceof ForwardingPointer f) {
                     if (LEVELS.weakCompareAndSet(this, p,
                             new QLevels((f.newCells)))) {
-                        f.sizeCtl = Integer.MAX_VALUE;
-                        //long s = f.adder.sum();
-                        /*if (s > length)
-                        System.out.println(s-length);*/
                         return;
                     }
                 } else {
@@ -284,11 +280,9 @@ public class ConcurrentArrayCells<E>
         @Override public int fence() {return shared.fence;}
 
 
-        void transferChunk(Shared ln, int start, int end) {
-            int i = start; Object[] sh;
-            for (; i < end && i < ln.fence; ++i) {
-                sh = ln.array;
-                for (Object o; ; ) {
+        void transferChunk(Shared ln, int i, int end) {
+            for (Object o; i < end && i < ln.fence; ++i, ln = shared) {
+                for (Object[] sh = ln.array; ; ) {
                     if (sizeCtl >= fence()) {
                         return;
                     } else if ((o = arrayAt(sh, i)) == FORWARDING_NIL
@@ -311,7 +305,6 @@ public class ConcurrentArrayCells<E>
                         break;
                     }
                 }
-                ln = shared;
             }
         }
         boolean trySwapSlot(Object o, int i,
@@ -330,7 +323,7 @@ public class ConcurrentArrayCells<E>
 
     static Shared newShared(Object[] oldCells, int n) {
         int stride = Math.max((n >>> 2) / NCPU, Math.min(n, MIN_TRANSFER_STRIDE));
-        return new Shared(oldCells, n, stride);
+        return new Shared(oldCells, n, stride /* stride + 1*/);
     }
 
     record Shared(Object[] array, int fence, int stride) implements Levels {}
