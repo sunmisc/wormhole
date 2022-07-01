@@ -6,8 +6,7 @@ import java.io.*;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.LongAdder;
 
 /**
@@ -58,11 +57,11 @@ public class ConcurrentArrayCells<E>
     private static final long serialVersionUID = -1151544938255125591L;
 
     // Dead node for null elements when wrapping
-    static final Index<?> DEAD_NIL = new Index<>() {
-        @Override public Object getValue() {return null;}
-        @Override public Object getAndSet(Object val) {
+    static final Index<Void> FORWARDING_NIL = new Index<>() {
+        @Override public Void getValue() {return null;}
+        @Override public Void getAndSet(Void val) {
             throw new UnsupportedOperationException();}
-        @Override public Object cae(Object c, Object v) {
+        @Override public Void cae(Void c, Void v) {
             throw new UnsupportedOperationException();}
         @Override public String toString() {return "null";}
     };
@@ -139,7 +138,7 @@ public class ConcurrentArrayCells<E>
                         new QCell<>(newValue))) {
                     return null;
                 }
-            } else if (o == DEAD_NIL) {
+            } else if (o == FORWARDING_NIL) {
             } else if (o instanceof ForwardingPointer f) {
                 arr = helpTransfer(f);
             } else if (o instanceof Index n) {
@@ -159,7 +158,7 @@ public class ConcurrentArrayCells<E>
         Object[] arr = levels.array();
         for (Object o; ; ) {
             if ((o = arrayAt(arr, i)) == null
-                    || o == DEAD_NIL) {
+                    || o == FORWARDING_NIL) {
                 return null;
             } else if (o instanceof ForwardingPointer f) {
                 arr = helpTransfer(f);
@@ -190,7 +189,7 @@ public class ConcurrentArrayCells<E>
                                 new QCell<>(newValue)))) {
                     return null;
                 }
-            } else if (o == DEAD_NIL) {
+            } else if (o == FORWARDING_NIL) {
             } else if (o instanceof ForwardingPointer f) {
                 arr = helpTransfer(f);
             } else if (o instanceof Index n) {
@@ -218,7 +217,10 @@ public class ConcurrentArrayCells<E>
                 if (p instanceof ForwardingPointer f) {
                     if (LEVELS.weakCompareAndSet(this, p,
                             new QLevels((f.newCells)))) {
-                        // f.sizeCtl = -1;
+                        f.sizeCtl = Integer.MAX_VALUE;
+                        //long s = f.adder.sum();
+                        /*if (s > length)
+                        System.out.println(s-length);*/
                         return;
                     }
                 } else {
@@ -228,7 +230,7 @@ public class ConcurrentArrayCells<E>
                     f.newCells.length == length) ||
                     LEVELS.weakCompareAndSet(
                             this, p,
-                            new ForwardingPointer(p, nextArray))) {
+                            new ForwardingPointer(p.array(), nextArray))) {
                 advance = true;
             }
         }
@@ -238,15 +240,16 @@ public class ConcurrentArrayCells<E>
         return l instanceof ForwardingPointer f ? f.newCells : l.array();
     }
     private Levels transfer(ForwardingPointer a) {
-        for (int i, ls; ; ) {
-            if ((i = a.strideIndex) >= a.fence) {
+        Shared sh;
+        for (int i, ls, c; ; ) {
+            if ((i = a.strideIndex) >= a.fence()) {
                 break;
             } else if (STRIDEINDEX.weakCompareAndSet(a, i,
-                    ls = i + a.stride)) {
-                a.transferChunk(i, ls);
-                int sz, c = a.stride;
+                    ls = i + (c = (sh = a.shared).stride))) {
+                a.transferChunk(sh, i, ls);
+                int sz;
                 do {
-                    if ((sz = a.sizeCtl) >= a.fence) {
+                    if ((sz = a.sizeCtl) >= a.fence()) {
                         break;
                     }
                 } while(!SIZECTL.weakCompareAndSet(a, sz, sz + c));
@@ -259,10 +262,78 @@ public class ConcurrentArrayCells<E>
             }
         }
         // recheck before commit and help
-        a.transferChunk(0, a.fence);
-        a.sizeCtl = a.fence;
+        sh = a.shared; int f;
+        a.transferChunk(sh, 0, f = sh.fence());
+        a.sizeCtl = f;
         return a;
     }
+
+    static final class ForwardingPointer implements Levels {
+        final Object[] newCells;
+        volatile int strideIndex; // current transfer chunk
+        volatile int sizeCtl; // total number of transferred chunks
+
+        Shared shared; // owning array
+
+        ForwardingPointer(Object[] prev, Object[] newCells) {
+            this.newCells = newCells;
+            int f = Math.min(prev.length, newCells.length);
+            this.shared = newShared(prev, f);
+        }
+        @Override public Object[] array() {return shared.array;}
+        @Override public int fence() {return shared.fence;}
+
+
+        void transferChunk(Shared ln, int start, int end) {
+            int i = start; Object[] sh;
+            for (; i < end && i < ln.fence; ++i) {
+                sh = ln.array;
+                for (Object o; ; ) {
+                    if (sizeCtl >= fence()) {
+                        return;
+                    } else if ((o = arrayAt(sh, i)) == FORWARDING_NIL
+                            || o instanceof ForwardingIndex) {
+                    } else if (o instanceof
+                            ForwardingPointer f) {
+                        if (f == this)
+                            break;
+                        // we read a more up-to-date array
+                        // since it is already filled in order
+                        // to avoid unnecessary cycles
+                        Object[] next = f.newCells;
+                        if (f.sizeCtl >= fence() &&
+                                f.shared.array == sh) {
+                            SHARED.compareAndSet(this, ln, newShared(next,
+                                    Math.min(ln.fence, f.fence())));
+                        }
+                        sh = next;
+                    } else if (trySwapSlot(o, i, sh, newCells)) {
+                        break;
+                    }
+                }
+                ln = shared;
+            }
+        }
+        boolean trySwapSlot(Object o, int i,
+                            Object[] oldCells, Object[] newCells) {
+            Object c;
+            if ((c = caeArrayAt(oldCells, i, o,
+                    o instanceof QCell n ? new ForwardingIndex(n) : FORWARDING_NIL))
+                    == o) {
+                setAt(newCells, i, o);
+                // store fence
+                setAt(oldCells, i, this);
+                return true;
+            } else return c == this; // finished
+        }
+    }
+
+    static Shared newShared(Object[] oldCells, int n) {
+        int stride = Math.max((n >>> 2) / NCPU, Math.min(n, MIN_TRANSFER_STRIDE));
+        return new Shared(oldCells, n, stride);
+    }
+
+    record Shared(Object[] array, int fence, int stride) implements Levels {}
 
     @NotNull
     @Override
@@ -310,67 +381,6 @@ public class ConcurrentArrayCells<E>
             if (cursor >= 0)
                 return next;
             throw new NoSuchElementException();
-        }
-    }
-
-    static final class ForwardingPointer implements Levels {
-        final int fence; // last index of elements from old to new
-        final int stride; // the size of the transfer chunk can be from 1 to fence
-        final Object[] oldCells, newCells;
-        volatile int strideIndex; // current transfer chunk
-        volatile int sizeCtl; // total number of transferred chunks
-
-        ForwardingPointer(Levels prev, Object[] newCells) {
-            this.oldCells = prev.array(); this.newCells = newCells;
-            // calculate the last index
-            int n = Math.min(prev.fence(), newCells.length);
-            this.fence = n;
-            // threshold
-            this.stride = Math.max((n >>> 2) / NCPU, Math.min(n, MIN_TRANSFER_STRIDE));
-        }
-        @Override public Object[] array() {return oldCells;}
-        @Override public int fence() {return fence;}
-
-
-        void transferChunk(int start, int end) {
-            int i = start, bound = fence;
-            Object[] prev = oldCells;
-            for (; i < end && i < bound; ++i) {
-                Object[] shared = prev;
-                for (Object o; ; ) {
-                    if (sizeCtl >= bound) {
-                        return;
-                    } else if ((o = arrayAt(shared, i)) == DEAD_NIL
-                            || o instanceof DeadIndex) {
-                    } else if (o instanceof
-                            ForwardingPointer f) {
-                        if (f == this)
-                            break;
-                        shared = f.newCells;
-                        // we read a more up-to-date array
-                        // since it is already filled in order
-                        // to avoid unnecessary cycles
-                        if (f.sizeCtl >= f.fence && f.oldCells == prev) { // todo: or committed
-                            prev = shared;
-                            bound = Math.min(bound, shared.length);
-                        }
-                    } else if (trySwapSlot(o, i, shared, newCells)) {
-                        break;
-                    }
-                }
-            }
-        }
-        boolean trySwapSlot(Object o, int i,
-                            Object[] oldCells, Object[] newCells) {
-            Object c;
-            if ((c = caeArrayAt(oldCells, i, o,
-                    o instanceof QCell n ? new DeadIndex(n) : DEAD_NIL))
-                    == o) {
-                setAt(newCells, i, o);
-                // store fence
-                setAt(oldCells, i, this);
-                return true;
-            } else return c == this; // finished
         }
     }
 
@@ -434,7 +444,7 @@ public class ConcurrentArrayCells<E>
         E cae(E c, E v);
     }
 
-    record DeadIndex<E>(Index<E> main) implements Index<E> {
+    record ForwardingIndex<E>(Index<E> main) implements Index<E> {
         @Override public E getValue() {return main.getValue();}
         @Override public E getAndSet(E val) {return main.getAndSet(val);}
 
@@ -476,12 +486,15 @@ public class ConcurrentArrayCells<E>
     private static final VarHandle STRIDEINDEX;
     private static final VarHandle SIZECTL;
 
+    private static final VarHandle SHARED;
+
     static {
         try {
             MethodHandles.Lookup l = MethodHandles.lookup();
             STRIDEINDEX = l.findVarHandle(ForwardingPointer.class, "strideIndex", int.class);
             SIZECTL = l.findVarHandle(ForwardingPointer.class, "sizeCtl", int.class);
             LEVELS = l.findVarHandle(ConcurrentArrayCells.class, "levels", Levels.class);
+            SHARED = l.findVarHandle(ForwardingPointer.class, "shared", Shared.class);
         } catch (ReflectiveOperationException e) {
             throw new ExceptionInInitializerError(e);
         }
