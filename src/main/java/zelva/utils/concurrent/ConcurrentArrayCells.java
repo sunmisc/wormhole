@@ -267,12 +267,12 @@ public class ConcurrentArrayCells<E>
     }
 
     static final class ForwardingPointer implements Levels {
-
         final int fence; // last index of elements from old to new
         final int stride; // the size of the transfer chunk can be from 1 to fence
         final Object[] oldCells, newCells; // owning array
         volatile int strideIndex; // current transfer chunk
         volatile int sizeCtl; // total number of transferred chunks
+
         ForwardingPointer(Levels prev, Object[] newCells) {
             this.oldCells = prev.array(); this.newCells = newCells;
             // calculate the last index
@@ -282,7 +282,9 @@ public class ConcurrentArrayCells<E>
             this.stride = Math.max((n >>> 2) / NCPU, Math.min(n, MIN_TRANSFER_STRIDE));
         }
         @Override public Object[] array() {return oldCells;}
+
         @Override public int fence() {return fence;}
+
         void transferChunk(int i, int end) {
             for (Object o; i < end && i < fence; ++i) {
                 for (Object[] sh = oldCells; ; ) {
