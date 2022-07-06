@@ -9,6 +9,7 @@ import java.util.Arrays;
 import java.util.Iterator;
 import java.util.NoSuchElementException;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * An array that supports full concurrency retrievals
@@ -211,20 +212,17 @@ public class ConcurrentArrayCells<E>
         boolean advance = false;
         for (Levels p;;) {
             if (((p = levels) instanceof QLevels) &&
-                    p.fence() == length) {
+                    p.array().length == length) {
                 return;
             } else if (advance) {
-                if (p instanceof ForwardingPointer f) {
-                    p = transfer(f);
-                }
-                if (p instanceof ForwardingPointer f) {
-                    if (LEVELS.weakCompareAndSet(this, p,
-                            new QLevels((f.newCells)))) {
-                        return;
-                    }
-                } else {
-                    return;
-                }
+                if (p instanceof ForwardingPointer f &&
+                        (p = transfer(f))
+                                instanceof ForwardingPointer fp &&
+                        !LEVELS.weakCompareAndSet(
+                                this, p,
+                                new QLevels((fp.newCells)))
+                ) { continue; }
+                return;
             } else if ((p instanceof ForwardingPointer f &&
                     f.newCells.length == length) ||
                     LEVELS.weakCompareAndSet(
@@ -261,7 +259,7 @@ public class ConcurrentArrayCells<E>
             }
         }
         // recheck before commit and help
-        a.transferChunk(0, f);
+        a.transferChunk(0, i);
         a.sizeCtl = f;
         return a;
     }
@@ -428,9 +426,7 @@ public class ConcurrentArrayCells<E>
     record ForwardingIndex<E>(Index<E> main) implements Index<E> {
         @Override public E getValue() {return main.getValue();}
         @Override public E getAndSet(E val) {return main.getAndSet(val);}
-
         @Override public E cae(E c, E v) {return main.cae(c,v);}
-
         @Override public String toString() {return Objects.toString(getValue());}
     }
     static final class QCell<E> implements Index<E> {
