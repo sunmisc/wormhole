@@ -76,7 +76,7 @@ public class ConcurrentArrayCells<E>
      * The minimum number of beginnings per transfer step
      * Ranges are subdivided to allow multiple resizing threads
      */
-    static final int MIN_TRANSFER_STRIDE = 16;
+    static final int MIN_TRANSFER_STRIDE = 6;
 
     /* ---------------- Field -------------- */
     volatile Levels levels; // current array claimant
@@ -249,7 +249,7 @@ public class ConcurrentArrayCells<E>
                     if ((sz = a.sizeCtl) >= f) {
                         break;
                     }
-                } while(!SIZECTL.weakCompareAndSet(a, sz, sz + c));
+                } while (!SIZECTL.weakCompareAndSet(a, sz, sz + c));
             }
             Levels l = levels;
             if (l instanceof ForwardingPointer fp) {
@@ -268,8 +268,8 @@ public class ConcurrentArrayCells<E>
         final int fence; // last index of elements from old to new
         final int stride; // the size of the transfer chunk can be from 1 to fence
         final Object[] oldCells, newCells; // owning array
-        volatile int strideIndex; // current transfer chunk
-        volatile int sizeCtl; // total number of transferred chunks
+        int strideIndex; // current transfer chunk
+        int sizeCtl; // total number of transferred chunks
 
         ForwardingPointer(Levels prev, Object[] newCells) {
             this.oldCells = prev.array(); this.newCells = newCells;
@@ -277,7 +277,7 @@ public class ConcurrentArrayCells<E>
             int n = Math.min(prev.fence(), newCells.length);
             this.fence = n;
             // threshold
-            this.stride = Math.max((n >>> 2) / NCPU, Math.min(n, MIN_TRANSFER_STRIDE));
+            this.stride = Math.max(MIN_TRANSFER_STRIDE, (n >>> 3) / NCPU);
         }
         @Override public Object[] array() {return oldCells;}
 
@@ -304,9 +304,10 @@ public class ConcurrentArrayCells<E>
         boolean trySwapSlot(Object o, int i,
                             Object[] oldCells, Object[] newCells) {
             Object c;
-            if ((c = caeArrayAt(oldCells, i, o,
-                    o instanceof QCell n ? new ForwardingIndex(n) : FORWARDING_NIL))
-                    == o) {
+            if ((c = caeArrayAt(oldCells, i, o, o instanceof QCell<?> n
+                    ? new ForwardingIndex<>(n)
+                    : FORWARDING_NIL)
+            ) == o) {
                 setAt(newCells, i, o);
                 // store fence
                 setAt(oldCells, i, this);
