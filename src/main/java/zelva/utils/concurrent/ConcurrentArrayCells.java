@@ -8,6 +8,7 @@ import java.lang.invoke.VarHandle;
 import java.util.Iterator;
 import java.util.NoSuchElementException;
 import java.util.Objects;
+import java.util.concurrent.atomic.LongAdder;
 
 /**
  * An array that supports full concurrency retrievals
@@ -139,7 +140,7 @@ public class ConcurrentArrayCells<E>
                     return null;
                 }
             } else if (o == FORWARDING_NIL) {
-                Thread.onSpinWait();
+                // Thread.onSpinWait();
             } else if (o instanceof ForwardingPointer f) {
                 arr = helpTransfer(f);
             } else if (o instanceof Index n) {
@@ -193,7 +194,7 @@ public class ConcurrentArrayCells<E>
             } else if (o == FORWARDING_NIL) {
                 if (newValue == null)
                     return null;
-                Thread.onSpinWait();
+                // Thread.onSpinWait();
             } else if (o instanceof ForwardingPointer f) {
                 arr = helpTransfer(f);
             } else if (o instanceof Index n) {
@@ -234,22 +235,19 @@ public class ConcurrentArrayCells<E>
     }
     private Object[] helpTransfer(ForwardingPointer a) {
         Levels l = transfer(a);
-        return l instanceof ForwardingPointer f ? f.newCells : l.array();
+        return l instanceof ForwardingPointer f
+                ? f.newCells : l.array();
     }
+
     private Levels transfer(ForwardingPointer a) {
-        int i,ls,f,c;
-        for (;;) {
+        int i,f;
+        for (int ls;;) {
             if ((i = a.strideIndex) >= (f = a.fence)) {
                 break;
-            } else if (STRIDEINDEX.weakCompareAndSet(a, i,
-                    ls = i + (c = a.stride))) {
-                a.transferChunk(i, ls);
-                int sz;
-                do {
-                    if ((sz = a.sizeCtl) >= f) {
-                        break;
-                    }
-                } while (!SIZECTL.weakCompareAndSet(a, sz, sz + c));
+            } else if (a.weakCasStride(i,
+                    ls = i + a.stride) &&
+                    a.transferChunk(i, ls)) {
+                a.getAndAddCtl(a.stride);
             }
             Levels l = levels;
             if (l instanceof ForwardingPointer fp) {
@@ -259,9 +257,10 @@ public class ConcurrentArrayCells<E>
             }
         }
         // recheck before commit and help
-        a.transferChunk(0, i);
-        VarHandle.releaseFence(); // emulate volatile stores
-        a.sizeCtl = f;
+        if (a.transferChunk(0, i)) {
+            VarHandle.releaseFence(); // emulate volatile stores
+            a.sizeCtl = f;
+        }
         return a;
     }
     static final class ForwardingPointer implements Levels {
@@ -280,16 +279,23 @@ public class ConcurrentArrayCells<E>
             // threshold
             this.stride = Math.max(MIN_TRANSFER_STRIDE, (n >>> 3) / NCPU);
         }
+
+        private int getAndAddCtl(int v) {
+            return (int)SIZECTL.getAndAdd(this, v);
+        }
+        private boolean weakCasStride(int c, int v) {
+            return STRIDEINDEX.weakCompareAndSet(this, c, v);
+        }
         @Override public Object[] array() {return oldCells;}
 
         @Override public int fence() {return fence;}
 
-        void transferChunk(int i, int end) {
+        boolean transferChunk(int i, int end) {
             for (Object o; i < end && i < fence; ++i) {
                 for (Object[] sh = oldCells; ; ) {
                     VarHandle.acquireFence();
                     if (sizeCtl >= fence) {
-                        return;
+                        return false;
                     } else if ((o = arrayAt(sh, i)) == FORWARDING_NIL
                             || o instanceof ForwardingIndex) {
                         Thread.onSpinWait();
@@ -303,6 +309,7 @@ public class ConcurrentArrayCells<E>
                     }
                 }
             }
+            return true;
         }
         boolean trySwapSlot(Object o, int i,
                             Object[] oldCells, Object[] newCells) {
@@ -311,11 +318,25 @@ public class ConcurrentArrayCells<E>
                     ? new ForwardingIndex<>(n)
                     : FORWARDING_NIL)
             ) == o) {
-                setAt(newCells, i, o);
+              //  if (o != null)
+                    setAt(newCells, i, o);
                 // store fence
                 setAt(oldCells, i, this);
                 return true;
             } else return c == this; // finished
+        }
+
+        private static final VarHandle STRIDEINDEX;
+        private static final VarHandle SIZECTL;
+
+        static {
+            try {
+                MethodHandles.Lookup l = MethodHandles.lookup();
+                STRIDEINDEX = l.findVarHandle(ForwardingPointer.class, "strideIndex", int.class);
+                SIZECTL = l.findVarHandle(ForwardingPointer.class, "sizeCtl", int.class);
+            } catch (ReflectiveOperationException e) {
+                throw new ExceptionInInitializerError(e);
+            }
         }
     }
     @NotNull
@@ -466,14 +487,9 @@ public class ConcurrentArrayCells<E>
     private static final VarHandle AA
             = MethodHandles.arrayElementVarHandle(Object[].class);
     private static final VarHandle LEVELS;
-    private static final VarHandle STRIDEINDEX;
-    private static final VarHandle SIZECTL;
-
     static {
         try {
             MethodHandles.Lookup l = MethodHandles.lookup();
-            STRIDEINDEX = l.findVarHandle(ForwardingPointer.class, "strideIndex", int.class);
-            SIZECTL = l.findVarHandle(ForwardingPointer.class, "sizeCtl", int.class);
             LEVELS = l.findVarHandle(ConcurrentArrayCells.class, "levels", Levels.class);
         } catch (ReflectiveOperationException e) {
             throw new ExceptionInInitializerError(e);
