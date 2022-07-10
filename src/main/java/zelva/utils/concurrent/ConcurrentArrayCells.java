@@ -5,11 +5,9 @@ import org.jetbrains.annotations.NotNull;
 import java.io.*;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
-import java.util.Arrays;
 import java.util.Iterator;
 import java.util.NoSuchElementException;
 import java.util.Objects;
-import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * An array that supports full concurrency retrievals
@@ -76,7 +74,7 @@ public class ConcurrentArrayCells<E>
      * The minimum number of beginnings per transfer step
      * Ranges are subdivided to allow multiple resizing threads
      */
-    static final int MIN_TRANSFER_STRIDE = 6;
+    static final int MIN_TRANSFER_STRIDE = 16;
 
     /* ---------------- Field -------------- */
     volatile Levels levels; // current array claimant
@@ -87,7 +85,7 @@ public class ConcurrentArrayCells<E>
     public ConcurrentArrayCells(E[] array) {
         int n; Object o;
         // parallelize copy using Stream API?
-        Object[] nodes = new QCell[n = array.length];
+        Object[] nodes = new Object[n = array.length];
         for (int i = 0; i < n; ++i) {
             if ((o = array[i]) != null)
                 nodes[i] = new QCell<>(o);
@@ -141,6 +139,7 @@ public class ConcurrentArrayCells<E>
                     return null;
                 }
             } else if (o == FORWARDING_NIL) {
+                Thread.onSpinWait();
             } else if (o instanceof ForwardingPointer f) {
                 arr = helpTransfer(f);
             } else if (o instanceof Index n) {
@@ -194,6 +193,7 @@ public class ConcurrentArrayCells<E>
             } else if (o == FORWARDING_NIL) {
                 if (newValue == null)
                     return null;
+                Thread.onSpinWait();
             } else if (o instanceof ForwardingPointer f) {
                 arr = helpTransfer(f);
             } else if (o instanceof Index n) {
@@ -264,11 +264,11 @@ public class ConcurrentArrayCells<E>
         a.sizeCtl = f;
         return a;
     }
-
     static final class ForwardingPointer implements Levels {
         final int fence; // last index of elements from old to new
         final int stride; // the size of the transfer chunk can be from 1 to fence
         final Object[] oldCells, newCells; // owning array
+
         int strideIndex; // current transfer chunk
         int sizeCtl; // total number of transferred chunks
 
@@ -287,10 +287,12 @@ public class ConcurrentArrayCells<E>
         void transferChunk(int i, int end) {
             for (Object o; i < end && i < fence; ++i) {
                 for (Object[] sh = oldCells; ; ) {
+                    VarHandle.acquireFence();
                     if (sizeCtl >= fence) {
                         return;
                     } else if ((o = arrayAt(sh, i)) == FORWARDING_NIL
                             || o instanceof ForwardingIndex) {
+                        Thread.onSpinWait();
                     } else if (o instanceof
                             ForwardingPointer f) {
                         if (f == this)
@@ -366,9 +368,11 @@ public class ConcurrentArrayCells<E>
     }
 
     @Serial
-    private void writeObject(ObjectOutputStream s) throws IOException {
-        Object[] arr = levels.array(); int len;
-        s.writeInt(len = arr.length);
+    private void writeObject(ObjectOutputStream s)
+            throws IOException {
+        Object[] arr = levels.array();
+        int len = arr.length;
+        s.writeInt(len);
         for (int i = 0; i < len; ++i) {
             for (Object o = arrayAt(arr, i);;) {
                 if (o == null) {
