@@ -38,7 +38,7 @@ import java.util.function.Function;
  * <V> – the type of mapped values
  */
 
-public final class ConcurrentEnumMap<K extends Enum<K>,V>
+public class ConcurrentEnumMap<K extends Enum<K>,V>
         implements ConcurrentMap<K,V>, Serializable {
     @Serial
     private static final long serialVersionUID = 9193424923934859345L;
