@@ -8,7 +8,6 @@ import java.lang.invoke.VarHandle;
 import java.util.Iterator;
 import java.util.NoSuchElementException;
 import java.util.Objects;
-import java.util.concurrent.atomic.LongAdder;
 
 /**
  * An array that supports full concurrency retrievals
@@ -81,7 +80,9 @@ public class ConcurrentArrayCells<E>
     volatile Levels levels; // current array claimant
 
     public ConcurrentArrayCells(int size) {
-        this.levels = new QLevels(new Object[size]);
+        Object[] arr = new Object[size];
+        //Arrays.setAll(arr, k -> new QCell<>(null));
+        this.levels = new QLevels(arr);
     }
     public ConcurrentArrayCells(E[] array) {
         int n; Object o;
@@ -314,16 +315,17 @@ public class ConcurrentArrayCells<E>
         boolean trySwapSlot(Object o, int i,
                             Object[] oldCells, Object[] newCells) {
             Object c;
-            if ((c = caeArrayAt(oldCells, i, o, o instanceof QCell<?> n
-                    ? new ForwardingIndex<>(n)
-                    : FORWARDING_NIL)
-            ) == o) {
-              //  if (o != null)
+            if (o instanceof Index<?> n) {
+                if ((c = caeArrayAt(oldCells, i, o, new ForwardingIndex<>(n))) == o) {
                     setAt(newCells, i, o);
-                // store fence
-                setAt(oldCells, i, this);
+                    // store fence
+                    setAt(oldCells, i, this);
+                    return true;
+                }
+            } else if ((c = caeArrayAt(oldCells, i, o, this)) == o) {
                 return true;
-            } else return c == this; // finished
+            }
+            return c == this;  // finished
         }
 
         private static final VarHandle STRIDEINDEX;
