@@ -316,17 +316,24 @@ public class ConcurrentArrayCells<E>
                             Object[] oldCells, Object[] newCells) {
             Object c;
             if (o instanceof Index<?> n) {
-                if ((c = caeArrayAt(oldCells, i, o, new ForwardingIndex<>(n))) == o) {
+                if ((c = caeArrayAt(
+                        oldCells, i,
+                        o, new ForwardingIndex<>(n))
+                ) == o) {
                     setAt(newCells, i, o);
                     // store fence
                     setAt(oldCells, i, this);
                     return true;
                 }
-            } else if ((c = caeArrayAt(oldCells, i, o, this)) == o) {
+            } else if ((c = caeArrayAt(
+                    oldCells, i,
+                    o, this)
+            ) == o) {
                 return true;
             }
             return c == this;  // finished
         }
+
 
         private static final VarHandle STRIDEINDEX;
         private static final VarHandle SIZECTL;
