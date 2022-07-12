@@ -252,8 +252,8 @@ public class ConcurrentArrayCells<E>
 
         // recheck before commit and help
         if (a.transferChunk(0, i)) {
-            VarHandle.releaseFence(); // emulate volatile stores
             a.sizeCtl = a.fence;
+            VarHandle.releaseFence(); // emulate volatile stores
         }
         return a;
     }
