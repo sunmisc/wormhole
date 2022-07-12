@@ -65,7 +65,7 @@ public class ConcurrentArrayCells<E>
      * The minimum number of beginnings per transfer step
      * Ranges are subdivided to allow multiple resizing threads
      */
-    static final int MIN_TRANSFER_STRIDE = 16;
+    static final int MIN_TRANSFER_STRIDE = 10;
 
     /* ---------------- Field -------------- */
     volatile Levels levels; // current array claimant
@@ -228,12 +228,13 @@ public class ConcurrentArrayCells<E>
         return l instanceof ForwardingPointer f
                 ? f.newCells : l.array();
     }
-
     private Levels transfer(ForwardingPointer a) {
         int i;
-        while((i = a.stride) < a.fence) {
-            int ls = i + a.stride;
-            if (a.weakCasStride(i, ls) &&
+        for (int ls;;) {
+            if ((i = a.strideIndex) >= a.fence) {
+                break;
+            } else if (a.weakCasStride(i,
+                    ls = i + a.stride) &&
                     a.transferChunk(i, ls)) {
                 a.getAndAddCtl(a.stride);
             }
