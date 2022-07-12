@@ -277,6 +277,7 @@ public class ConcurrentArrayCells<E>
         @Override public Object[] array() { return oldCells; }
 
         @Override public int fence() { return fence; }
+
         int getAndAddCtl(int v) {
             return (int)SIZECTL.getAndAdd(this, v);
         }
