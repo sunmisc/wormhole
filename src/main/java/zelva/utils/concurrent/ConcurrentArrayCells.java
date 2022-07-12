@@ -245,6 +245,12 @@ public class ConcurrentArrayCells<E>
             }
         }
         // recheck before commit and help
+
+        /*while (a.sizeCtl < a.fence) {
+            VarHandle.loadLoadFence();
+            Thread.onSpinWait();
+        }*/
+
         if (a.transferChunk(0, i)) {
             VarHandle.releaseFence(); // emulate volatile stores
             a.sizeCtl = a.fence;
