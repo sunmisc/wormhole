@@ -230,11 +230,9 @@ public class ConcurrentArrayCells<E>
     }
     private Levels transfer(ForwardingPointer a) {
         int i;
-        for (int ls;;) {
-            if ((i = a.strideIndex) >= a.fence) {
-                break;
-            } else if (a.weakCasStride(i,
-                    ls = i + a.stride) &&
+        while ((i = a.strideIndex) < a.fence) {
+            int ls = i + a.stride;
+            if (a.weakCasStride(i, ls) &&
                     a.transferChunk(i, ls)) {
                 a.getAndAddCtl(a.stride);
             }
