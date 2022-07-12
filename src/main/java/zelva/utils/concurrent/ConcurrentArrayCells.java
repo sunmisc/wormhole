@@ -304,6 +304,7 @@ public class ConcurrentArrayCells<E>
         }
         boolean trySwapSlot(Object o, int i,
                             Object[] oldCells, Object[] newCells) {
+            // assert newCells[i] == null;
             Object c;
             if (o instanceof Cell<?> n) {
                 if ((c = caeArrayAt(
