@@ -56,15 +56,6 @@ public class ConcurrentArrayCells<E>
     @Serial
     private static final long serialVersionUID = -1151544938255125591L;
 
-    // Dead node for null elements when wrapping
-    static final Index<Void> FORWARDING_NIL = new Index<>() {
-        @Override public Void getValue() {return null;}
-        @Override public Void getAndSet(Void val) {
-            throw new UnsupportedOperationException();}
-        @Override public Void cae(Void c, Void v) {
-            throw new UnsupportedOperationException();}
-        @Override public String toString() {return "null";}
-    };
     /**
      * Number of CPUS, to place bounds on some sizing's
      */
@@ -140,8 +131,6 @@ public class ConcurrentArrayCells<E>
                         new QCell<>(newValue))) {
                     return null;
                 }
-            } else if (o == FORWARDING_NIL) {
-                Thread.onSpinWait();
             } else if (o instanceof ForwardingPointer f) {
                 arr = helpTransfer(f);
             } else if (o instanceof Index n) {
@@ -160,12 +149,13 @@ public class ConcurrentArrayCells<E>
     public E remove(int i) {
         Object[] arr = levels.array();
         for (Object o; ; ) {
-            if ((o = arrayAt(arr, i)) == null
-                    || o == FORWARDING_NIL) {
+            if ((o = arrayAt(arr, i)) == null) {
                 return null;
             } else if (o instanceof ForwardingPointer f) {
                 arr = helpTransfer(f);
-            } else if (o instanceof QCell n &&
+            } else if (o instanceof ForwardingIndex<?>) {
+                Thread.onSpinWait();
+            } else if (o instanceof Index<?> n &&
                     weakCasArrayAt(arr, i, o, null)) {
                 return (E) n.getValue();
             }
@@ -182,8 +172,8 @@ public class ConcurrentArrayCells<E>
      * expected value if successful
      */
     @Override
-    public E cae(int i, E expectedValue, E newValue) {
-        // todo: remove
+    public E cae(int i, E expectedValue, E newValue) { // todo: check it
+        // todo: remove suppots
         Object[] arr = levels.array();
         for (Object o; ; ) {
             if ((o = arrayAt(arr, i)) == null) {
@@ -193,10 +183,6 @@ public class ConcurrentArrayCells<E>
                                 new QCell<>(newValue)))) {
                     return null;
                 }
-            } else if (o == FORWARDING_NIL) {
-                if (newValue == null)
-                    return null;
-                Thread.onSpinWait();
             } else if (o instanceof ForwardingPointer f) {
                 arr = helpTransfer(f);
             } else if (o instanceof Index n) {
@@ -299,8 +285,8 @@ public class ConcurrentArrayCells<E>
                     VarHandle.acquireFence();
                     if (sizeCtl >= fence) {
                         return false;
-                    } else if ((o = arrayAt(sh, i)) == FORWARDING_NIL
-                            || o instanceof ForwardingIndex) {
+                    } else if ((o = arrayAt(sh, i))
+                            instanceof ForwardingIndex) {
                         Thread.onSpinWait();
                     } else if (o instanceof
                             ForwardingPointer f) {
