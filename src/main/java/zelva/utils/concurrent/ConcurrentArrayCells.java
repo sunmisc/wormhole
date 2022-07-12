@@ -288,10 +288,10 @@ public class ConcurrentArrayCells<E>
                     Object o;
                     if ((o = arrayAt(sh, i)) == this) {
                         break;
-                    } else if (o instanceof ForwardingIndex) {
-                        Thread.onSpinWait();
                     } else if (o instanceof ForwardingPointer f) {
                         sh = f.newCells;
+                    } else if (o instanceof ForwardingIndex) {
+                        Thread.onSpinWait();
                     } else if (trySwapSlot(o, i, sh, newCells)) {
                         break;
                     }
