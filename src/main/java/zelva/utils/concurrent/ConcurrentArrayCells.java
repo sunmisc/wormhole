@@ -141,7 +141,7 @@ public class ConcurrentArrayCells<E>
                     return null;
                 }
             } else if (o == FORWARDING_NIL) {
-                // Thread.onSpinWait();
+                Thread.onSpinWait();
             } else if (o instanceof ForwardingPointer f) {
                 arr = helpTransfer(f);
             } else if (o instanceof Index n) {
@@ -183,6 +183,7 @@ public class ConcurrentArrayCells<E>
      */
     @Override
     public E cae(int i, E expectedValue, E newValue) {
+        // todo: remove
         Object[] arr = levels.array();
         for (Object o; ; ) {
             if ((o = arrayAt(arr, i)) == null) {
@@ -195,7 +196,7 @@ public class ConcurrentArrayCells<E>
             } else if (o == FORWARDING_NIL) {
                 if (newValue == null)
                     return null;
-                // Thread.onSpinWait();
+                Thread.onSpinWait();
             } else if (o instanceof ForwardingPointer f) {
                 arr = helpTransfer(f);
             } else if (o instanceof Index n) {
@@ -217,6 +218,8 @@ public class ConcurrentArrayCells<E>
                     p.array().length == length) {
                 return;
             } else if (advance) {
+                // after a successful commit, you can be sure that
+                // we will commit either the same array or the next one
                 if (p instanceof ForwardingPointer f &&
                         (p = transfer(f))
                                 instanceof ForwardingPointer fp &&
@@ -241,26 +244,25 @@ public class ConcurrentArrayCells<E>
     }
 
     private Levels transfer(ForwardingPointer a) {
-        int i,f;
-        for (int ls;;) {
-            if ((i = a.strideIndex) >= (f = a.fence)) {
-                break;
-            } else if (a.weakCasStride(i,
-                    ls = i + a.stride) &&
+        int i;
+        while((i = a.stride) < a.fence) {
+            int ls = i + a.stride;
+            if (a.weakCasStride(i, ls) &&
                     a.transferChunk(i, ls)) {
                 a.getAndAddCtl(a.stride);
             }
+            // trying to switch to a newer array
             Levels l = levels;
             if (l instanceof ForwardingPointer fp) {
                 a = fp;
             } else {
-                return l;
+                return l; // our mission is over
             }
         }
         // recheck before commit and help
         if (a.transferChunk(0, i)) {
             VarHandle.releaseFence(); // emulate volatile stores
-            a.sizeCtl = f;
+            a.sizeCtl = a.fence;
         }
         return a;
     }
