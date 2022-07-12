@@ -281,18 +281,16 @@ public class ConcurrentArrayCells<E>
         @Override public int fence() {return fence;}
 
         boolean transferChunk(int i, int end) {
-            for (Object o; i < end && i < fence; ++i) {
+            for (; i < end && i < fence; ++i) {
                 for (Object[] sh = oldCells; ; ) {
-                    VarHandle.acquireFence();
-                    if (sizeCtl >= fence) {
+                    if (sizeCtl >= fence)
                         return false;
-                    } else if ((o = arrayAt(sh, i))
-                            instanceof ForwardingIndex) {
+                    Object o;
+                    if ((o = arrayAt(sh, i)) == this) {
+                        break;
+                    } else if (o instanceof ForwardingIndex) {
                         Thread.onSpinWait();
-                    } else if (o instanceof
-                            ForwardingPointer f) {
-                        if (f == this)
-                            break;
+                    } else if (o instanceof ForwardingPointer f) {
                         sh = f.newCells;
                     } else if (trySwapSlot(o, i, sh, newCells)) {
                         break;
