@@ -71,9 +71,7 @@ public class ConcurrentArrayCells<E>
     transient volatile Shared shared; // current array claimant
 
     public ConcurrentArrayCells(int size) {
-        Object[] arr = new Object[size];
-        //Arrays.setAll(arr, k -> new QCell<>(null));
-        this.shared = new QShared(arr);
+        this.shared = new QShared(new Object[size]);
     }
     public ConcurrentArrayCells(E[] array) {
         int n; Object o;
@@ -246,14 +244,12 @@ public class ConcurrentArrayCells<E>
         }
 
         /*while (a.sizeCtl < a.fence) {
-            VarHandle.loadLoadFence();
             Thread.onSpinWait();
         }*/
 
         // recheck before commit and help
         if (a.transferChunk(0, i)) {
             a.sizeCtl = a.fence;
-            VarHandle.releaseFence(); // emulate volatile stores
         }
         return a;
     }
@@ -312,7 +308,7 @@ public class ConcurrentArrayCells<E>
                         oldCells, i,
                         o, new ForwardingCell<>(n))
                 ) == o) {
-                    setAt(newCells, i, o);
+                    newCells[i] = o;
                     // store fence
                     setAt(oldCells, i, this);
                     return true;
