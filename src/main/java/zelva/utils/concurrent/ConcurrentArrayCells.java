@@ -65,7 +65,7 @@ public class ConcurrentArrayCells<E>
      * The minimum number of beginnings per transfer step
      * Ranges are subdivided to allow multiple resizing threads
      */
-    static final int MIN_TRANSFER_STRIDE = 10;
+    static final int MIN_TRANSFER_STRIDE = 8;
 
     /* ---------------- Field -------------- */
     transient volatile Shared shared; // current array claimant
@@ -228,12 +228,14 @@ public class ConcurrentArrayCells<E>
     }
     private Shared transfer(ForwardingPointer a) {
         int i;
-        while ((i = a.strideIndex) < a.fence) {
-            int ls = i + a.stride;
-            if (a.weakCasStride(i, ls) &&
-                    a.transferChunk(i, ls)) {
-                a.getAndAddCtl(a.stride);
-            }
+        while ((i = a.getAndAddStride(a.stride)) < a.fence) {
+            int ls = i + a.stride, t = a.transferChunk(i, ls), s;
+            if (t < ls)
+                return a;
+            else if (t >= a.fence)
+                break;
+            else if ((s = t - i) > 0)
+                a.getAndAddCtl(s);
             // trying to switch to a newer array
             Shared lst = shared;
             if (lst instanceof ForwardingPointer f) {
@@ -243,7 +245,7 @@ public class ConcurrentArrayCells<E>
             }
         }
         // recheck before commit and help
-        if (a.transferChunk(0, i)) {
+        if (a.transferChunk(0, i) == i) {
             a.sizeCtl = a.fence;
         }
         return a;
@@ -272,32 +274,41 @@ public class ConcurrentArrayCells<E>
         int getAndAddCtl(int v) {
             return (int)SIZECTL.getAndAdd(this, v);
         }
-        boolean weakCasStride(int c, int v) {
-            return STRIDEINDEX.weakCompareAndSet(this, c, v);
+        int getAndAddStride(int v) {
+            return (int) STRIDEINDEX.getAndAdd(this, v);
         }
-        boolean transferChunk(int i, int end) {
-            for (; i < end && i < fence; ++i) {
-                for (Object[] sh = prevCells; ; ) {
-                    if (sizeCtl >= fence)
-                        return false;
-                    Object o;
-                    if ((o = arrayAt(sh, i)) == this) {
-                        break;
-                    } else if (o instanceof ForwardingPointer f) {
-                        sh = f.nextCells;
-                    } else if (o instanceof ForwardingCell) {
-                        // Thread.onSpinWait();
-                    } else if (trySwapSlot(o, i, sh)) {
-                        break;
-                    }
+
+        boolean transferSlot(int i) {
+            for (Object[] sh = prevCells; ; ) {
+                if (sizeCtl >= fence)
+                    return false;
+                Object o;
+                if ((o = arrayAt(sh, i)) == this) {
+                    break;
+                } else if (o instanceof ForwardingPointer f) {
+                    sh = f.nextCells;
+                } else if (o instanceof ForwardingCell) {
+                    // Thread.onSpinWait();
+                } else if (trySwapSlot(o, i, sh)) {
+                    break;
                 }
             }
             return true;
         }
+        int transferChunk(int i, int end) {
+            for (; i < end; ++i) {
+                if (i >= fence) {
+                    return end;
+                } else if (!transferSlot(i)) {
+                    break;
+                }
+            }
+            return i;
+        }
         boolean trySwapSlot(Object o, int i, Object[] oldCells) {
-            // assert nextCells[i] == null;
             Object c;
             if (o instanceof Cell<?> n) {
+                // assert nextCells[i] == null;
                 if ((c = caeArrayAt(
                         oldCells, i,
                         o, new ForwardingCell<>(n))
