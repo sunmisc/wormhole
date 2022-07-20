@@ -229,13 +229,15 @@ public class ConcurrentArrayCells<E>
     private Shared transfer(ForwardingPointer a) {
         int i;
         while ((i = a.getAndAddStride(a.stride)) < a.fence) {
-            int ls = i + a.stride, t = a.transferChunk(i, ls), s;
-            if (t < ls)
+            int ls = i + a.stride, s;
+
+            if ((s = a.transferChunk(i, ls)) < 0) {
                 return a;
-            else if (t >= a.fence)
+            } else if (ls >= a.fence) {
                 break;
-            else if ((s = t - i) > 0)
-                a.getAndAddCtl(s);
+            } else if (s > 0 && a.getAndAddCtl(s) >= a.fence) {
+                return a;
+            }
             // trying to switch to a newer array
             Shared lst = shared;
             if (lst instanceof ForwardingPointer f) {
@@ -245,7 +247,7 @@ public class ConcurrentArrayCells<E>
             }
         }
         // recheck before commit and help
-        if (a.transferChunk(0, i) == i) {
+        if (a.transferChunk(0, i) > 0) {
             a.sizeCtl = a.fence;
         }
         return a;
@@ -278,32 +280,24 @@ public class ConcurrentArrayCells<E>
             return (int) STRIDEINDEX.getAndAdd(this, v);
         }
 
-        boolean transferSlot(int i) {
-            for (Object[] sh = prevCells; ; ) {
-                if (sizeCtl >= fence)
-                    return false;
-                Object o;
-                if ((o = arrayAt(sh, i)) == this) {
-                    break;
-                } else if (o instanceof ForwardingPointer f) {
-                    sh = f.nextCells;
-                } else if (o instanceof ForwardingCell) {
-                    // Thread.onSpinWait();
-                } else if (trySwapSlot(o, i, sh)) {
-                    break;
+        int transferChunk(int s, int end) {
+            for (end = Math.min(end, fence); s < end; ++s) {
+                for (Object[] sh = prevCells; ; ) {
+                    if (sizeCtl >= fence)
+                        return -1;
+                    Object o;
+                    if ((o = arrayAt(sh, s)) == this) {
+                        break;
+                    } else if (o instanceof ForwardingPointer f) {
+                        sh = f.nextCells;
+                    } else if (o instanceof ForwardingCell) {
+                        // Thread.onSpinWait();
+                    } else if (trySwapSlot(o, s, sh)) {
+                        break;
+                    }
                 }
             }
-            return true;
-        }
-        int transferChunk(int i, int end) {
-            for (; i < end; ++i) {
-                if (i >= fence) {
-                    return end;
-                } else if (!transferSlot(i)) {
-                    break;
-                }
-            }
-            return i;
+            return end-s;
         }
         boolean trySwapSlot(Object o, int i, Object[] oldCells) {
             Object c;
