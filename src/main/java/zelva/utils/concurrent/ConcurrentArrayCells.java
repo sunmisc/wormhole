@@ -216,9 +216,8 @@ public class ConcurrentArrayCells<E>
                     f.nextCells.length == length) ||
                     LEVELS.weakCompareAndSet(
                             this, p,
-                            new ForwardingPointer(p, nextArray))) {
-                advance = true;
-            }
+                            new ForwardingPointer(p, nextArray))
+            ) { advance = true; }
         }
     }
     private Object[] helpTransfer(ForwardingPointer a) {
@@ -226,13 +225,13 @@ public class ConcurrentArrayCells<E>
         return l instanceof ForwardingPointer f
                 ? f.nextCells : l.array();
     }
-    /*private Shared transfer0(ForwardingPointer a) {
+    private Shared transfer(ForwardingPointer a) {
         int i;
-        outer: while ((i = a.getAndAddStride(a.stride)) < a.fence) {
-            int ls = i + a.stride, end, s = i;
-
-            for (end = Math.min(ls, a.fence); s < end; ++s) {
-                a.transferSlot(s);
+        outer: while ((i = a.strideIndex) < a.fence) {
+            int ls = Math.min(a.fence, i + a.stride);
+            if (!a.weakCasStride(i,ls))
+                continue;
+            for (int s = i; s < ls; ++s) {
                 // trying to switch to a newer array
                 Shared lst = shared;
                 if (!(lst instanceof ForwardingPointer f)) {
@@ -240,43 +239,25 @@ public class ConcurrentArrayCells<E>
                 } else if (a != f) {
                     a = f;
                     continue outer;
+                } else {
+                    a.transferSlot(s);
                 }
             }
-            int t = end - s;
+            int t;
             if (ls >= a.fence) {
                 break;
-            } else if (t > 0 && a.getAndAddCtl(t) >= a.fence) {
+            } else if ((t = ls - i) > 0 &&
+                    a.getAndAddCtl(t) + t >= a.fence) {
                 return a;
             }
         }
         // recheck before commit and help
-        for (int end = Math.min(i, a.fence), s = 0; s < end; ++s) {
+        for (int s = 0; s < i; ++s) {
+            if (a.sizeCtl >= a.fence)
+                return a;
             a.transferSlot(s);
         }
         a.sizeCtl = a.fence;
-        return a;
-    }*/
-    private Shared transfer(ForwardingPointer a) {
-        int i;
-        while ((i = a.getAndAddStride(a.stride)) < a.fence) {
-            int ls = i + a.stride, s = a.transferChunk(i, ls);
-            if (ls >= a.fence) {
-                break;
-            } else if (s > 0 && a.getAndAddCtl(s) >= a.fence) {
-                return a;
-            }
-            // trying to switch to a newer array
-            Shared lst = shared;
-            if (lst instanceof ForwardingPointer f) {
-                a = f;
-            } else {
-                return lst; // our mission is over
-            }
-        }
-        // recheck before commit and help
-        if (a.transferChunk(0, i) > 0) {
-            a.sizeCtl = a.fence;
-        }
         return a;
     }
     static final class ForwardingPointer implements Shared {
@@ -303,15 +284,9 @@ public class ConcurrentArrayCells<E>
         int getAndAddCtl(int v) {
             return (int)SIZECTL.getAndAdd(this, v);
         }
-        int getAndAddStride(int v) {
-            return (int) STRIDEINDEX.getAndAdd(this, v);
-        }
 
-        int transferChunk(int s, int end) {
-            for (end = Math.min(end, fence); s < end; ++s) {
-                transferSlot(s);
-            }
-            return end-s;
+        boolean weakCasStride(int c, int v) {
+            return STRIDEINDEX.weakCompareAndSet(this, c, v);
         }
         void transferSlot(int i) {
             for (Object[] sh = prevCells; ; ) {
