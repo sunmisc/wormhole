@@ -26,7 +26,7 @@ public class BenchConcurrencyMap {
 
     @State(Scope.Thread)
     @OutputTimeUnit(TimeUnit.MILLISECONDS)
-    public static class _1Thread extends Maps {
+    public static class _1Thread extends ConcurrentMaps {
         @Benchmark
         public int putChm() {
             int i = getNextIndex(a.getAndIncrement());
@@ -43,7 +43,7 @@ public class BenchConcurrencyMap {
     @State(Scope.Benchmark)
     @Threads(8)
     @OutputTimeUnit(TimeUnit.MILLISECONDS)
-    public static class _8Threads extends Maps {
+    public static class _8Threads extends ConcurrentMaps {
         @Benchmark
         public int putChm() {
             int i = getNextIndex(a.getAndIncrement());
@@ -59,17 +59,17 @@ public class BenchConcurrencyMap {
             return i;
         }
     }
-    static class Maps {
+    static class ConcurrentMaps {
+        static final double SC = Math.PI * 5;
         final AtomicInteger a = new AtomicInteger();
         final ConcurrentMap<Integer,Integer> chm = new ConcurrentHashMap<>();
         final AtomicInteger b = new AtomicInteger();
         final Map<Integer,Integer> hm = new HashMap<>();
 
+        static int getNextIndex(int a) {
+            return (int) ((MathUtils._cos(a/SC) + 1) * 10_000);
+        }
+
     }
 
-    static final double SC = Math.PI * 5;
-
-    static int getNextIndex(int a) {
-        return (int) ((MathUtils._cos(a/SC) + 1) * 10_000);
-    }
 }
