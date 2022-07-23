@@ -23,11 +23,7 @@ public class JcstressConcurrentArray {
     )
     @State
     public static class CombineArrayArray extends ConcurrentArrayCells<Integer> {
-
-        public CombineArrayArray() {
-            super(2);
-        }
-
+        public CombineArrayArray() { super(2); }
         @Actor
         public void actor1() {
             resize(7);
