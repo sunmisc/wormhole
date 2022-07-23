@@ -284,44 +284,37 @@ public class ConcurrentArrayCells<E>
         int getAndAddCtl(int v) {
             return (int)SIZECTL.getAndAdd(this, v);
         }
-
         boolean weakCasStride(int c, int v) {
             return STRIDEINDEX.weakCompareAndSet(this, c, v);
         }
         void transferSlot(int i) {
-            for (Object[] sh = prevCells; ; ) {
-                Object o;
-                if ((o = arrayAt(sh, i)) == this) {
+            for (Object[] sh = prevCells;;) {
+                Object o, c;
+                if (((o = arrayAt(sh, i)) == null &&
+                        ((c = caeArrayAt(sh, i,
+                                null, this)
+                        ) == null || c == this)) ||
+                        o == this) {
                     break;
                 } else if (o instanceof ForwardingPointer f) {
                     sh = f.nextCells;
                 } else if (o instanceof ForwardingCell) {
                     // Thread.onSpinWait();
-                } else if (trySwapSlot(o, i, sh)) {
-                    break;
+                } else if (o instanceof Cell<?> e) {
+                    if ((c = caeArrayAt(
+                            sh, i,
+                            o, new ForwardingCell<>(e))
+                    ) == o) {
+                        // assert nextCells[i] == null;
+                        nextCells[i] = o;
+                        // store fence
+                        setAt(sh, i, this);
+                        break;
+                    } else if (c == this) {
+                        break;
+                    }
                 }
             }
-        }
-        boolean trySwapSlot(Object o, int i, Object[] oldCells) {
-            Object c;
-            if (o instanceof Cell<?> n) {
-                // assert nextCells[i] == null;
-                if ((c = caeArrayAt(
-                        oldCells, i,
-                        o, new ForwardingCell<>(n))
-                ) == o) {
-                    nextCells[i] = o;
-                    // store fence
-                    setAt(oldCells, i, this);
-                    return true;
-                }
-            } else if ((c = caeArrayAt(
-                    oldCells, i,
-                    o, this)
-            ) == o) {
-                return true;
-            }
-            return c == this;  // finished
         }
 
         // VarHandle mechanics
