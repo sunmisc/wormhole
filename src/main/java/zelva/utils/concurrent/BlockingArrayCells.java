@@ -49,17 +49,11 @@ public class BlockingArrayCells<E> extends ConcurrentCells<E> {
             w.unlock();
         }
     }
-    static final Object EMPTY = new Object();
     @Override
     public void resize(int size) {
         w.lock();
         try {
-            E[] newArr = (E[]) new Object[size];
-            int l = Math.min(array.length, size);
-            for (int i = 0; i < l; ++i) {
-                newArr[i] = array[i]; //(E) Objects.requireNonNullElse(array[i], EMPTY);
-            }
-        array = newArr;
+            array = Arrays.copyOf(array, size);
         } finally {
             w.unlock();
         }
