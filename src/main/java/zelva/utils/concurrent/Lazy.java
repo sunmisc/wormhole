@@ -23,7 +23,7 @@ public class Lazy<V> {
      *
      * It can be seen on some platforms
      */
-    @SuppressWarnings("unchecked")
+    
     private volatile V value;
     private final Supplier<V> supplier;
 
