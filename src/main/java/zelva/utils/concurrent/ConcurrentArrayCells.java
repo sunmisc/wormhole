@@ -65,7 +65,7 @@ public class ConcurrentArrayCells<E>
      * The minimum number of beginnings per transfer step
      * Ranges are subdivided to allow multiple resizing threads
      */
-    static final int MIN_TRANSFER_STRIDE = 10;
+    static final int MIN_TRANSFER_STRIDE = 16;
 
     /* ---------------- Field -------------- */
     transient volatile Shared shared; // current array claimant
