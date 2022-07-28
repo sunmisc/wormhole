@@ -257,6 +257,7 @@ public class ConcurrentArrayCells<E>
                 return a;
             a.transferSlot(s);
         }
+        // non-volatile write
         a.sizeCtl = a.fence;
         return a;
     }
@@ -307,7 +308,7 @@ public class ConcurrentArrayCells<E>
                     ) == o) {
                         // assert nextCells[i] == null;
                         nextCells[i] = o;
-                        // store fence
+                        // StoreStore fence
                         setAt(sh, i, this);
                         break;
                     } else if (c == this) {
