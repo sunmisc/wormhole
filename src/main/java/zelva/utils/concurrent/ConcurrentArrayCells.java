@@ -389,7 +389,7 @@ public class ConcurrentArrayCells<E>
         for (int i = 0; i < len; ++i) {
             for (Object o = arrayAt(arr, i);;) {
                 if (o == null) {
-                    s.writeObject(o);
+                    s.writeObject(null);
                     break;
                 } else if (o instanceof ForwardingPointer f) {
                     o = arrayAt(f.nextCells,i);
