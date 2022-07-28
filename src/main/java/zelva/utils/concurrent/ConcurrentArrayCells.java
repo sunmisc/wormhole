@@ -300,7 +300,7 @@ public class ConcurrentArrayCells<E>
                 } else if (o instanceof ForwardingPointer f) {
                     sh = f.nextCells;
                 } else if (o instanceof ForwardingCell) {
-                    // Thread.onSpinWait();
+                    Thread.onSpinWait();
                 } else if (o instanceof Cell<?> e) {
                     if ((c = caeArrayAt(
                             sh, i,
