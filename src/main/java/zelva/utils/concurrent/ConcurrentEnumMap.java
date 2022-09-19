@@ -9,6 +9,7 @@ import java.util.concurrent.atomic.LongAdder;
 import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
 import java.util.function.Function;
+import java.util.function.Predicate;
 
 /**
  * A specialized implementation of the map for use with enumeration type keys.
@@ -104,10 +105,10 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
 
     @Override
     public void putAll(Map<? extends K, ? extends V> m) {
-        long delta = 0L;
+        long delta = 0L; V[] tab = table;
         for (Map.Entry<? extends K, ? extends V> e : m.entrySet()) {
             Enum<?> key = e.getKey(); Object val = e.getValue();
-            if (getAndSetAt(table, key.ordinal(), val) == null)
+            if (getAndSetAt(tab, key.ordinal(), val) == null)
                 ++delta;
         }
         addCount(delta);
@@ -326,6 +327,44 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
         if ((es = entrySet) != null) return es;
         return entrySet = new EntrySetView<>(this);
     }
+    /**
+     * Helper method for EntrySetView.removeIf.
+     */
+    boolean removeEntryIf(Predicate<? super Entry<K,V>> function) {
+        if (function == null) throw new NullPointerException();
+        V[] tab = table; boolean removed = false;
+        for (int i = 0, len = tab.length; i < len; ++i) {
+            V v = tabAt(tab, i);
+            if (v == null)
+                continue;
+            K k = keys[i];
+            Map.Entry<K,V> entry = Map.entry(k,v);
+
+            if (function.test(entry) && remove(k,v)) {
+                removed = true;
+            }
+        }
+        return removed;
+    }
+
+    /**
+     * Helper method for ValuesView.removeIf.
+     */
+    boolean removeValueIf(Predicate<? super V> function) {
+        if (function == null) throw new NullPointerException();
+        V[] tab = table; boolean removed = false;
+        for (int i = 0, len = tab.length; i < len; ++i) {
+            V v = tabAt(tab, i);
+            if (v == null)
+                continue;
+            K k = keys[i];
+
+            if (function.test(v) && remove(k,v)) {
+                removed = true;
+            }
+        }
+        return removed;
+    }
 
     /* --------------------- Views --------------------- */
 
@@ -362,9 +401,15 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
         @Override public boolean isEmpty() {return map.isEmpty();}
         @Override public void clear() {map.clear();}
 
+
         @Override public Iterator<V> iterator() {return new ValueIterator<>(map);}
 
         @Override public boolean contains(Object o) {return map.containsValue(o);}
+
+        @Override
+        public boolean removeIf(Predicate<? super V> filter) {
+            return map.removeValueIf(filter);
+        }
 
         @Override
         public boolean remove(Object o) {
@@ -396,6 +441,11 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
         @Override public void clear() {map.clear();}
 
         @Override public Iterator<Map.Entry<K,V>> iterator() {return new EntryIterator<>(map);}
+
+        @Override
+        public boolean removeIf(Predicate<? super Entry<K,V>> filter) {
+            return map.removeEntryIf(filter);
+        }
 
         @Override
         public boolean contains(Object o) {
