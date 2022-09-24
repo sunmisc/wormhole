@@ -11,6 +11,11 @@ public class UnsafeLazy<V> extends Lazy<V> {
     }
 
     @Override
+    public void clear() {
+        value = (V) NIL;
+    }
+
+    @Override
     public boolean isDone() {
         return value != NIL;
     }
