@@ -17,6 +17,10 @@ public abstract class Lazy<V> {
         return computeIfAbsent(supplier);
     }
 
+    public void clear() {
+        computeIfPresent(x -> null);
+    }
+
     public abstract boolean isDone();
 
     public abstract V compute(UnaryOperator<V> function);
