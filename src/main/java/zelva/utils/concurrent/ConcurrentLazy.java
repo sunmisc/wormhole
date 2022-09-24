@@ -44,7 +44,10 @@ public class ConcurrentLazy<V> extends Lazy<V> {
     public V compute(UnaryOperator<V> function) {
         synchronized (this) {
             V val = value;
-            return value = function.apply(val == NIL ? null : val);
+            return value = function.apply(val == NIL
+                    ? null
+                    : val
+            );
         }
     }
 
@@ -69,7 +72,8 @@ public class ConcurrentLazy<V> extends Lazy<V> {
         if (val != NIL) {
             synchronized (this) {
                 // no need for volatile-read here
-                if ((val = value) != NIL) {
+                if ((val = value)
+                        != NIL) {
                     return value = function.apply(val);
                 }
             }
