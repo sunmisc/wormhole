@@ -34,16 +34,16 @@ public abstract class Lazy<V> {
     public enum LazyType {
         CONCURRENT {
             @Override
-            protected <V> Lazy<V> create(Supplier<V> supplier) {
+            <V> Lazy<V> create(Supplier<V> supplier) {
                 return new ConcurrentLazy<>(supplier);
             }
         }, UNSAFE {
             @Override
-            protected <V> Lazy<V> create(Supplier<V> supplier) {
+            <V> Lazy<V> create(Supplier<V> supplier) {
                 return new UnsafeLazy<>(supplier);
             }
         };
 
-        protected abstract <V> Lazy<V> create(Supplier<V> supplier);
+        abstract <V> Lazy<V> create(Supplier<V> supplier);
     }
 }
