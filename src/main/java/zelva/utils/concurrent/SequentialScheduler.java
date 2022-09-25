@@ -28,8 +28,8 @@ public class SequentialScheduler {
 
 
     public void cancel() {
-        stack.get().obtrudeException(
-                new CancellationException()
+        stack.set(CompletableFuture.failedFuture(
+                new CancellationException())
         );
     }
 
