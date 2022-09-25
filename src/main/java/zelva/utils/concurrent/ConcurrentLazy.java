@@ -36,19 +36,22 @@ public class ConcurrentLazy<V> extends Lazy<V> {
     }
 
     @Override
+    public synchronized void clear() {
+        value = (V) NIL;
+    }
+
+    @Override
     public boolean isDone() {
         return value != NIL;
     }
 
     @Override
-    public V compute(UnaryOperator<V> function) {
-        synchronized (this) {
-            V val = value;
-            return value = function.apply(val == NIL
-                    ? null
-                    : val
-            );
-        }
+    public synchronized V compute(UnaryOperator<V> function) {
+        V val = value;
+        return value = function.apply(val == NIL
+                ? null
+                : val
+        );
     }
 
     @Override
