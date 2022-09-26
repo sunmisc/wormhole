@@ -39,7 +39,8 @@ public abstract class Lazy<V> {
             <V> Lazy<V> create(Supplier<V> supplier) {
                 return new ConcurrentLazy<>(supplier);
             }
-        }, UNSAFE {
+        },
+        UNSAFE {
             @Override
             <V> Lazy<V> create(Supplier<V> supplier) {
                 return new UnsafeLazy<>(supplier);

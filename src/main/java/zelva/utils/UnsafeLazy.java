@@ -4,7 +4,7 @@ import java.util.function.Supplier;
 import java.util.function.UnaryOperator;
 
 public class UnsafeLazy<V> extends Lazy<V> {
-    private V value;
+    private V value = (V) NIL;
 
     public UnsafeLazy(Supplier<V> supplier) {
         super(supplier);
