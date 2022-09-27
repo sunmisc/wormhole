@@ -2,6 +2,7 @@ package zelva.utils;
 
 import zelva.utils.concurrent.ConcurrentLazy;
 
+import java.util.Optional;
 import java.util.function.Supplier;
 import java.util.function.UnaryOperator;
 
@@ -17,7 +18,7 @@ public abstract class Lazy<V> {
         return computeIfAbsent(supplier);
     }
 
-    public abstract V clear();
+    public abstract Optional<V> clear();
 
     public abstract boolean isDone();
 

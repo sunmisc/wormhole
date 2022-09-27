@@ -2,6 +2,7 @@ package zelva.utils;
 
 import org.jetbrains.annotations.Nullable;
 
+import java.util.Optional;
 import java.util.function.Supplier;
 import java.util.function.UnaryOperator;
 
@@ -13,10 +14,12 @@ public class UnsafeLazy<V> extends Lazy<V> {
     }
 
     @Override
-    public V clear() {
+    public Optional<V> clear() {
         V val = value;
         value = (V) NIL;
-        return val;
+        return val == NIL || val == null
+                ? Optional.empty()
+                : Optional.of(val);
     }
 
     @Override
