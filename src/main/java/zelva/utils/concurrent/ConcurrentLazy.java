@@ -44,6 +44,13 @@ public class ConcurrentLazy<V> extends Lazy<V> {
                 ? Optional.empty()
                 : Optional.of(val);
     }
+    @Override
+    public Optional<V> getIfPresent() {
+        final V val = value;
+        return val == NIL || val == null
+                ? Optional.empty()
+                : Optional.of(val);
+    }
 
     @Override
     public boolean isDone() {

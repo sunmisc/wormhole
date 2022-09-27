@@ -17,6 +17,7 @@ public abstract class Lazy<V> {
     public V get() {
         return computeIfAbsent(supplier);
     }
+    public abstract Optional<V> getIfPresent();
 
     public abstract Optional<V> clear();
 
