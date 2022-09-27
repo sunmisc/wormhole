@@ -16,18 +16,14 @@ public class UnsafeLazy<V> extends Lazy<V> {
     @Override
     public Optional<V> getIfPresent() {
         V val = value;
-        return val == NIL || val == null
-                ? Optional.empty()
-                : Optional.of(val);
+        return val == NIL ? Optional.empty() : Optional.ofNullable(val);
     }
 
     @Override
     public Optional<V> clear() {
         V val = value;
         value = (V) NIL;
-        return val == NIL || val == null
-                ? Optional.empty()
-                : Optional.of(val);
+        return val == NIL ? Optional.empty() : Optional.ofNullable(val);
     }
 
     @Override
