@@ -17,7 +17,7 @@ public abstract class Lazy<V> {
         return computeIfAbsent(supplier);
     }
 
-    public abstract void clear();
+    public abstract V clear();
 
     public abstract boolean isDone();
 

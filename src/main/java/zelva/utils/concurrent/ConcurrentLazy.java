@@ -1,5 +1,6 @@
 package zelva.utils.concurrent;
 
+import org.jetbrains.annotations.Nullable;
 import zelva.utils.Lazy;
 
 import java.lang.invoke.VarHandle;
@@ -36,8 +37,10 @@ public class ConcurrentLazy<V> extends Lazy<V> {
     }
 
     @Override
-    public synchronized void clear() {
+    public synchronized V clear() {
+        V val = value;
         value = (V) NIL;
+        return val;
     }
 
     @Override

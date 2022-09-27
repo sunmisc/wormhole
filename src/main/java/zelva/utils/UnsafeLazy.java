@@ -1,5 +1,7 @@
 package zelva.utils;
 
+import org.jetbrains.annotations.Nullable;
+
 import java.util.function.Supplier;
 import java.util.function.UnaryOperator;
 
@@ -11,8 +13,10 @@ public class UnsafeLazy<V> extends Lazy<V> {
     }
 
     @Override
-    public void clear() {
+    public V clear() {
+        V val = value;
         value = (V) NIL;
+        return val;
     }
 
     @Override
@@ -38,6 +42,6 @@ public class UnsafeLazy<V> extends Lazy<V> {
     @Override
     public V computeIfPresent(UnaryOperator<V> function) {
         V val = value;
-        return val == NIL ? val : (value = function.apply(val));
+        return val == NIL ? null : (value = function.apply(val));
     }
 }
