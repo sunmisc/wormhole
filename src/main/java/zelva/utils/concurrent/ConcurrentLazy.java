@@ -39,9 +39,9 @@ public class ConcurrentLazy<V> extends Lazy<V> {
     @Override
     public synchronized Optional<V> clear() {
         V val = value;
-        if (val != NIL && val != null) {
+        if (val != NIL) {
             value = (V) NIL;
-            return Optional.of(val);
+            return Optional.ofNullable(val);
         }
         return Optional.empty();
     }
