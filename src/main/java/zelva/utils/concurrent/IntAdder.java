@@ -14,8 +14,6 @@ public class IntAdder {
     static final int START_CAPACITY = 2;
     static final int NCPU = Runtime.getRuntime().availableProcessors();
 
-    private int sizeCtl = START_CAPACITY;
-
     public final ConcurrentArrayCells<AtomicInteger> cells
             = new ConcurrentArrayCells<>(START_CAPACITY);
 
@@ -38,12 +36,9 @@ public class IntAdder {
                     new AtomicInteger(delta)
             );
             if (prev != null) {
-                for (int sz, nx;;) {
-                    if ((sz = cells.length()) >= NCPU) {
-                        break;
-                    } else if (SIZECTL.weakCompareAndSet(this, sz, nx = sz << 1)) {
-                        cells.resize(nx);
-                    }
+                int sz = cells.length();
+                if (sz < NCPU) {
+                    cells.resize(sz << 1);
                 }
             } else {
                 return;
@@ -59,16 +54,6 @@ public class IntAdder {
             sum += c.get();
         }
         return sum;
-    }
-
-    private static final VarHandle SIZECTL;
-    static {
-        try {
-            MethodHandles.Lookup l = MethodHandles.lookup();
-            SIZECTL = l.findVarHandle(IntAdder.class, "sizeCtl", int.class);
-        } catch (ReflectiveOperationException e) {
-            throw new ExceptionInInitializerError(e);
-        }
     }
 
 }
