@@ -20,15 +20,15 @@ public class IntAdder {
             = new ConcurrentArrayCells<>(START_CAPACITY);
 
 
-    static int hash(Thread o) {
-        int h = System.identityHashCode(o);
-        return ((h << 1) - (h << 8));
+    static int spread(int h) {
+        return h ^ (h >>> 16);
     }
 
 
     public void add(int delta) {
         Thread current = Thread.currentThread();
-        int h = hash(current);
+        int h = spread(current.hashCode());
+
         AtomicInteger prev = cells.get(h & (cells.length() - 1));
 
         if (prev == null) {
