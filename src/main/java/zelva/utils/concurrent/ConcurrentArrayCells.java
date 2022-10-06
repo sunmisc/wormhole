@@ -70,6 +70,7 @@ public class ConcurrentArrayCells<E>
     /* ---------------- Field -------------- */
     transient volatile Shared shared; // current array claimant
 
+
     public ConcurrentArrayCells(int size) {
         this.shared = new QShared(new Object[size]);
     }
@@ -106,7 +107,7 @@ public class ConcurrentArrayCells<E>
                 return null;
             } else if (o instanceof ForwardingPointer t) {
                 arr = t.nextCells;
-            } else if (o instanceof Cell f) {
+            } else if (o instanceof Cell<?> f) {
                 return (E) f.getValue();
             }
         }
@@ -123,16 +124,23 @@ public class ConcurrentArrayCells<E>
     public E set(int i, E newValue) {
         Objects.requireNonNull(newValue);
         Object[] arr = shared.array();
-        for (Object o; ; ) {
+        for (Object o;;) {
             if ((o = arrayAt(arr, i)) == null) {
-                if (weakCasArrayAt(arr, i, null,
+                if (weakCasAt(arr, i, null,
                         new QCell<>(newValue))) {
                     return null;
                 }
             } else if (o instanceof ForwardingPointer f) {
                 arr = helpTransfer(f);
             } else if (o instanceof Cell n) {
-                return (E) n.getAndSet(newValue);
+                E val = (E) n.getValue();
+                if (val == null) {
+                    if (weakCasAt(arr, i, n, new QCell<>(newValue))) {
+                        return null;
+                    }
+                } else if (n.cae(val, newValue) == val) {
+                    return val;
+                }
             }
         }
     }
@@ -146,15 +154,15 @@ public class ConcurrentArrayCells<E>
     @Override
     public E remove(int i) {
         Object[] arr = shared.array();
-        for (Object o; ; ) {
+        for (Object o;;) {
             if ((o = arrayAt(arr, i)) == null) {
                 return null;
             } else if (o instanceof ForwardingPointer f) {
                 arr = helpTransfer(f);
             } else if (o instanceof ForwardingCell) {
                 Thread.onSpinWait();
-            } else if (o instanceof Cell n &&
-                    weakCasArrayAt(arr, i, o, null)) {
+            } else if (o instanceof Cell<?> n &&
+                    weakCasAt(arr, i, o, null)) {
                 return (E) n.getValue();
             }
         }
@@ -170,20 +178,35 @@ public class ConcurrentArrayCells<E>
      * expected value if successful
      */
     @Override
-    public E cae(int i, E expectedValue, E newValue) { // todo: check it
-        // todo: remove suppots
+    public E cae(final int i,
+                 final E expectedValue, final E newValue) {
+        if (expectedValue == newValue)
+            return newValue;
         Object[] arr = shared.array();
         for (Object o; ; ) {
             if ((o = arrayAt(arr, i)) == null) {
-                if (expectedValue == null &&
-                        (newValue == null || weakCasArrayAt(arr, i,
-                                null,
-                                new QCell<>(newValue)))) {
+                if (expectedValue == null) {
+                    if (weakCasAt(arr, i,
+                            null,
+                            new QCell<>(newValue))) {
+                        return null;
+                    }
+                } else {
                     return null;
                 }
             } else if (o instanceof ForwardingPointer f) {
                 arr = helpTransfer(f);
             } else if (o instanceof Cell n) {
+                if (newValue == null) {
+                    E val = (E) n.getValue();
+                    if (val != expectedValue) {
+                        return null;
+                    }
+                    val = (E) n.cae(expectedValue, null);
+
+                    return val == expectedValue ? remove(i) : val;
+
+                }
                 return (E) n.cae(expectedValue, newValue);
             }
         }
@@ -205,19 +228,23 @@ public class ConcurrentArrayCells<E>
                 // after a successful commit, you can be sure that
                 // we will commit either the same array or the next one
                 if (p instanceof ForwardingPointer f &&
-                        (p = transfer(f)) // recheck
-                                instanceof ForwardingPointer rf &&
+                        transfer(f) instanceof ForwardingPointer r && // recheck
                         !LEVELS.weakCompareAndSet(
-                                this, p,
-                                new QShared((rf.nextCells)))
+                                this, r,
+                                new QShared((r.nextCells)))
                 ) { continue; }
                 return;
-            } else if ((p instanceof ForwardingPointer f &&
-                    f.nextCells.length == length) ||
-                    LEVELS.weakCompareAndSet(
-                            this, p,
-                            new ForwardingPointer(p, nextArray))
-            ) { advance = true; }
+            } else {
+                if ((p instanceof ForwardingPointer f &&
+                        f.nextCells.length == length)) {
+                    transfer(f); // help and try commit
+                    return;
+                } else if (LEVELS.weakCompareAndSet(
+                        this, p,
+                        new ForwardingPointer(p, nextArray))) {
+                    advance = true;
+                }
+            }
         }
     }
     private Object[] helpTransfer(ForwardingPointer a) {
@@ -261,6 +288,7 @@ public class ConcurrentArrayCells<E>
         a.sizeCtl = a.fence;
         return a;
     }
+
     static final class ForwardingPointer implements Shared {
         final int fence; // last index of elements from old to new
         final int stride; // the size of the transfer chunk can be from 1 to fence
@@ -292,7 +320,7 @@ public class ConcurrentArrayCells<E>
             for (Object[] sh = prevCells;;) {
                 Object o, c;
                 if (((o = arrayAt(sh, i)) == null &&
-                        ((c = caeArrayAt(sh, i,
+                        ((c = caeAt(sh, i,
                                 null, this)
                         ) == null || c == this)) ||
                         o == this) {
@@ -302,7 +330,7 @@ public class ConcurrentArrayCells<E>
                 } else if (o instanceof ForwardingCell) {
                     // Thread.onSpinWait();
                 } else if (o instanceof Cell<?> e) {
-                    if ((c = caeArrayAt(
+                    if ((c = caeAt(
                             sh, i,
                             o, new ForwardingCell<>(e))
                     ) == o) {
@@ -358,7 +386,7 @@ public class ConcurrentArrayCells<E>
                     return true;
                 } else if (o instanceof ForwardingPointer t) {
                     arr = t.nextCells;
-                } else if (o instanceof Cell<?> f){
+                } else if (o instanceof Cell<?> f) {
                     next = (E) f.getValue();
                     return true;
                 }
@@ -423,10 +451,10 @@ public class ConcurrentArrayCells<E>
     static void setAt(Object[] arr, int i, Object v) {
         AA.setRelease(arr,i,v);
     }
-    static boolean weakCasArrayAt(Object[] arr, int i, Object c, Object v) {
+    static boolean weakCasAt(Object[] arr, int i, Object c, Object v) {
         return AA.weakCompareAndSet(arr,i,c,v);
     }
-    static Object caeArrayAt(Object[] arr, int i, Object c, Object v) {
+    static Object caeAt(Object[] arr, int i, Object c, Object v) {
         return AA.compareAndExchange(arr,i,c,v);
     }
 
@@ -435,29 +463,37 @@ public class ConcurrentArrayCells<E>
         Object[] array();
         default int fence() { return array().length; }
     }
+
     interface Cell<E> {
         E getValue();
-
-        E getAndSet(E val);
 
         E cae(E c, E v);
     }
 
     record ForwardingCell<E>(Cell<E> main) implements Cell<E> {
         @Override public E getValue() {return main.getValue();}
-        @Override public E getAndSet(E val) {return main.getAndSet(val);}
         @Override public E cae(E c, E v) {return main.cae(c,v);}
         @Override public String toString() {return Objects.toString(getValue());}
     }
     static final class QCell<E> implements Cell<E> {
         volatile E val;
         QCell(E val) { this.val = val; }
-        @Override public E getValue() { return val; }
-        @Override public E getAndSet(E val) { return (E) VAL.getAndSet(this, val); }
 
-        @Override public E cae(E c, E v) { return (E) VAL.compareAndExchange(this, c,v); }
+        @Override
+        public E getValue() {
+            return val;
+        }
 
-        @Override public String toString() { return Objects.toString(val); }
+        @Override
+        public E cae(E c, E v) {
+            return (E) VAL.compareAndExchange(this, c,v);
+        }
+
+        @Override
+        public String toString() {
+            E v = val;
+            return v == null ? "NIL" : Objects.toString(v);
+        }
 
         // VarHandle mechanics
         private static final VarHandle VAL;
