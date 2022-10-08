@@ -4,6 +4,6 @@ Goals:
 
 Provide more concurrency tools compared to standard jdk library
 
-Non-targets:
+Non-Goals:
 
 Rewriting existing solutions in the standard jdk library
