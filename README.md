@@ -1,8 +1,8 @@
 A library with some experimental features, aims to be a high performance library complementing java.util.concurrent in particular
 
-Goals:
+**Goals:**
 * Provide more concurrency tools compared to standard jdk library
 * Provide more utilities
 
-Non-Goals:
+**Non-Goals:**
 * Rewriting existing solutions in the standard jdk library
