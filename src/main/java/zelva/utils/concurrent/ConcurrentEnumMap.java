@@ -156,8 +156,8 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
     @Override
     public int size() {
         // let's handle the overflow
-        long n = Math.max(counter.sum(), 0L);
-        return n >= Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) n;
+        long n = counter.sum();
+        return n < 0L ? 0 : n >= Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) n;
     }
 
     @Override
@@ -355,13 +355,10 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
         V[] tab = table; boolean removed = false;
         for (int i = 0, len = tab.length; i < len; ++i) {
             V v = tabAt(tab, i);
-            if (v == null)
-                continue;
-            K k = keys[i];
-
-            if (function.test(v) && remove(k,v)) {
-                removed = true;
-            }
+            if (v != null &&
+                    function.test(v) &&
+                    remove(keys[i],v)
+            ) { removed = true; }
         }
         return removed;
     }
