@@ -234,17 +234,13 @@ public class ConcurrentArrayCells<E>
                                 new QShared((r.nextCells)))
                 ) { continue; }
                 return;
-            } else {
-                if ((p instanceof ForwardingPointer f &&
-                        f.nextCells.length == length)) {
-                    transfer(f); // help and try commit
-                    return;
-                } else if (LEVELS.weakCompareAndSet(
-                        this, p,
-                        new ForwardingPointer(p, nextArray))) {
-                    advance = true;
-                }
-            }
+            } else if ((
+                    p instanceof ForwardingPointer f &&
+                    f.nextCells.length == length) ||
+                    LEVELS.weakCompareAndSet(
+                            this, p,
+                            new ForwardingPointer(p, nextArray))
+            ) { advance = true; }
         }
     }
     private Object[] helpTransfer(ForwardingPointer a) {
