@@ -1,5 +1,6 @@
 package zelva.utils.concurrent;
 
+import java.lang.invoke.VarHandle;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -30,12 +31,17 @@ public class IntAdder {
             prev = cells.cae(
                     h & (cells.length() - 1),
                     null,
-                    new AtomicInteger(delta)
+                    new AtomicInteger(delta) {
+                        @Override
+                        public String toString() {
+                            return Integer.toString(get());
+                        }
+                    }
             );
             if (prev != null) {
                 int sz = cells.length();
                 if (sz < NCPU) {
-                    cells.resize(sz << 1);
+                    cells.resize0((x -> x << 1));
                 }
             } else {
                 return;
