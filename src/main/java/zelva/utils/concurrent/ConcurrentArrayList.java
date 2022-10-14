@@ -20,7 +20,7 @@ public class ConcurrentArrayList<E> {
             long mask = 1L << index;
 
             Node<E> p = array.cae(index, null, new Node<>(element, 0));
-            if (p != null && !VAL.weakCompareAndSet(p, null, element)) {
+            if (p != null && !VAL.compareAndSet(p, null, element)) {
                 continue;
             }
 
