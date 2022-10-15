@@ -4,6 +4,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
+@Deprecated
 public class ConcurrentArrayList<E> {
     private final ConcurrentMap<Integer, E> map
             = new ConcurrentHashMap<>();
@@ -19,14 +20,14 @@ public class ConcurrentArrayList<E> {
 
         bitSet.set(i);
     }
+    public void remove(int i) {
+        i = bitSet.removeNextSetBit(i);
+        if (i < 0) return;
+        map.remove(i);
+    }
     public E get(int i) {
         i = bitSet.nextSetBit(i);
         return map.get(i);
-    }
-
-    public void remove(int i) {
-        i = bitSet.removeNextSetBit(i);
-        map.remove(i);
     }
 
     @Override

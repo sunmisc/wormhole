@@ -1,8 +1,5 @@
 package zelva.utils.concurrent;
 
-import java.lang.invoke.MethodHandles;
-import java.lang.invoke.VarHandle;
-import java.util.BitSet;
 import java.util.Objects;
 import java.util.function.UnaryOperator;
 
@@ -51,8 +48,8 @@ public class ConcurrentBitSet {
                         bits,
                         bits & ~(1L << idx)
                 ), bits)) { return idx; }
-
-            } else if (++u >= words.length() ||
+            }
+            if (++u >= words.length() ||
                     (i = bits = words.get(u)) == null) {
                 return -1;
             }
