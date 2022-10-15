@@ -13,25 +13,9 @@ public class ConcurrentBitSet {
     /* Used to shift left or right for a partial word mask */
     private static final long WORD_MASK = 0xFFFFFFFFFFFFFFFFL; // -1
 
-
-    final BitSet set = new BitSet();
-    final ConcurrentArrayCells<Long> words
+    private final ConcurrentArrayCells<Long> words
             = new ConcurrentArrayCells<>(1);
 
-    public static void main(String[] args) {
-        ConcurrentBitSet bitSet = new ConcurrentBitSet();
-        BitSet bitSet1 = new BitSet();
-
-        for (int i = 0; i < 10; ++i) {
-            bitSet.set(i);
-            bitSet1.set(i);
-        }
-
-        bitSet.removeNextSetBit(0);
-        bitSet1.clear(0);
-        System.out.println(bitSet);
-        System.out.println(bitSet1);
-    }
 
     public void set(int bitIndex) {
         final int wordIndex = wordIndex(bitIndex);
