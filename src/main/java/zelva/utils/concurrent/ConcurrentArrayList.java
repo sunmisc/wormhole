@@ -13,7 +13,7 @@ public class ConcurrentArrayList<E> {
             new AtomicInteger();
 
     public void add(E element) {
-        int i = 0; //adder.getAndIncrement();
+        int i = adder.getAndIncrement();
 
         map.put(i, element);
 
