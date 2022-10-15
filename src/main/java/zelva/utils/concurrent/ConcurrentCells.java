@@ -2,6 +2,7 @@ package zelva.utils.concurrent;
 
 import java.util.Iterator;
 import java.util.Objects;
+import java.util.function.IntUnaryOperator;
 
 public abstract class ConcurrentCells<E> implements Iterable<E> {
     public abstract E get(int i);
@@ -14,7 +15,7 @@ public abstract class ConcurrentCells<E> implements Iterable<E> {
 
     public abstract E cae(int i, E c, E v);
 
-    public abstract void resize(int size);
+    public abstract void resize(IntUnaryOperator resize);
 
     public abstract int length();
 

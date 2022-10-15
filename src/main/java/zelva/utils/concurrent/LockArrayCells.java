@@ -7,6 +7,7 @@ import java.util.Iterator;
 import java.util.NoSuchElementException;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
+import java.util.function.IntUnaryOperator;
 
 public class LockArrayCells<E> extends ConcurrentCells<E> {
     private final ReentrantReadWriteLock rwl = new ReentrantReadWriteLock();
@@ -52,16 +53,14 @@ public class LockArrayCells<E> extends ConcurrentCells<E> {
         }
     }
     @Override
-    public void resize(int size) {
-        E[] newArr = (E[]) new Object[size];
+    public void resize(IntUnaryOperator operator) {
         w.lock();
         try {
-            System.arraycopy(
-                    array, 0,
-                    newArr, 0,
-                    Math.min(array.length, size)
+            E[] arr = array;
+            array = Arrays.copyOf(
+                    arr,
+                    operator.applyAsInt(arr.length)
             );
-            array = newArr;
         } finally {
             w.unlock();
         }

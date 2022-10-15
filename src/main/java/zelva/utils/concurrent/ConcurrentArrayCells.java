@@ -8,6 +8,7 @@ import java.lang.invoke.VarHandle;
 import java.util.Iterator;
 import java.util.NoSuchElementException;
 import java.util.Objects;
+import java.util.function.IntUnaryOperator;
 
 /**
  * An array that supports full concurrency retrievals
@@ -84,6 +85,7 @@ public class ConcurrentArrayCells<E>
         }
         this.shared = new QShared(nodes);
     }
+
 
     /**
      * @return the current length of the array
@@ -217,12 +219,12 @@ public class ConcurrentArrayCells<E>
      * @param length new array length
      */
     @Override
-    public void resize(int length) {
-        Object[] nextArray = new Object[length];
+    public void resize(IntUnaryOperator operator) {
         boolean advance = false;
         for (Shared p;;) {
+            int len;
             if (((p = shared) instanceof QShared) &&
-                    p.array().length == length) {
+                    (len = p.array().length) == operator.applyAsInt(len)) {
                 return;
             } else if (advance) {
                 // after a successful commit, you can be sure that
@@ -234,13 +236,16 @@ public class ConcurrentArrayCells<E>
                                 new QShared((r.nextCells)))
                 ) { continue; }
                 return;
-            } else if ((
-                    p instanceof ForwardingPointer f &&
-                    f.nextCells.length == length) ||
-                    LEVELS.weakCompareAndSet(
-                            this, p,
-                            new ForwardingPointer(p, nextArray))
-            ) { advance = true; }
+            } else {
+                len = p instanceof ForwardingPointer f ?
+                        f.nextCells.length : p.array().length;
+                int nextLen = operator.applyAsInt(len);
+                if (len == nextLen ||
+                        LEVELS.weakCompareAndSet(
+                                this, p,
+                                new ForwardingPointer(p, new Object[nextLen]))
+                ) { advance = true; }
+            }
         }
     }
     private Object[] helpTransfer(ForwardingPointer a) {
