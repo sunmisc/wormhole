@@ -35,7 +35,7 @@ public class IntAdder {
             if (prev != null) {
                 int sz = cells.length();
                 if (sz < NCPU) {
-                    cells.resize((x -> x << 1));
+                    cells.resize(x -> x < NCPU ? x << 1 : x);
                 }
             } else {
                 return;

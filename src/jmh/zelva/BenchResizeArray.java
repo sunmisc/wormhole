@@ -1,4 +1,4 @@
-package bench;
+package zelva;
 
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.Scope;
@@ -9,9 +9,9 @@ import org.openjdk.jmh.runner.RunnerException;
 import org.openjdk.jmh.runner.options.Options;
 import org.openjdk.jmh.runner.options.OptionsBuilder;
 import zelva.utils.MathUtils;
-import zelva.utils.concurrent.BlockingArrayCells;
 import zelva.utils.concurrent.ConcurrentArrayCells;
 import zelva.utils.concurrent.ConcurrentCells;
+import zelva.utils.concurrent.LockArrayCells;
 
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -50,18 +50,21 @@ public class BenchResizeArray {
         private final AtomicInteger a = new AtomicInteger();
         private final AtomicInteger b = new AtomicInteger();
 
-        private final ConcurrentArrayCells<Integer> cac = new ConcurrentArrayCells<>(1_000_000);
-        private final ConcurrentCells<Integer> bac = new BlockingArrayCells<>(1_000_000);
+        private final ConcurrentArrayCells<Integer> cac
+                = new ConcurrentArrayCells<>(1_000_000);
+        private final ConcurrentCells<Integer> bac
+                = new LockArrayCells<>(1_000_000);
+
 
         public int rzConcurrent() {
             int n = getNextSize(a.getAndIncrement());
-            cac.resize(n);
+            cac.resize(x -> n);
             return n;
         }
 
         public int rzSynchronize() {
             int n = getNextSize(b.getAndIncrement());
-            bac.resize(n);
+            bac.resize(x -> n);
             return n;
         }
 

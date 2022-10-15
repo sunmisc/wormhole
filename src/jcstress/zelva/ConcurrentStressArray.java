@@ -1,11 +1,11 @@
-package tests;
+package zelva;
 
 import org.openjdk.jcstress.Main;
 import org.openjdk.jcstress.annotations.*;
 import org.openjdk.jcstress.infra.results.L_Result;
 import zelva.utils.concurrent.ConcurrentArrayCells;
 
-public class JcstressConcurrentArray {
+public class ConcurrentStressArray {
 
     public static void main(String[] args) throws Exception {Main.main(args);}
 
@@ -26,33 +26,33 @@ public class JcstressConcurrentArray {
         public CombineArrayArray() { super(2); }
         @Actor
         public void actor1() {
-            resize(7);
+            resize(x -> 7);
             for (int i = 0; i < 2; ++i) {
                 set(i,i);
-                resize(11);
+                resize(x -> 11);
             }
-            resize(9);
+            resize(x -> 9);
             remove(0);
         }
 
         @Actor
         public void actor2() {
-            resize(8);
+            resize(x -> 8);
             for (int i = 2; i < 4; ++i) {
                 set(i,i);
-                resize(10);
+                resize(x -> 10);
             }
-            resize(13);
+            resize(x -> 13);
             remove(1);
         }
         @Actor
         public void actor3() {
-            resize(8);
+            resize(x -> 8);
             for (int i = 4; i < 6; ++i) {
                 set(i,i);
-                resize(9);
+                resize(x -> 9);
             }
-            resize(11);
+            resize(x -> 11);
             remove(0);
         }
 
