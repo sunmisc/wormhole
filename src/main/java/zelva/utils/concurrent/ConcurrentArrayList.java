@@ -43,7 +43,7 @@ public class ConcurrentArrayList<E> {
                 null,
                 new Node<>(e)
         )) != null) {
-            p.value = e; // todo: fixed race
+            p.value = e; // todo: fixe race
         }
         Node<E> n = table.get(wordIndex);
 
