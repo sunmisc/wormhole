@@ -1,7 +1,10 @@
 package zelva.utils;
 
+import zelva.annotation.PreviewFeature;
+
 import java.util.*;
 
+@PreviewFeature
 public class CntArrayList<E> {
     private final TreeMap<Integer,Long> words = new TreeMap<>();
     private final Map<Integer, E> values = new HashMap<>();
