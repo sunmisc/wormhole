@@ -25,35 +25,33 @@ public class ConcurrentArrayList<E> {
 
 
     public void add(E element) {
+        for (NavigableMap<Integer, Long> m = words.descendingMap();;) {
 
-        NavigableMap<Integer, Long> m = words.descendingMap();
+            int lastIndex = 0;
 
-        int lastIndex = 0;
-
-        for (Map.Entry<Integer, Long> e : m.entrySet()) {
-            long bits = e.getValue();
-            if (bits != 0) {
-                int k = e.getKey();
-                lastIndex = (k + 1) * BITS_PER_WORD - 1 - Long.numberOfLeadingZeros(bits);
-                break;
+            for (Map.Entry<Integer, Long> e : m.entrySet()) {
+                long bits = e.getValue();
+                if (bits != 0) {
+                    int k = e.getKey();
+                    lastIndex = (k + 1) * BITS_PER_WORD - 1 - Long.numberOfLeadingZeros(bits);
+                    break;
+                }
             }
-        }
-        if (values.putIfAbsent(++lastIndex, element) == null) {
-            long mask = 1L << lastIndex;
+            if (values.putIfAbsent(++lastIndex, element) == null) {
+                long mask = 1L << lastIndex;
 
-            int wordIndex = wordIndex(lastIndex);
+                int wordIndex = wordIndex(lastIndex);
 
-            words.merge(wordIndex, mask, (old, msk) -> old | msk);
+                words.merge(wordIndex, mask, (old, msk) -> old | msk);
+                return;
+            }
         }
     }
 
     public void remove(int i) {
-        i++;
-        while (true) {
-            int k = -1;
-            Map.Entry<Integer, Long> last = null;
-            outer:
-            for (int q = 0; q < i; ++q) {
+        for (;;) {
+            int k = -1; Map.Entry<Integer, Long> last = null;
+            outer: for (int q = 0; q <= i; ++q) {
                 SortedMap<Integer, Long> m = words.tailMap(wordIndex(++k));
                 boolean first = true;
                 for (Map.Entry<Integer, Long> e : m.entrySet()) {
