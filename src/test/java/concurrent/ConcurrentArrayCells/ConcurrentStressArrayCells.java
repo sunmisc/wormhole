@@ -1,11 +1,11 @@
-package zelva;
+package concurrent.ConcurrentArrayCells;
 
 import org.openjdk.jcstress.Main;
 import org.openjdk.jcstress.annotations.*;
 import org.openjdk.jcstress.infra.results.L_Result;
 import zelva.utils.concurrent.ConcurrentArrayCells;
 
-public class ConcurrentStressArray {
+public class ConcurrentStressArrayCells {
 
     public static void main(String[] args) throws Exception {Main.main(args);}
 

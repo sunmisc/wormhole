@@ -7,7 +7,7 @@ import java.util.*;
 @PreviewFeature
 public class CntArrayList<E> {
     private final TreeMap<Integer,Long> words = new TreeMap<>();
-    private final Map<Integer, E> values = new HashMap<>();
+    private final Map<Integer,E> values = new HashMap<>();
 
     public E get(int i) {
         int k = nextSetBit(0);
@@ -24,7 +24,7 @@ public class CntArrayList<E> {
         }
     }
     public void remove(int i) {
-        int k = nextSetBit(0);
+        int k = -1; i++;
         for (int q = 0; q < i; ++q) {
             k = nextSetBit(k+1);
         }
@@ -54,10 +54,8 @@ public class CntArrayList<E> {
 
     private static final long WORD_MASK = 0xFFFFFFFFFFFFFFFFL; // -1
 
-    int size;
 
     private void set(int bitIndex) {
-        size++;
 
         int wordIndex = wordIndex(bitIndex);
 
