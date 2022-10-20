@@ -1,4 +1,4 @@
-package concurrent.ArrayList;
+package utils.concurrent.ArrayList;
 
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.Scope;
@@ -28,7 +28,7 @@ public class BenchArrayList {
 
         @Benchmark public int modifyABArrayList() { return modTestList(); }
 
-        @Benchmark public int modifyArrayList() { return modJavaList(); }
+        @Benchmark public int modifyArrayList() { return modArrayList(); }
     }
 
     private static class ListsCombine {
@@ -50,7 +50,7 @@ public class BenchArrayList {
             return n;
         }
 
-        public int modJavaList() {
+        public int modArrayList() {
             int n = ThreadLocalRandom.current().nextInt();
             arrayList.add(n);
             arrayList.remove(0);

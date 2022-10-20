@@ -1,4 +1,4 @@
-package concurrent;
+package utils.MathUtils;
 
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.Param;
