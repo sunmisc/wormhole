@@ -1,3 +1,4 @@
+/*
 package concurrent.IntAdder;
 
 import org.openjdk.jcstress.Main;
@@ -50,3 +51,4 @@ public class ConcurrentStressIntAdder {
     }
 }
 
+*/

@@ -1,3 +1,4 @@
+/*
 package concurrent.ConcurrentArrayCells;
 
 import org.openjdk.jcstress.Main;
@@ -62,3 +63,4 @@ public class ConcurrentStressArrayCells {
         }
     }
 }
+*/
