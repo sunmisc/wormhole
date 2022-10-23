@@ -45,7 +45,7 @@ public class ConcurrentStressIntAdder {
 
         @Arbiter
         public void arbiter(L_Result s) {
-            s.r1 = cells.toString();
+            s.r1 = get();
         }
     }
 }
