@@ -38,8 +38,7 @@ public class IntAdder {
                     new AtomicInteger(delta)
             );
             if (prev != null) {
-                int sz = cells.length();
-                if (sz < NCPU) {
+                if (cells.length() < NCPU) {
                     cells.resize(x -> x < NCPU ? x << 1 : x);
                 }
             } else {
