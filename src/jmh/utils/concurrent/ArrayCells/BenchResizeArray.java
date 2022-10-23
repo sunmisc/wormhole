@@ -10,8 +10,8 @@ import org.openjdk.jmh.runner.options.Options;
 import org.openjdk.jmh.runner.options.OptionsBuilder;
 import zelva.utils.MathUtils;
 import zelva.utils.concurrent.ConcurrentArrayMap;
-import zelva.utils.concurrent.ConcurrentTransferArrayMap;
-import zelva.utils.concurrent.LockArrayArrayMap;
+import zelva.utils.concurrent.ConcurrentIndexMap;
+import zelva.utils.concurrent.LockArrayIndexMap;
 
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -50,10 +50,10 @@ public class BenchResizeArray {
         private final AtomicInteger a = new AtomicInteger();
         private final AtomicInteger b = new AtomicInteger();
 
-        private final ConcurrentTransferArrayMap<Integer> cac
-                = new ConcurrentTransferArrayMap<>(1_000_000);
-        private final ConcurrentArrayMap<Integer> bac
-                = new LockArrayArrayMap<>(1_000_000);
+        private final ConcurrentArrayMap<Integer> cac
+                = new ConcurrentArrayMap<>(1_000_000);
+        private final ConcurrentIndexMap<Integer> bac
+                = new LockArrayIndexMap<>(1_000_000);
 
 
         public int rzConcurrent() {

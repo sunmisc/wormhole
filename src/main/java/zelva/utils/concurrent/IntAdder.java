@@ -13,8 +13,8 @@ public class IntAdder {
     static final int START_CAPACITY = 2;
     static final int NCPU = Runtime.getRuntime().availableProcessors();
 
-    private final ConcurrentTransferArrayMap<AtomicInteger> cells
-            = new ConcurrentTransferArrayMap<>(START_CAPACITY);
+    private final ConcurrentArrayMap<AtomicInteger> cells
+            = new ConcurrentArrayMap<>(START_CAPACITY);
 
 
     static int spread(long h) {

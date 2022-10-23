@@ -12,8 +12,8 @@ public class ConcurrentBitSet {
     /* Used to shift left or right for a partial word mask */
     private static final long WORD_MASK = 0xFFFFFFFFFFFFFFFFL; // -1
 
-    private final ConcurrentTransferArrayMap<Long> words
-            = new ConcurrentTransferArrayMap<>(1);
+    private final ConcurrentArrayMap<Long> words
+            = new ConcurrentArrayMap<>(1);
 
     public void set(int bitIndex) {
         final int wordIndex = wordIndex(bitIndex);

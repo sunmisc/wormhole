@@ -7,18 +7,18 @@ import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.IntUnaryOperator;
 
-public class LockArrayArrayMap<E> extends ConcurrentArrayMap<E> {
+public class LockArrayIndexMap<E> extends ConcurrentIndexMap<E> {
     private final ReentrantReadWriteLock rwl = new ReentrantReadWriteLock();
     private final Lock r = rwl.readLock();
     private final Lock w = rwl.writeLock();
     private E[] array;
     transient EntrySetView<E> entrySet;
 
-    public LockArrayArrayMap(int cap) {
+    public LockArrayIndexMap(int cap) {
         this.array = (E[]) new Object[cap];
     }
 
-    public LockArrayArrayMap(E[] array) {
+    public LockArrayIndexMap(E[] array) {
         this.array = (E[]) Arrays.copyOf(array, array.length, Object[].class);
     }
     @Override
@@ -111,8 +111,8 @@ public class LockArrayArrayMap<E> extends ConcurrentArrayMap<E> {
 
 
     static final class EntrySetView<E> extends AbstractSet<Entry<Integer,E>> {
-        final LockArrayArrayMap<E> array;
-        EntrySetView(LockArrayArrayMap<E> array) {
+        final LockArrayIndexMap<E> array;
+        EntrySetView(LockArrayIndexMap<E> array) {
             this.array = array;
         }
         @Override
@@ -123,11 +123,11 @@ public class LockArrayArrayMap<E> extends ConcurrentArrayMap<E> {
         @Override public int size() { return array.size(); }
     }
     static final class EntrySetItr<E> implements Iterator<Map.Entry<Integer,E>> {
-        final LockArrayArrayMap<E> es;
+        final LockArrayIndexMap<E> es;
         int cursor = -1;
         E next;
 
-        EntrySetItr(LockArrayArrayMap<E> es) {
+        EntrySetItr(LockArrayIndexMap<E> es) {
             this.es = es;
         }
         @Override

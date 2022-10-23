@@ -3,7 +3,7 @@ package concurrent.ConcurrentArrayMap;
 import org.openjdk.jcstress.Main;
 import org.openjdk.jcstress.annotations.*;
 import org.openjdk.jcstress.infra.results.L_Result;
-import zelva.utils.concurrent.ConcurrentTransferArrayMap;
+import zelva.utils.concurrent.ConcurrentArrayMap;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -22,8 +22,8 @@ public class ConcurrentStressArrayMap {
             desc = "all updates"
     )
     @State
-    public static class CombineArrayArray extends ConcurrentTransferArrayMap<List<String>> {
-        public CombineArrayArray() { super(2); }
+    public static class CombineArrayIndex extends ConcurrentArrayMap<List<String>> {
+        public CombineArrayIndex() { super(2); }
         @Actor
         public void actor1() {
             List<String> list = computeIfAbsent(0,
