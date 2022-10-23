@@ -12,12 +12,6 @@ public abstract class ConcurrentArrayMap<E>
 
     transient KeySetView<E> keySetView;
 
-    public abstract E cae(int i, E c, E v);
-
-    public boolean cas(int i, E c, E v) {
-        return Objects.equals(cae(i,c,v),c);
-    }
-
     public abstract void resize(IntUnaryOperator resize);
 
     @Override
@@ -27,21 +21,6 @@ public abstract class ConcurrentArrayMap<E>
         return keySetView = new KeySetView<>(this);
     }
 
-    @Override
-    public E putIfAbsent(@NotNull Integer key, E value) {
-        return cae(key,null,value);
-    }
-
-    @Override
-    public boolean remove(@NotNull Object key, Object value) {
-
-        return cas((int) key,(E) value,null);
-    }
-
-    @Override
-    public boolean replace(@NotNull Integer key, @NotNull E oldValue, @NotNull E newValue) {
-        return cas(key,oldValue,newValue);
-    }
 
     @Override
     public E replace(@NotNull Integer key, @NotNull E value) {

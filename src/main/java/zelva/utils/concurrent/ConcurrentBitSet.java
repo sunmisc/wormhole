@@ -2,8 +2,7 @@ package zelva.utils.concurrent;
 
 import zelva.annotation.PreviewFeature;
 
-import java.util.Objects;
-import java.util.function.UnaryOperator;
+import java.util.StringJoiner;
 
 @PreviewFeature
 public class ConcurrentBitSet {
@@ -24,7 +23,8 @@ public class ConcurrentBitSet {
         }
 
         long mask = (1L << bitIndex);
-        getAndBitwiseOr(wordIndex, mask);
+
+        words.merge(wordIndex, mask, (old,m) -> old | m);
     }
 
     public void clear(int bitIndex) {
@@ -32,7 +32,8 @@ public class ConcurrentBitSet {
 
         long mask = ~(1L << bitIndex);
 
-        updateAndGet(wordIndex, x -> x == null ? null : x & mask);
+        words.computeIfPresent(wordIndex, (k,v) -> v & mask);
+
     }
 
     public int nextSetBit(int start) {
@@ -54,31 +55,20 @@ public class ConcurrentBitSet {
 
     @Override
     public String toString() {
-        StringBuilder builder = new StringBuilder();
-
+        StringJoiner joiner = new StringJoiner(
+                ", ",
+                "[",
+                "]"
+        );
         for (int i = 0;;) {
             int t = nextSetBit(i);
-            if (t < 0) break;
-            builder.append(t).append(' ');
+            if (t < 0)
+                break;
+            joiner.add(Integer.toString(t));
             i = t + 1;
         }
-        return builder.toString();
+        return joiner.toString();
     }
-
-    private Long updateAndGet(int index, UnaryOperator<Long> operator) {
-        for (Long n, t;;) {
-            t = operator.apply(n = words.get(index));
-            if (Objects.equals(n, t)) {
-                return t;
-            } else if (Objects.equals(words.cae(index, n, t), t)) {
-                return n;
-            }
-        }
-    }
-    private long getAndBitwiseOr(int index, long mask) {
-        return updateAndGet(index, x -> x == null ? mask : x | mask);
-    }
-
 
     private static int wordIndex(int bitIndex) {
         return bitIndex >> ADDRESS_BITS_PER_WORD;

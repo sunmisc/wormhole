@@ -32,9 +32,8 @@ public class IntAdder {
         AtomicInteger prev = cells.get(h & (cells.size() - 1));
 
         if (prev == null) {
-            prev = cells.cae(
+            prev = cells.putIfAbsent(
                     h & (cells.size() - 1),
-                    null,
                     new AtomicInteger(delta)
             );
             if (prev != null) {

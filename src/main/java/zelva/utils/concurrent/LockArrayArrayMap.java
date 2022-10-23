@@ -47,8 +47,8 @@ public class LockArrayArrayMap<E> extends ConcurrentArrayMap<E> {
         return entrySet = new EntrySetView<>(this);
     }
 
-    @Override
-    public E cae(int i, E c, E v) {
+
+    private E cae(int i, E c, E v) {
         w.lock();
         try {
             E p = array[i];
@@ -92,6 +92,21 @@ public class LockArrayArrayMap<E> extends ConcurrentArrayMap<E> {
         } finally {
             r.unlock();
         }
+    }
+
+    @Override
+    public E putIfAbsent(@NotNull Integer key, E value) {
+        return cae(key, null, value);
+    }
+
+    @Override
+    public boolean remove(@NotNull Object key, Object value) {
+        return cae((int)key, (E)value, null) == value;
+    }
+
+    @Override
+    public boolean replace(@NotNull Integer key, @NotNull E oldValue, @NotNull E newValue) {
+        return cae(key,oldValue,newValue) == oldValue;
     }
 
 

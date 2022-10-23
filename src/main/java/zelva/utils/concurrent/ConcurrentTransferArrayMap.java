@@ -138,13 +138,13 @@ public class ConcurrentTransferArrayMap<E>
             } else if (o instanceof ForwardingPointer f) {
                 arr = helpTransfer(f);
             } else if (o instanceof Cell n) {
-                E val = (E) n.getValue();
+                Object val = n.getValue();
                 if (val == null) {
                     if (weakCasAt(arr, i, n, new QCell<>(newValue))) {
                         return null;
                     }
                 } else if (n.cae(val, newValue) == val) {
-                    return val;
+                    return (E) val;
                 }
             }
         }
@@ -175,46 +175,86 @@ public class ConcurrentTransferArrayMap<E>
         }
     }
 
-    /**
-     * Atomically sets the element at index {@code i} to {@code newValue}
-     * if the element's current value, referred to as the <em>witness
-     * @param i the index
-     * @param expectedValue the expected value
-     * @param newValue the new value
-     * @return the witness value, which will be the same as the
-     * expected value if successful
-     */
     @Override
-    public E cae(final int i,
-                 final E expectedValue, final E newValue) {
-        if (expectedValue == newValue)
-            return newValue;
+    public E putIfAbsent(@NotNull Integer i, E val) {
         Object[] arr = shared.array();
-        for (Object o; ; ) {
+        for (Object o;;) {
             if ((o = arrayAt(arr, i)) == null) {
-                if (expectedValue == null) {
-                    if (weakCasAt(arr, i,
-                            null,
-                            new QCell<>(newValue))) {
-                        return null;
-                    }
-                } else {
+                if (weakCasAt(arr, i, null,
+                        new QCell<>(val))) {
                     return null;
                 }
             } else if (o instanceof ForwardingPointer f) {
                 arr = helpTransfer(f);
-            } else if (o instanceof Cell n) {
-                if (newValue == null) {
-                    E val = (E) n.getValue();
-                    if (val != expectedValue) {
+            } else if (o instanceof Cell<?> n) {
+                Object v = n.getValue();
+                if (v == null) {
+                    if (weakCasAt(arr, i, n, new QCell<>(val))) {
                         return null;
                     }
-                    val = (E) n.cae(expectedValue, null);
-
-                    return val == expectedValue ? remove(i) : val;
-
+                } else {
+                    return (E) v;
                 }
-                return (E) n.cae(expectedValue, newValue);
+            }
+        }
+    }
+
+    @Override
+    public boolean replace(@NotNull Integer i, @NotNull E oldVal, @NotNull E newVal) {
+        Object[] arr = shared.array();
+        for (Object o;;) {
+            if ((o = arrayAt(arr, i)) == null) {
+                return false;
+            } else if (o instanceof ForwardingPointer f) {
+                arr = helpTransfer(f);
+            } else if (o instanceof Cell n) {
+                return n.cae(oldVal, newVal) == oldVal;
+            }
+        }
+    }
+
+    @Override
+    public boolean remove(@NotNull Object idx, Object oldVal) {
+        if (oldVal == null) throw new NullPointerException();
+        int i = (int) idx;
+        Object[] arr = shared.array();
+        for (Object o;;) {
+            if ((o = arrayAt(arr, i)) == null) {
+                return false;
+            } else if (o instanceof ForwardingPointer f) {
+                arr = helpTransfer(f);
+            } else if (o instanceof Cell n) {
+                Object val = n.getValue();
+                if (val == null) {
+                    return false;
+                } else if (n.cae(oldVal, null) != oldVal) {
+                    return false;
+                }
+                for (;;) {
+                    if ((o = arrayAt(arr, i)) == null) {
+                        return false;
+                    } else if (o instanceof ForwardingPointer f) {
+                        arr = helpTransfer(f);
+                    } else if (o instanceof Cell<?> p) {
+                        if (n != p) {
+                            return false;
+                        } else if (weakCasAt(arr, i, p, null)) {
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    private Cell<?> removeIf(int i, Cell<?> cell) {
+        Object[] arr = shared.array();
+        for (Object o;;) {
+            if ((o = arrayAt(arr, i)) == null) {
+                return null;
+            } else if (o instanceof ForwardingPointer f) {
+                arr = helpTransfer(f);
+            } else if (o instanceof Cell n) {
+                return n == cell ? (Cell<?>) caeAt(arr, i, n, null) : n;
             }
         }
     }
