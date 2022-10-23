@@ -2,27 +2,27 @@ package zelva.utils.concurrent;
 
 import org.jetbrains.annotations.NotNull;
 
-import java.util.Arrays;
-import java.util.Iterator;
-import java.util.NoSuchElementException;
+import java.util.*;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.IntUnaryOperator;
 
-public class LockArrayCells<E> extends ConcurrentCells<E> {
+public class LockArrayArrayMap<E> extends ConcurrentArrayMap<E> {
     private final ReentrantReadWriteLock rwl = new ReentrantReadWriteLock();
     private final Lock r = rwl.readLock();
     private final Lock w = rwl.writeLock();
     private E[] array;
+    transient EntrySetView<E> entrySet;
 
-    public LockArrayCells(int cap) {
+    public LockArrayArrayMap(int cap) {
         this.array = (E[]) new Object[cap];
     }
 
-    public LockArrayCells(E[] array) {
+    public LockArrayArrayMap(E[] array) {
         this.array = (E[]) Arrays.copyOf(array, array.length, Object[].class);
     }
-    public E set(int i, E s) {
+    @Override
+    public E put(Integer i, E s) {
         w.lock();
         try {
             E d = array[i];
@@ -35,8 +35,16 @@ public class LockArrayCells<E> extends ConcurrentCells<E> {
 
 
     @Override
-    public E remove(int i) {
-        return set(i, null);
+    public E remove(Object i) {
+        return put((int) i, null);
+    }
+
+    @NotNull
+    @Override
+    public Set<Map.Entry<Integer,E>> entrySet() {
+        EntrySetView<E> es;
+        if ((es = entrySet) != null) return es;
+        return entrySet = new EntrySetView<>(this);
     }
 
     @Override
@@ -67,7 +75,7 @@ public class LockArrayCells<E> extends ConcurrentCells<E> {
     }
 
     @Override
-    public int length() {
+    public int size() {
         r.lock();
         try {
             return array.length;
@@ -77,52 +85,57 @@ public class LockArrayCells<E> extends ConcurrentCells<E> {
     }
 
     @Override
-    public E get(int i) {
+    public E get(Object i) {
         r.lock();
         try {
-            return array[i];
-        } finally {
-            r.unlock();
-        }
-    }
-    @Override
-    public String toString() {
-        r.lock();
-        try {
-            return Arrays.toString(array);
+            return array[(int) i];
         } finally {
             r.unlock();
         }
     }
 
-    @NotNull
-    @Override
-    public Iterator<E> iterator() {
-        return new Itr<>(this);
-    }
 
-    static final class Itr<E> implements Iterator<E> {
-        final LockArrayCells<E> es;
+    static final class EntrySetView<E> extends AbstractSet<Entry<Integer,E>> {
+        final LockArrayArrayMap<E> array;
+        EntrySetView(LockArrayArrayMap<E> array) {
+            this.array = array;
+        }
+        @Override
+        public Iterator<Entry<Integer, E>> iterator() {
+            return new EntrySetItr<>(array);
+        }
+
+        @Override public int size() { return array.size(); }
+    }
+    static final class EntrySetItr<E> implements Iterator<Map.Entry<Integer,E>> {
+        final LockArrayArrayMap<E> es;
         int cursor = -1;
         E next;
 
-        Itr(LockArrayCells<E> es) {
+        EntrySetItr(LockArrayArrayMap<E> es) {
             this.es = es;
         }
         @Override
         public boolean hasNext() {
-            Object[] arr = es.array; int i;
-            if ((i = ++cursor) == arr.length) {
-                cursor = -1;
-                return false;
-            }
             es.r.lock();
             try {
+                Object[] arr = es.array; int i;
+                if ((i = ++cursor) == arr.length) {
+                    cursor = -1;
+                    return false;
+                }
                 next = (E) arr[i];
                 return true;
             } finally {
                 es.r.unlock();
             }
+        }
+        @Override
+        public Map.Entry<Integer,E> next() {
+            int k = cursor;
+            if (k >= 0)
+                return new IndexEntry<>(k,next);
+            throw new NoSuchElementException();
         }
         @Override
         public void remove() {
@@ -133,11 +146,5 @@ public class LockArrayCells<E> extends ConcurrentCells<E> {
             next = null;
         }
 
-        @Override
-        public E next() {
-            if (cursor >= 0)
-                return next;
-            throw new NoSuchElementException();
-        }
     }
 }

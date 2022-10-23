@@ -1,8 +1,11 @@
 package zelva.utils.concurrent;
 
+import zelva.annotation.PreviewFeature;
+
 import java.util.Objects;
 import java.util.function.UnaryOperator;
 
+@PreviewFeature
 public class ConcurrentBitSet {
     private static final int ADDRESS_BITS_PER_WORD
             = Integer.numberOfTrailingZeros(Long.SIZE);
@@ -10,13 +13,13 @@ public class ConcurrentBitSet {
     /* Used to shift left or right for a partial word mask */
     private static final long WORD_MASK = 0xFFFFFFFFFFFFFFFFL; // -1
 
-    private final ConcurrentArrayCells<Long> words
-            = new ConcurrentArrayCells<>(1);
+    private final ConcurrentTransferArrayMap<Long> words
+            = new ConcurrentTransferArrayMap<>(1);
 
     public void set(int bitIndex) {
         final int wordIndex = wordIndex(bitIndex);
 
-        if (wordIndex >= words.length()) {
+        if (wordIndex >= words.size()) {
             words.resize(x -> wordIndex >= x ? x << 1 : x);
         }
 
@@ -32,39 +35,16 @@ public class ConcurrentBitSet {
         updateAndGet(wordIndex, x -> x == null ? null : x & mask);
     }
 
-    public int removeNextSetBit(int start) {
-        int u = wordIndex(start);
-
-        Long w = words.get(u);
-        if (w == null)
-            return -1;
-        Long bits = w;
-        for (Long i = w & (WORD_MASK << start);;) {
-            if (bits != 0) {
-                int idx = (u * Long.SIZE) + Long.numberOfTrailingZeros(i);
-
-                if (Objects.equals(words.cae(u,
-                        bits,
-                        bits & ~(1L << idx)
-                ), bits)) { return idx; }
-            }
-            if (++u >= words.length() ||
-                    (i = bits = words.get(u)) == null) {
-                return -1;
-            }
-        }
-    }
-
     public int nextSetBit(int start) {
         int u = wordIndex(start);
-        if (u >= words.length()) return -1;
+        if (u >= words.size()) return -1;
         Long w = words.get(u);
         if (w == null)
             return -1;
         for (Long bits = w & (WORD_MASK << start);;) {
             if (bits != 0)
                 return (u * Long.SIZE) + Long.numberOfTrailingZeros(bits);
-            else if (++u >= words.length() ||
+            else if (++u >= words.size() ||
                     (bits = words.get(u)) == null) {
                 return -1;
             }

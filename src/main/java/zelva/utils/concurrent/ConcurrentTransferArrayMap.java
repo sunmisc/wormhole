@@ -5,9 +5,7 @@ import org.jetbrains.annotations.NotNull;
 import java.io.*;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
-import java.util.Iterator;
-import java.util.NoSuchElementException;
-import java.util.Objects;
+import java.util.*;
 import java.util.function.IntUnaryOperator;
 
 /**
@@ -18,8 +16,8 @@ import java.util.function.IntUnaryOperator;
  * @author ZelvaLea
  * @param <E> The base class of elements held in this array
  */
-public class ConcurrentArrayCells<E>
-        extends ConcurrentCells<E>
+public class ConcurrentTransferArrayMap<E>
+        extends ConcurrentArrayMap<E>
         implements Serializable {
     /*
      * Overview:
@@ -71,11 +69,13 @@ public class ConcurrentArrayCells<E>
     /* ---------------- Field -------------- */
     transient volatile Shared shared; // current array claimant
 
+    transient EntrySetView<E> entrySet;
 
-    public ConcurrentArrayCells(int size) {
+
+    public ConcurrentTransferArrayMap(int size) {
         this.shared = new QShared(new Object[size]);
     }
-    public ConcurrentArrayCells(E[] array) {
+    public ConcurrentTransferArrayMap(E[] array) {
         int n; Object o;
         // parallelize copy using Stream API?
         Object[] nodes = new Object[n = array.length];
@@ -91,18 +91,20 @@ public class ConcurrentArrayCells<E>
      * @return the current length of the array
      */
     @Override
-    public int length() {
+    public int size() {
         return shared.array().length;
     }
 
     /**
      * Returns the current value of the element at index {@code i}
      *
-     * @param i the index
+     * @param c the index
      * @return the current value
      */
     @Override
-    public E get(int i) {
+    public E get(Object c) {
+        Objects.requireNonNull(c);
+        int i = (int) c;
         Object[] arr = shared.array();
         for (Object o;;) {
             if ((o = arrayAt(arr, i)) == null) {
@@ -123,7 +125,8 @@ public class ConcurrentArrayCells<E>
      * @return the previous value
      */
     @Override
-    public E set(int i, E newValue) {
+    public E put(Integer i, E newValue) {
+        Objects.requireNonNull(i);
         Objects.requireNonNull(newValue);
         Object[] arr = shared.array();
         for (Object o;;) {
@@ -150,11 +153,13 @@ public class ConcurrentArrayCells<E>
     /**
      * Remove a cell from the index {@code i}
      *
-     * @param i the index
+     * @param c the index
      * @return the previous value
      */
     @Override
-    public E remove(int i) {
+    public E remove(Object c) {
+        Objects.requireNonNull(c);
+        int i = (int)c;
         Object[] arr = shared.array();
         for (Object o;;) {
             if ((o = arrayAt(arr, i)) == null) {
@@ -216,7 +221,7 @@ public class ConcurrentArrayCells<E>
 
     /**
      * resize array to {@code i} length
-     * @param length new array length
+     * @param operator new array length
      */
     @Override
     public void resize(IntUnaryOperator operator) {
@@ -363,21 +368,37 @@ public class ConcurrentArrayCells<E>
     }
     @NotNull
     @Override
-    public Iterator<E> iterator() {
-        return new Itr<>(this);
+    public Set<Map.Entry<Integer,E>> entrySet() {
+        EntrySetView<E> es;
+        if ((es = entrySet) != null) return es;
+        return entrySet = new EntrySetView<>(this);
     }
-    static final class Itr<E> implements Iterator<E> {
-        final ConcurrentArrayCells<E> array;
+
+    static final class EntrySetView<E> extends AbstractSet<Map.Entry<Integer,E>> {
+        final ConcurrentTransferArrayMap<E> array;
+        EntrySetView(ConcurrentTransferArrayMap<E> array) {
+            this.array = array;
+        }
+        @Override
+        public Iterator<Entry<Integer, E>> iterator() {
+            return new EntrySetItr<>(array);
+        }
+
+        @Override public int size() { return array.size(); }
+    }
+    static final class EntrySetItr<E> implements Iterator<Map.Entry<Integer,E>> {
+        final ConcurrentTransferArrayMap<E> array;
         int cursor = -1;
         E next;
 
-        Itr(ConcurrentArrayCells<E> array) {
+        EntrySetItr(ConcurrentTransferArrayMap<E> array) {
             this.array = array;
         }
         @Override
         public boolean hasNext() {
-            Object[] arr = array.shared.array(); int i;
-            if ((i = ++cursor) == arr.length) {
+            Object[] arr = array.shared.array();
+            int i = ++cursor;
+            if (i == arr.length) {
                 cursor = -1;
                 return false;
             }
@@ -387,11 +408,24 @@ public class ConcurrentArrayCells<E>
                     return true;
                 } else if (o instanceof ForwardingPointer t) {
                     arr = t.nextCells;
+                    if (i == arr.length) {
+                        cursor = -1;
+                        return false;
+                    }
                 } else if (o instanceof Cell<?> f) {
                     next = (E) f.getValue();
                     return true;
                 }
             }
+        }
+
+        @Override
+        public Map.Entry<Integer,E> next() {
+            int k = cursor;
+            if (k >= 0) {
+                return new IndexEntry<>(k, next);
+            }
+            throw new NoSuchElementException();
         }
         @Override
         public void remove() {
@@ -401,46 +435,30 @@ public class ConcurrentArrayCells<E>
             array.remove(c);
             next = null;
         }
-
-        @Override
-        public E next() {
-            if (cursor >= 0)
-                return next;
-            throw new NoSuchElementException();
-        }
     }
 
     @Serial
     private void writeObject(ObjectOutputStream s)
             throws IOException {
-        Object[] arr = shared.array();
-        int len = arr.length;
-        s.writeInt(len);
-        for (int i = 0; i < len; ++i) {
-            for (Object o = arrayAt(arr, i);;) {
-                if (o == null) {
-                    s.writeObject(null);
-                    break;
-                } else if (o instanceof ForwardingPointer f) {
-                    o = arrayAt(f.nextCells,i);
-                } else if (o instanceof Cell<?> f) {
-                    s.writeObject(f.getValue());
-                    break;
-                }
+        forEach((k,v) -> {
+            try {
+                s.writeObject(k); s.writeObject(v);
+            } catch (IOException e) {
+                throw new RuntimeException(e);
             }
-        }
+        });
+        s.writeObject(null);
     }
     @Serial
     private void readObject(ObjectInputStream s)
             throws IOException, ClassNotFoundException {
-        int c = s.readInt();
-        Object[] arr = new Object[c];
-        for (int i = 0; i < c; ++i) {
-            Object o = s.readObject();
-            if (o != null)
-                arr[i] = new QCell<>(o);
+        List<Object> list = new ArrayList<>();
+        for (;;) {
+            Object k = s.readObject(), v = s.readObject();
+            if (k == null) break;
+            list.add((int) k,v);
         }
-        this.shared = new QShared(arr);
+        this.shared = new QShared(list.toArray());
     }
     /*
      * Atomic access methods are used for array elements as well
@@ -519,7 +537,7 @@ public class ConcurrentArrayCells<E>
     static {
         try {
             MethodHandles.Lookup l = MethodHandles.lookup();
-            LEVELS = l.findVarHandle(ConcurrentArrayCells.class, "shared", Shared.class);
+            LEVELS = l.findVarHandle(ConcurrentTransferArrayMap.class, "shared", Shared.class);
         } catch (ReflectiveOperationException e) {
             throw new ExceptionInInitializerError(e);
         }
