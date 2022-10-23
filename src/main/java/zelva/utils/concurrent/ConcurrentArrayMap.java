@@ -426,7 +426,7 @@ public class ConcurrentArrayMap<E>
             Object[] arr = array.shared.array();
             int i = ++cursor;
             if (i == arr.length) {
-                cursor = -1;
+                cursor = -1; // next = null;?
                 return false;
             }
             for (Object o; ; ) {
@@ -436,7 +436,7 @@ public class ConcurrentArrayMap<E>
                 } else if (o instanceof ForwardingPointer t) {
                     arr = t.nextCells;
                     if (i == arr.length) {
-                        cursor = -1;
+                        cursor = -1; // next = null;?
                         return false;
                     }
                 } else if (o instanceof Cell<?> f) {
