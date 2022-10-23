@@ -1,12 +1,14 @@
 package zelva.utils.concurrent;
 
+import zelva.annotation.PreviewFeature;
+
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * @see java.util.concurrent.atomic.LongAdder
  * @author ZelvaLea
  */
-@Deprecated
+@PreviewFeature
 public class IntAdder {
     static final int START_CAPACITY = 2;
     static final int NCPU = Runtime.getRuntime().availableProcessors();
