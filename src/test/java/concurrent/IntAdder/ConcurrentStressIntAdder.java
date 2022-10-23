@@ -1,4 +1,3 @@
-/*
 package concurrent.IntAdder;
 
 import org.openjdk.jcstress.Main;
@@ -46,9 +45,8 @@ public class ConcurrentStressIntAdder {
 
         @Arbiter
         public void arbiter(L_Result s) {
-            s.r1 = get();
+            s.r1 = cells.toString();
         }
     }
 }
 
-*/

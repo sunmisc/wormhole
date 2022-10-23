@@ -13,7 +13,7 @@ public class IntAdder {
     static final int START_CAPACITY = 2;
     static final int NCPU = Runtime.getRuntime().availableProcessors();
 
-    private final ConcurrentArrayCells<AtomicInteger> cells
+    public final ConcurrentArrayCells<AtomicInteger> cells
             = new ConcurrentArrayCells<>(START_CAPACITY);
 
 

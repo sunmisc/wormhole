@@ -4,15 +4,14 @@ import java.util.Objects;
 import java.util.function.UnaryOperator;
 
 public class ConcurrentBitSet {
-    private static final int ADDRESS_BITS_PER_WORD = 6;
-    private static final int BITS_PER_WORD = 1 << ADDRESS_BITS_PER_WORD;
+    private static final int ADDRESS_BITS_PER_WORD
+            = Integer.numberOfTrailingZeros(Long.SIZE);
 
     /* Used to shift left or right for a partial word mask */
     private static final long WORD_MASK = 0xFFFFFFFFFFFFFFFFL; // -1
 
     private final ConcurrentArrayCells<Long> words
             = new ConcurrentArrayCells<>(1);
-
 
     public void set(int bitIndex) {
         final int wordIndex = wordIndex(bitIndex);
@@ -42,7 +41,7 @@ public class ConcurrentBitSet {
         Long bits = w;
         for (Long i = w & (WORD_MASK << start);;) {
             if (bits != 0) {
-                int idx = (u * BITS_PER_WORD) + Long.numberOfTrailingZeros(i);
+                int idx = (u * Long.SIZE) + Long.numberOfTrailingZeros(i);
 
                 if (Objects.equals(words.cae(u,
                         bits,
@@ -64,7 +63,7 @@ public class ConcurrentBitSet {
             return -1;
         for (Long bits = w & (WORD_MASK << start);;) {
             if (bits != 0)
-                return (u * BITS_PER_WORD) + Long.numberOfTrailingZeros(bits);
+                return (u * Long.SIZE) + Long.numberOfTrailingZeros(bits);
             else if (++u >= words.length() ||
                     (bits = words.get(u)) == null) {
                 return -1;
@@ -86,7 +85,7 @@ public class ConcurrentBitSet {
         return builder.toString();
     }
 
-    private long updateAndGet(int index, UnaryOperator<Long> operator) {
+    private Long updateAndGet(int index, UnaryOperator<Long> operator) {
         for (Long n, t;;) {
             t = operator.apply(n = words.get(index));
             if (Objects.equals(n, t)) {
