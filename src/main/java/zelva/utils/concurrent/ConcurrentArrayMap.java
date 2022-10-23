@@ -246,19 +246,6 @@ public class ConcurrentArrayMap<E>
             }
         }
     }
-    private Cell<?> removeIf(int i, Cell<?> cell) {
-        Object[] arr = shared.array();
-        for (Object o;;) {
-            if ((o = arrayAt(arr, i)) == null) {
-                return null;
-            } else if (o instanceof ForwardingPointer f) {
-                arr = helpTransfer(f);
-            } else if (o instanceof Cell n) {
-                return n == cell ? (Cell<?>) caeAt(arr, i, n, null) : n;
-            }
-        }
-    }
-
     /**
      * resize array to {@code i} length
      * @param operator new array length
