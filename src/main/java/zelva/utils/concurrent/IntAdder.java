@@ -15,14 +15,17 @@ public class IntAdder {
             = new ConcurrentArrayCells<>(START_CAPACITY);
 
 
-    static int spread(int h) {
-        return h ^ (h >>> 16);
+    static int spread(long h) {
+        h ^= h << 13;
+        h ^= h >>> 17;
+        h ^= h << 5;
+        return (int) h;
     }
 
 
     public void add(int delta) {
         Thread current = Thread.currentThread();
-        int h = spread(current.hashCode());
+        int h = spread(current.threadId());
 
         AtomicInteger prev = cells.get(h & (cells.length() - 1));
 
@@ -44,8 +47,15 @@ public class IntAdder {
         prev.getAndAdd(delta);
     }
 
-    public int get() {
-        int sum = 0;
+    public void reset() {
+        for (AtomicInteger c : cells) {
+            if (c == null) continue;
+            c.set(0);
+        }
+    }
+
+    public long get() {
+        long sum = 0;
         for (AtomicInteger c : cells) {
             if (c == null) continue;
             sum += c.get();

@@ -2,7 +2,7 @@ package zelva;
 
 import org.openjdk.jcstress.Main;
 import org.openjdk.jcstress.annotations.*;
-import org.openjdk.jcstress.infra.results.I_Result;
+import org.openjdk.jcstress.infra.results.L_Result;
 import zelva.utils.concurrent.IntAdder;
 
 public class ConcurrentStressIntAdder {
@@ -44,7 +44,7 @@ public class ConcurrentStressIntAdder {
         }
 
         @Arbiter
-        public void arbiter(I_Result s) {
+        public void arbiter(L_Result s) {
             s.r1 = get();
         }
     }
