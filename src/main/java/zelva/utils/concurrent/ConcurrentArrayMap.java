@@ -286,24 +286,24 @@ public class ConcurrentArrayMap<E>
                 ? f.nextCells : l.array();
     }
     private Shared tryTransfer(ForwardingPointer a) {
-        int i;
-        outer: while ((i = a.strideIndex) < a.bound) {
-            int ls = Math.min(a.bound, i + a.stride);
-            if (!a.weakCasStride(i,ls))
+        int startChunk;
+        outer: while ((startChunk = a.strideIndex) < a.bound) {
+            int endChunk = Math.min(a.bound, startChunk + a.stride);
+            if (!a.weakCasStride(startChunk, endChunk))
                 continue;
-            for (int s = i; s < ls; s++) {
-                // trying to switch to a newer array
-                Shared lst = shared;
-                if (!(lst instanceof ForwardingPointer f)) {
-                    return lst; // our mission is over
-                } else if (a != f) {
+            for (int i = startChunk; i < endChunk; i++) {
+                Shared n = shared;
+                if (n == a) {
+                    a.transferSlot(i);
+                } else if (n instanceof ForwardingPointer f) {
+                    // trying to switch to a newer array
                     a = f;
                     continue outer;
                 } else {
-                    a.transferSlot(s);
+                    return n; // our mission is over
                 }
             }
-            final int delta = ls - i, f = a.bound;
+            final int delta = endChunk - startChunk, f = a.bound;
             if (delta > 0 && a.getAndAddPendingCount(delta) + delta >= f) {
                 return a;
             /*
@@ -311,14 +311,15 @@ public class ConcurrentArrayMap<E>
              * the set value or a value greater than the set value,
              * which is already out of scope of the array
              */
-            } else if (ls >= f) {
+            } else if (endChunk >= f) {
                 break;
             }
         }
         // recheck before commit and help
-        for (int s = 0; s < i; s++) {
-            if (a.pendingCount >= i) return a;
-            a.transferSlot(s);
+        for (int i = 0; i < startChunk; i++) {
+            if (a.pendingCount >= startChunk)
+                return a;
+            a.transferSlot(i);
         }
         // non-volatile write
         a.pendingCount = a.bound;
