@@ -11,7 +11,7 @@ import static java.util.concurrent.CompletableFuture.completedFuture;
 /**
  * @author ZelvaLea
  */
-public class SequentialScheduler {
+public class SequentialScope {
     final AtomicReference<CompletableFuture<?>> stack
             = new AtomicReference<>(completedFuture(null));
 

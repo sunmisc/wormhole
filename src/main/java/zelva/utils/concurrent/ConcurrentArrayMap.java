@@ -79,7 +79,7 @@ public class ConcurrentArrayMap<E>
         int n; Object o;
         // parallelize copy using Stream API?
         Object[] nodes = new Object[n = array.length];
-        for (int i = 0; i < n; ++i) {
+        for (int i = 0; i < n; i++) {
             if ((o = array[i]) != null)
                 nodes[i] = new QCell<>(o);
         }
@@ -262,7 +262,7 @@ public class ConcurrentArrayMap<E>
                 // after a successful commit, you can be sure that
                 // we will commit either the same array or the next one
                 if (p instanceof ForwardingPointer f &&
-                        transfer(f) instanceof ForwardingPointer r && // recheck
+                        tryTransfer(f) instanceof ForwardingPointer r && // recheck
                         !LEVELS.weakCompareAndSet(
                                 this, r,
                                 new QShared((r.nextCells)))
@@ -281,17 +281,17 @@ public class ConcurrentArrayMap<E>
         }
     }
     private Object[] helpTransfer(ForwardingPointer a) {
-        Shared l = transfer(a);
+        Shared l = tryTransfer(a);
         return l instanceof ForwardingPointer f
                 ? f.nextCells : l.array();
     }
-    private Shared transfer(ForwardingPointer a) {
+    private Shared tryTransfer(ForwardingPointer a) {
         int i;
-        outer: while ((i = a.strideIndex) < a.fence) {
-            int ls = Math.min(a.fence, i + a.stride);
+        outer: while ((i = a.strideIndex) < a.bound) {
+            int ls = Math.min(a.bound, i + a.stride);
             if (!a.weakCasStride(i,ls))
                 continue;
-            for (int s = i; s < ls; ++s) {
+            for (int s = i; s < ls; s++) {
                 // trying to switch to a newer array
                 Shared lst = shared;
                 if (!(lst instanceof ForwardingPointer f)) {
@@ -303,68 +303,70 @@ public class ConcurrentArrayMap<E>
                     a.transferSlot(s);
                 }
             }
-            int t;
-            if (ls >= a.fence) {
-                break;
-            } else if ((t = ls - i) > 0 &&
-                    a.getAndAddCtl(t) + t >= a.fence) {
+            final int delta = ls - i, f = a.bound;
+            if (delta > 0 && a.getAndAddPendingCount(delta) + delta >= f) {
                 return a;
+            /*
+             * after a successful cas, we can read either
+             * the set value or a value greater than the set value,
+             * which is already out of scope of the array
+             */
+            } else if (ls >= f) {
+                break;
             }
         }
         // recheck before commit and help
-        for (int s = 0; s < i; ++s) {
-            if (a.sizeCtl >= a.fence)
-                return a;
+        for (int s = 0; s < i; s++) {
+            if (a.pendingCount >= i) return a;
             a.transferSlot(s);
         }
         // non-volatile write
-        a.sizeCtl = a.fence;
+        a.pendingCount = a.bound;
         return a;
     }
 
     static final class ForwardingPointer implements Shared {
-        final int fence; // last index of elements from old to new
+        final int bound; // last index of elements from old to new
         final int stride; // the size of the transfer chunk can be from 1 to fence
         final Object[] prevCells, nextCells; // owning array
 
         int strideIndex; // current transfer chunk
-        int sizeCtl; // total number of transferred chunks
+        int pendingCount; // total number of transferred chunks
 
         ForwardingPointer(Shared prev, Object[] nextCells) {
             this.prevCells = prev.array(); this.nextCells = nextCells;
             // calculate the last index
-            int n = Math.min(prev.fence(), nextCells.length);
-            this.fence = n;
+            int n = Math.min(prev.targetSize(), nextCells.length);
+            this.bound = n;
             // threshold
             this.stride = Math.max(MIN_TRANSFER_STRIDE, (n >>> 3) / NCPU);
         }
 
         @Override public Object[] array() { return prevCells; }
 
-        @Override public int fence() { return fence; }
+        @Override public int targetSize() { return bound; }
 
-        int getAndAddCtl(int v) {
-            return (int)SIZECTL.getAndAdd(this, v);
+        int getAndAddPendingCount(int v) {
+            return (int) PENDINGCOUNT.getAndAdd(this, v);
         }
         boolean weakCasStride(int c, int v) {
             return STRIDEINDEX.weakCompareAndSet(this, c, v);
         }
         void transferSlot(int i) {
             for (Object[] sh = prevCells;;) {
-                Object o, c;
-                if (((o = arrayAt(sh, i)) == null &&
-                        ((c = caeAt(sh, i,
-                                null, this)
-                        ) == null || c == this)) ||
-                        o == this) {
-                    break;
+                Object o;
+                if ((o = arrayAt(sh, i)) == this ||
+                        (o == null &&
+                        (o = caeAt(sh, i, null, this)) == null ||
+                        o == this)
+                ) { break;
                 } else if (o instanceof ForwardingPointer f) {
                     sh = f.nextCells;
                 } else if (o instanceof ForwardingCell) {
                     // Thread.onSpinWait();
                 } else if (o instanceof Cell<?> e) {
-                    if ((c = caeAt(
-                            sh, i,
+                    Object c;
+                    if ((c = caeAt(sh, i,
                             o, new ForwardingCell<>(e))
                     ) == o) {
                         // assert nextCells[i] == null;
@@ -381,13 +383,13 @@ public class ConcurrentArrayMap<E>
 
         // VarHandle mechanics
         private static final VarHandle STRIDEINDEX;
-        private static final VarHandle SIZECTL;
+        private static final VarHandle PENDINGCOUNT;
 
         static {
             try {
                 MethodHandles.Lookup l = MethodHandles.lookup();
                 STRIDEINDEX = l.findVarHandle(ForwardingPointer.class, "strideIndex", int.class);
-                SIZECTL = l.findVarHandle(ForwardingPointer.class, "sizeCtl", int.class);
+                PENDINGCOUNT = l.findVarHandle(ForwardingPointer.class, "pendingCount", int.class);
             } catch (ReflectiveOperationException e) {
                 throw new ExceptionInInitializerError(e);
             }
@@ -480,9 +482,10 @@ public class ConcurrentArrayMap<E>
     private void readObject(ObjectInputStream s)
             throws IOException, ClassNotFoundException {
         List<Object> list = new ArrayList<>();
-        for (;;) {
-            Object k = s.readObject(), v = s.readObject();
+        for (Object k,v;;) {
+            k = s.readObject();
             if (k == null) break;
+            v = s.readObject();
             list.add((int) k,v);
         }
         this.shared = new QShared(list.toArray());
@@ -507,7 +510,9 @@ public class ConcurrentArrayMap<E>
     @FunctionalInterface
     interface Shared {
         Object[] array();
-        default int fence() { return array().length; }
+        default int targetSize() {
+            return array().length;
+        }
     }
 
     interface Cell<E> {
@@ -517,9 +522,9 @@ public class ConcurrentArrayMap<E>
     }
 
     record ForwardingCell<E>(Cell<E> main) implements Cell<E> {
-        @Override public E getValue() {return main.getValue();}
-        @Override public E cae(E c, E v) {return main.cae(c,v);}
-        @Override public String toString() {return Objects.toString(getValue());}
+        @Override public E getValue() { return main.getValue(); }
+        @Override public E cae(E c, E v) { return main.cae(c,v); }
+        @Override public String toString() { return main.toString(); }
     }
     static final class QCell<E> implements Cell<E> {
         volatile E val;
