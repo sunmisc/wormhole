@@ -39,15 +39,22 @@ public class ConcurrentArrayMap<E>
      * if it is found that a new array has appeared,
      * it depends on the sizes of the chunks themselves
      *
-     * For this we have strideIndex and sizeCtl field strideIndex
+     * For this we have strideIndex and pendingCount field strideIndex
      * divides the array into chunks and gives to the streams,
-     * and sizeCtl is the total number of chunks that are already filled
+     * and pendingCount is the total number of chunks that are already filled
      *
      * the memory problem is solved by a partial spin lock,
      * in cases of deleting an element, for this we use a redirect node,
      * which allows us to read/update the value,
      * but does not allow us to remove the node from the array,
      * this is a unique case of deletion and resize
+     *
+     * The transfer itself is in the "loop"
+     * after a successful commit of the new array
+     * we start migrating the current or more recent ForwardingPointer
+     * before a successful commit
+     * At the same time, readers do not see the new array until the commit,
+     *  so there is no disagreement with the size
      */
 
     /* ---------------- Constants -------------- */
@@ -139,11 +146,12 @@ public class ConcurrentArrayMap<E>
                 arr = helpTransfer(f);
             } else if (o instanceof Cell n) {
                 Object val = n.getValue();
+                // Replacing a dead cell
                 if (val == null) {
                     if (weakCasAt(arr, i, n, new QCell<>(newValue))) {
                         return null;
                     }
-                } else if (n.cae(val, newValue) == val) {
+                } else if (n.cas(val, newValue)) {
                     return (E) val;
                 }
             }
@@ -208,7 +216,7 @@ public class ConcurrentArrayMap<E>
             } else if (o instanceof ForwardingPointer f) {
                 arr = helpTransfer(f);
             } else if (o instanceof Cell n) {
-                return n.cae(oldVal, newVal) == oldVal;
+                return n.cas(oldVal, newVal);
             }
         }
     }
@@ -225,9 +233,15 @@ public class ConcurrentArrayMap<E>
                 arr = helpTransfer(f);
             } else if (o instanceof Cell n) {
                 Object val = n.getValue();
+                /*
+                 * marks a dead cell; Dead cell - null value
+                 * after that, we only have to change the cell,
+                 * this will allow us to safely remove dead cells,
+                 * without fear that we will remove the added value
+                 */
                 if (val == null) {
                     return false;
-                } else if (n.cae(oldVal, null) != oldVal) {
+                } else if (!n.cas(oldVal, null)) {
                     return false;
                 }
                 for (;;) {
@@ -235,6 +249,8 @@ public class ConcurrentArrayMap<E>
                         return false;
                     } else if (o instanceof ForwardingPointer f) {
                         arr = helpTransfer(f);
+                    } else if (o instanceof ForwardingCell<?>) {
+                        Thread.onSpinWait();
                     } else if (o instanceof Cell<?> p) {
                         if (n != p) {
                             return false;
@@ -256,7 +272,7 @@ public class ConcurrentArrayMap<E>
         for (Shared p;;) {
             int len;
             if (((p = shared) instanceof QShared) &&
-                    (len = p.array().length) == operator.applyAsInt(len)) {
+                    (len = p.targetSize()) == operator.applyAsInt(len)) {
                 return;
             } else if (advance) {
                 // after a successful commit, you can be sure that
@@ -269,8 +285,7 @@ public class ConcurrentArrayMap<E>
                 ) { continue; }
                 return;
             } else {
-                len = p instanceof ForwardingPointer f ?
-                        f.nextCells.length : p.array().length;
+                len = targetSize(p);
                 int nextLen = operator.applyAsInt(len);
                 if (len == nextLen ||
                         LEVELS.weakCompareAndSet(
@@ -279,6 +294,11 @@ public class ConcurrentArrayMap<E>
                 ) { advance = true; }
             }
         }
+    }
+    private static int targetSize(Shared shared) {
+        return shared instanceof ForwardingPointer f
+                ? f.nextCells.length
+                : shared.array().length;
     }
     private Object[] helpTransfer(ForwardingPointer a) {
         Shared l = tryTransfer(a);
@@ -334,10 +354,10 @@ public class ConcurrentArrayMap<E>
         int strideIndex; // current transfer chunk
         int pendingCount; // total number of transferred chunks
 
-        ForwardingPointer(Shared prev, Object[] nextCells) {
-            this.prevCells = prev.array(); this.nextCells = nextCells;
+        ForwardingPointer(Shared prevShared, Object[] nextArray) {
+            this.prevCells = prevShared.array(); this.nextCells = nextArray;
             // calculate the last index
-            int n = Math.min(prev.targetSize(), nextCells.length);
+            int n = Math.min(prevShared.targetSize(), nextArray.length);
             this.bound = n;
             // threshold
             this.stride = Math.max(MIN_TRANSFER_STRIDE, (n >>> 3) / NCPU);
@@ -511,6 +531,7 @@ public class ConcurrentArrayMap<E>
     @FunctionalInterface
     interface Shared {
         Object[] array();
+
         default int targetSize() {
             return array().length;
         }
@@ -519,12 +540,12 @@ public class ConcurrentArrayMap<E>
     interface Cell<E> {
         E getValue();
 
-        E cae(E c, E v);
+        boolean cas(E c, E v);
     }
 
     record ForwardingCell<E>(Cell<E> main) implements Cell<E> {
         @Override public E getValue() { return main.getValue(); }
-        @Override public E cae(E c, E v) { return main.cae(c,v); }
+        @Override public boolean cas(E c, E v) { return main.cas(c,v); }
         @Override public String toString() { return main.toString(); }
     }
     static final class QCell<E> implements Cell<E> {
@@ -537,14 +558,13 @@ public class ConcurrentArrayMap<E>
         }
 
         @Override
-        public E cae(E c, E v) {
-            return (E) VAL.compareAndExchange(this, c,v);
+        public boolean cas(E c, E v) {
+            return VAL.compareAndSet(this, c,v);
         }
 
         @Override
         public String toString() {
-            E v = val;
-            return v == null ? "NIL" : Objects.toString(v);
+            return Objects.toString(val);
         }
 
         // VarHandle mechanics
