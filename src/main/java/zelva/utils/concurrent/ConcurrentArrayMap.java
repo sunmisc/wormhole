@@ -109,6 +109,7 @@ public class ConcurrentArrayMap<E>
      * @return the current value
      */
     @Override
+    @SuppressWarnings("unchecked")
     public E get(Object c) {
         Objects.requireNonNull(c);
         int i = (int) c;
@@ -132,6 +133,7 @@ public class ConcurrentArrayMap<E>
      * @return the previous value
      */
     @Override
+    @SuppressWarnings({"unchecked", "rawtypes"})
     public E put(Integer i, E newValue) {
         Objects.requireNonNull(i);
         Objects.requireNonNull(newValue);
@@ -165,6 +167,7 @@ public class ConcurrentArrayMap<E>
      * @return the previous value
      */
     @Override
+    @SuppressWarnings("unchecked")
     public E remove(Object c) {
         Objects.requireNonNull(c);
         int i = (int)c;
@@ -184,6 +187,7 @@ public class ConcurrentArrayMap<E>
     }
 
     @Override
+    @SuppressWarnings("unchecked")
     public E putIfAbsent(@NotNull Integer i, E val) {
         Object[] arr = shared.array();
         for (Object o;;) {
@@ -208,7 +212,9 @@ public class ConcurrentArrayMap<E>
     }
 
     @Override
-    public boolean replace(@NotNull Integer i, @NotNull E oldVal, @NotNull E newVal) {
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    public boolean replace(@NotNull Integer i,
+                           @NotNull E oldVal, @NotNull E newVal) {
         Object[] arr = shared.array();
         for (Object o;;) {
             if ((o = arrayAt(arr, i)) == null) {
@@ -222,6 +228,7 @@ public class ConcurrentArrayMap<E>
     }
 
     @Override
+    @SuppressWarnings({"unchecked", "rawtypes"})
     public boolean remove(@NotNull Object idx, Object oldVal) {
         if (oldVal == null) throw new NullPointerException();
         int i = (int) idx;
@@ -430,7 +437,7 @@ public class ConcurrentArrayMap<E>
             this.array = array;
         }
         @Override
-        public Iterator<Entry<Integer, E>> iterator() {
+        public @NotNull Iterator<Entry<Integer, E>> iterator() {
             return new EntrySetItr<>(array);
         }
 
@@ -445,6 +452,7 @@ public class ConcurrentArrayMap<E>
             this.array = array;
         }
         @Override
+        @SuppressWarnings("unchecked")
         public boolean hasNext() {
             Object[] arr = array.shared.array();
             int i = ++cursor;
