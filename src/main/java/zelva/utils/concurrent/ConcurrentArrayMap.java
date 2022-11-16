@@ -246,9 +246,7 @@ public class ConcurrentArrayMap<E>
                  * this will allow us to safely remove dead cells,
                  * without fear that we will remove the added value
                  */
-                if (val == null) {
-                    return false;
-                } else if (!n.cas(oldVal, null)) {
+                if (val == null || !n.cas(oldVal, null)) {
                     return false;
                 }
                 for (;;) {
@@ -279,7 +277,7 @@ public class ConcurrentArrayMap<E>
         for (Shared p;;) {
             int len;
             if (((p = shared) instanceof QShared) &&
-                    (len = p.targetSize()) == operator.applyAsInt(len)) {
+                    (len = p.numberOfTransfers()) == operator.applyAsInt(len)) {
                 return;
             } else if (advance) {
                 // after a successful commit, you can be sure that
@@ -292,8 +290,7 @@ public class ConcurrentArrayMap<E>
                 ) { continue; }
                 return;
             } else {
-                len = targetSize(p);
-                int nextLen = operator.applyAsInt(len);
+                int nextLen = operator.applyAsInt(len = p.capacity());
                 if (len == nextLen ||
                         LEVELS.weakCompareAndSet(
                                 this, p,
@@ -301,11 +298,6 @@ public class ConcurrentArrayMap<E>
                 ) { advance = true; }
             }
         }
-    }
-    private static int targetSize(Shared shared) {
-        return shared instanceof ForwardingPointer f
-                ? f.nextCells.length
-                : shared.array().length;
     }
     private Object[] helpTransfer(ForwardingPointer a) {
         Shared l = tryTransfer(a);
@@ -364,15 +356,16 @@ public class ConcurrentArrayMap<E>
         ForwardingPointer(Shared prevShared, Object[] nextArray) {
             this.prevCells = prevShared.array(); this.nextCells = nextArray;
             // calculate the last index
-            int n = Math.min(prevShared.targetSize(), nextArray.length);
+            int n = Math.min(prevShared.numberOfTransfers(), nextArray.length);
             this.bound = n;
             // threshold
             this.stride = Math.max(MIN_TRANSFER_STRIDE, (n >>> 3) / NCPU);
         }
+        @Override public int capacity() { return nextCells.length; }
 
         @Override public Object[] array() { return prevCells; }
 
-        @Override public int targetSize() { return bound; }
+        @Override public int numberOfTransfers() { return bound; }
 
         int getAndAddPendingCount(int v) {
             return (int) PENDINGCOUNT.getAndAdd(this, v);
@@ -540,7 +533,10 @@ public class ConcurrentArrayMap<E>
     interface Shared {
         Object[] array();
 
-        default int targetSize() {
+        default int numberOfTransfers() {
+            return array().length;
+        }
+        default int capacity() {
             return array().length;
         }
     }
