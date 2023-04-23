@@ -1,4 +1,4 @@
-package zelva.utils.concurrent;
+package sunmisc.utils.concurrent;
 
 import org.jetbrains.annotations.NotNull;
 

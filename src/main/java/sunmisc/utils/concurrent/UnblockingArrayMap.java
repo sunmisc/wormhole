@@ -1,4 +1,4 @@
-package zelva.utils.concurrent;
+package sunmisc.utils.concurrent;
 
 import org.jetbrains.annotations.NotNull;
 
@@ -13,10 +13,10 @@ import java.util.function.IntUnaryOperator;
  * and high expected update concurrency.
  * This array is based entirely on the free-lock mechanism.
  *
- * @author ZelvaLea
+ * @author Sunmisc Unsafe
  * @param <E> The base class of elements held in this array
  */
-public class ConcurrentArrayMap<E>
+public class UnblockingArrayMap<E>
         extends ConcurrentIndexMap<E>
         implements Serializable {
     /*
@@ -79,10 +79,10 @@ public class ConcurrentArrayMap<E>
     transient EntrySetView<E> entrySet;
 
 
-    public ConcurrentArrayMap(int size) {
+    public UnblockingArrayMap(int size) {
         this.shared = new QShared(new Object[size]);
     }
-    public ConcurrentArrayMap(E[] array) {
+    public UnblockingArrayMap(E[] array) {
         int n; Object o;
         // parallelize copy using Stream API?
         Object[] nodes = new Object[n = array.length];
@@ -114,14 +114,15 @@ public class ConcurrentArrayMap<E>
         Objects.requireNonNull(c);
         int i = (int) c;
         Object[] arr = shared.array();
+        Objects.checkIndex(i, arr.length);
         for (Object o;;) {
-            if ((o = arrayAt(arr, i)) == null) {
+            if ((o = arrayAt(arr, i)) == null)
                 return null;
-            } else if (o instanceof ForwardingPointer t) {
+            else if (o instanceof ForwardingPointer t) {
                 arr = t.nextCells;
-            } else if (o instanceof Cell<?> f) {
+                Objects.checkIndex(i, arr.length);
+            } else if (o instanceof Cell<?> f)
                 return (E) f.getValue();
-            }
         }
     }
 
@@ -138,24 +139,23 @@ public class ConcurrentArrayMap<E>
         Objects.requireNonNull(i);
         Objects.requireNonNull(newValue);
         Object[] arr = shared.array();
+        Objects.checkIndex(i, arr.length);
         for (Object o;;) {
             if ((o = arrayAt(arr, i)) == null) {
                 if (weakCasAt(arr, i, null,
-                        new QCell<>(newValue))) {
+                        new QCell<>(newValue)))
                     return null;
-                }
-            } else if (o instanceof ForwardingPointer f) {
-                arr = helpTransfer(f);
-            } else if (o instanceof Cell n) {
+            }
+            else if (o instanceof ForwardingPointer f)
+                arr = helpTransfer(f, i);
+            else if (o instanceof Cell n) {
                 Object val = n.getValue();
                 // Replacing a dead cell
                 if (val == null) {
-                    if (weakCasAt(arr, i, n, new QCell<>(newValue))) {
+                    if (weakCasAt(arr, i, n, new QCell<>(newValue)))
                         return null;
-                    }
-                } else if (n.cas(val, newValue)) {
+                } else if (n.cas(val, newValue))
                     return (E) val;
-                }
             }
         }
     }
@@ -172,17 +172,17 @@ public class ConcurrentArrayMap<E>
         Objects.requireNonNull(c);
         int i = (int)c;
         Object[] arr = shared.array();
+        Objects.checkIndex(i, arr.length);
         for (Object o;;) {
-            if ((o = arrayAt(arr, i)) == null) {
+            if ((o = arrayAt(arr, i)) == null)
                 return null;
-            } else if (o instanceof ForwardingPointer f) {
-                arr = helpTransfer(f);
-            } else if (o instanceof ForwardingCell) {
+            else if (o instanceof ForwardingPointer f)
+                arr = helpTransfer(f, i);
+            else if (o instanceof ForwardingCell)
                 Thread.onSpinWait();
-            } else if (o instanceof Cell<?> n &&
-                    weakCasAt(arr, i, o, null)) {
+            else if (o instanceof Cell<?> n &&
+                    weakCasAt(arr, i, o, null))
                 return (E) n.getValue();
-            }
         }
     }
 
@@ -190,23 +190,22 @@ public class ConcurrentArrayMap<E>
     @SuppressWarnings("unchecked")
     public E putIfAbsent(@NotNull Integer i, E val) {
         Object[] arr = shared.array();
+        Objects.checkIndex(i, arr.length);
         for (Object o;;) {
             if ((o = arrayAt(arr, i)) == null) {
                 if (weakCasAt(arr, i, null,
-                        new QCell<>(val))) {
+                        new QCell<>(val)))
                     return null;
-                }
-            } else if (o instanceof ForwardingPointer f) {
-                arr = helpTransfer(f);
-            } else if (o instanceof Cell<?> n) {
+            }
+            else if (o instanceof ForwardingPointer f)
+                arr = helpTransfer(f, i);
+            else if (o instanceof Cell<?> n) {
                 Object v = n.getValue();
                 if (v == null) {
-                    if (weakCasAt(arr, i, n, new QCell<>(val))) {
+                    if (weakCasAt(arr, i, n, new QCell<>(val)))
                         return null;
-                    }
-                } else {
+                } else
                     return (E) v;
-                }
             }
         }
     }
@@ -216,14 +215,14 @@ public class ConcurrentArrayMap<E>
     public boolean replace(@NotNull Integer i,
                            @NotNull E oldVal, @NotNull E newVal) {
         Object[] arr = shared.array();
+        Objects.checkIndex(i, arr.length);
         for (Object o;;) {
-            if ((o = arrayAt(arr, i)) == null) {
+            if ((o = arrayAt(arr, i)) == null)
                 return false;
-            } else if (o instanceof ForwardingPointer f) {
-                arr = helpTransfer(f);
-            } else if (o instanceof Cell n) {
+            else if (o instanceof ForwardingPointer f)
+                arr = helpTransfer(f, i);
+            else if (o instanceof Cell n)
                 return n.cas(oldVal, newVal);
-            }
         }
     }
 
@@ -233,12 +232,13 @@ public class ConcurrentArrayMap<E>
         if (oldVal == null) throw new NullPointerException();
         int i = (int) idx;
         Object[] arr = shared.array();
+        Objects.checkIndex(i, arr.length);
         for (Object o;;) {
-            if ((o = arrayAt(arr, i)) == null) {
+            if ((o = arrayAt(arr, i)) == null)
                 return false;
-            } else if (o instanceof ForwardingPointer f) {
-                arr = helpTransfer(f);
-            } else if (o instanceof Cell n) {
+            else if (o instanceof ForwardingPointer f)
+                arr = helpTransfer(f, i);
+            else if (o instanceof Cell n) {
                 Object val = n.getValue();
                 /*
                  * marks a dead cell; Dead cell - null value
@@ -246,22 +246,20 @@ public class ConcurrentArrayMap<E>
                  * this will allow us to safely remove dead cells,
                  * without fear that we will remove the added value
                  */
-                if (val == null || !n.cas(oldVal, null)) {
+                if (val == null || !n.cas(oldVal, null))
                     return false;
-                }
                 for (;;) {
-                    if ((o = arrayAt(arr, i)) == null) {
+                    if ((o = arrayAt(arr, i)) == null)
                         return false;
-                    } else if (o instanceof ForwardingPointer f) {
-                        arr = helpTransfer(f);
-                    } else if (o instanceof ForwardingCell<?>) {
+                    else if (o instanceof ForwardingPointer f)
+                        arr = helpTransfer(f, i);
+                    else if (o instanceof ForwardingCell<?>)
                         Thread.onSpinWait();
-                    } else if (o instanceof Cell<?> p) {
-                        if (n != p) {
+                    else if (o instanceof Cell<?> p) {
+                        if (n != p)
                             return false;
-                        } else if (weakCasAt(arr, i, p, null)) {
+                        else if (weakCasAt(arr, i, p, null))
                             return true;
-                        }
                     }
                 }
             }
@@ -277,32 +275,37 @@ public class ConcurrentArrayMap<E>
         for (Shared p;;) {
             int len;
             if (((p = shared) instanceof QShared) &&
-                    (len = p.numberOfTransfers()) == operator.applyAsInt(len)) {
+                    (len = p.numberOfTransfers()) == operator.applyAsInt(len))
                 return;
-            } else if (advance) {
+            else if (advance) {
                 // after a successful commit, you can be sure that
                 // we will commit either the same array or the next one
                 if (p instanceof ForwardingPointer f &&
                         tryTransfer(f) instanceof ForwardingPointer r && // recheck
                         !LEVELS.weakCompareAndSet(
                                 this, r,
-                                new QShared((r.nextCells)))
-                ) { continue; }
+                                new QShared((r.nextCells))))
+                    continue;
                 return;
             } else {
                 int nextLen = operator.applyAsInt(len = p.capacity());
                 if (len == nextLen ||
                         LEVELS.weakCompareAndSet(
                                 this, p,
-                                new ForwardingPointer(p, new Object[nextLen]))
-                ) { advance = true; }
+                                new ForwardingPointer(p, new Object[nextLen])))
+                    advance = true;
             }
         }
     }
-    private Object[] helpTransfer(ForwardingPointer a) {
-        Shared l = tryTransfer(a);
-        return l instanceof ForwardingPointer f
-                ? f.nextCells : l.array();
+    private Object[]
+    helpTransfer(ForwardingPointer a, int targetIndex) {
+        Shared p = tryTransfer(a);
+
+        Object[] array = p instanceof ForwardingPointer f
+                ? f.nextCells : p.array();
+        Objects.checkIndex(targetIndex, array.length);
+
+        return array;
     }
     private Shared tryTransfer(ForwardingPointer a) {
         int startChunk;
@@ -312,27 +315,28 @@ public class ConcurrentArrayMap<E>
                 continue;
             for (int i = startChunk; i < endChunk; i++) {
                 Shared n = shared;
-                if (n == a) {
+                if (n == a)
                     a.transferSlot(i);
-                } else if (n instanceof ForwardingPointer f) {
+                else if (n instanceof ForwardingPointer f) {
                     // trying to switch to a newer array
                     a = f;
                     continue outer;
-                } else {
-                    return n; // our mission is over
                 }
+                else
+                    return n; // our mission is over
             }
-            final int delta = endChunk - startChunk, f = a.bound;
-            if (delta > 0 && a.getAndAddPendingCount(delta) + delta >= f) {
-                return a;
+            final int delta = endChunk - startChunk,
+                    f = a.bound;
             /*
              * after a successful cas, we can read either
              * the set value or a value greater than the set value,
              * which is already out of scope of the array
              */
-            } else if (endChunk >= f) {
+            if (delta > 0 &&
+                    a.getAndAddPendingCount(delta) + delta >= f)
+                return a;
+            else if (endChunk >= f)
                 break;
-            }
         }
         // recheck before commit and help
         for (int i = 0; i < startChunk; i++) {
@@ -379,25 +383,24 @@ public class ConcurrentArrayMap<E>
                 if ((o = arrayAt(sh, i)) == this ||
                         (o == null &&
                         (o = caeAt(sh, i, null, this)) == null ||
-                        o == this)
-                ) { break;
-                } else if (o instanceof ForwardingPointer f) {
+                        o == this))
+                    break;
+                else if (o instanceof ForwardingPointer f)
                     sh = f.nextCells;
-                } else if (o instanceof ForwardingCell) {
+                else if (o instanceof ForwardingCell) {
                     // Thread.onSpinWait();
-                } else if (o instanceof Cell<?> e) {
+                }
+                else if (o instanceof Cell<?> e) {
                     Object c;
                     if ((c = caeAt(sh, i,
-                            o, new ForwardingCell<>(e))
-                    ) == o) {
+                            o, new ForwardingCell<>(e))) == o) {
                         // assert nextCells[i] == null;
                         nextCells[i] = o;
                         // StoreStore fence
                         setAt(sh, i, this);
                         break;
-                    } else if (c == this) {
+                    } else if (c == this)
                         break;
-                    }
                 }
             }
         }
@@ -425,8 +428,8 @@ public class ConcurrentArrayMap<E>
     }
 
     static final class EntrySetView<E> extends AbstractSet<Map.Entry<Integer,E>> {
-        final ConcurrentArrayMap<E> array;
-        EntrySetView(ConcurrentArrayMap<E> array) {
+        final UnblockingArrayMap<E> array;
+        EntrySetView(UnblockingArrayMap<E> array) {
             this.array = array;
         }
         @Override
@@ -437,11 +440,11 @@ public class ConcurrentArrayMap<E>
         @Override public int size() { return array.size(); }
     }
     static final class EntrySetItr<E> implements Iterator<Map.Entry<Integer,E>> {
-        final ConcurrentArrayMap<E> array;
+        final UnblockingArrayMap<E> array;
         int cursor = -1;
         E next;
 
-        EntrySetItr(ConcurrentArrayMap<E> array) {
+        EntrySetItr(UnblockingArrayMap<E> array) {
             this.array = array;
         }
         @Override
@@ -473,9 +476,8 @@ public class ConcurrentArrayMap<E>
         @Override
         public Map.Entry<Integer,E> next() {
             int k = cursor;
-            if (k >= 0) {
+            if (k >= 0)
                 return new IndexEntry<>(k, next);
-            }
             throw new NoSuchElementException();
         }
         @Override
@@ -506,7 +508,8 @@ public class ConcurrentArrayMap<E>
         List<Object> list = new ArrayList<>();
         for (Object k,v;;) {
             k = s.readObject();
-            if (k == null) break;
+            if (k == null)
+                break;
             v = s.readObject();
             list.add((int) k,v);
         }
@@ -594,7 +597,7 @@ public class ConcurrentArrayMap<E>
     static {
         try {
             MethodHandles.Lookup l = MethodHandles.lookup();
-            LEVELS = l.findVarHandle(ConcurrentArrayMap.class, "shared", Shared.class);
+            LEVELS = l.findVarHandle(UnblockingArrayMap.class, "shared", Shared.class);
         } catch (ReflectiveOperationException e) {
             throw new ExceptionInInitializerError(e);
         }

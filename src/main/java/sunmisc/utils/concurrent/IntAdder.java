@@ -1,6 +1,6 @@
-package zelva.utils.concurrent;
+package sunmisc.utils.concurrent;
 
-import zelva.annotation.PreviewFeature;
+import sunmisc.annotation.PreviewFeature;
 
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -13,8 +13,8 @@ public class IntAdder {
     static final int START_CAPACITY = 2;
     static final int NCPU = Runtime.getRuntime().availableProcessors();
 
-    private final ConcurrentArrayMap<AtomicInteger> cells
-            = new ConcurrentArrayMap<>(START_CAPACITY);
+    private final UnblockingArrayMap<AtomicInteger> cells
+            = new UnblockingArrayMap<>(START_CAPACITY);
 
 
     static int spread(long h) {

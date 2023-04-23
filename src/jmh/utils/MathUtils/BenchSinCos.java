@@ -8,7 +8,7 @@ import org.openjdk.jmh.runner.Runner;
 import org.openjdk.jmh.runner.RunnerException;
 import org.openjdk.jmh.runner.options.Options;
 import org.openjdk.jmh.runner.options.OptionsBuilder;
-import zelva.utils.MathUtils;
+import sunmisc.utils.MathUtils;
 @State(Scope.Thread)
 public class BenchSinCos {
     public static void main(String[] args) throws RunnerException {

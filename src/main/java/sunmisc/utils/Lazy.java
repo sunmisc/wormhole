@@ -1,6 +1,6 @@
-package zelva.utils;
+package sunmisc.utils;
 
-import zelva.utils.concurrent.ConcurrentLazy;
+import sunmisc.utils.concurrent.ConcurrentLazy;
 
 import java.util.Optional;
 import java.util.function.Supplier;

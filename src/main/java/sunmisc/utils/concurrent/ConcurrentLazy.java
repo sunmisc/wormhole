@@ -1,6 +1,6 @@
-package zelva.utils.concurrent;
+package sunmisc.utils.concurrent;
 
-import zelva.utils.Lazy;
+import sunmisc.utils.Lazy;
 
 import java.lang.invoke.VarHandle;
 import java.util.Optional;

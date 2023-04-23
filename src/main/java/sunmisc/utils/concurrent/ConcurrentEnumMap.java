@@ -1,4 +1,4 @@
-package zelva.utils.concurrent;
+package sunmisc.utils.concurrent;
 
 import java.io.*;
 import java.lang.invoke.MethodHandles;
@@ -57,12 +57,14 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
     private transient ValuesView<K,V> values;
     private transient EntrySetView<K,V> entrySet;
 
+    @SuppressWarnings("unchecked")
     public ConcurrentEnumMap(Class<? extends K> keyType) {
         this.keyType = keyType;
         this.keys = keyType.getEnumConstants();
         this.counter = new LongAdder();
         this.table = (V[]) new Object[keys.length];
     }
+    @SuppressWarnings("unchecked")
     public ConcurrentEnumMap(Map<? extends K, ? extends V> m) {
         if (m instanceof ConcurrentEnumMap) {
             ConcurrentEnumMap<K,V> em = (ConcurrentEnumMap<K,V>)m;
@@ -631,6 +633,7 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
         s.writeObject(null);
     }
     @Serial
+    @SuppressWarnings("unchecked")
     private void readObject(ObjectInputStream s)
             throws IOException, ClassNotFoundException {
         this.keyType = (Class<K>) s.readObject();
@@ -661,6 +664,7 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
     /*
      * Atomic access methods are used for array
      */
+    @SuppressWarnings("unchecked")
     private static <V> V tabAt(V[] tab, int i) {
         return (V) AA.getAcquire(tab, i);
     }
@@ -670,9 +674,11 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
     private static <V> boolean weakCasTabAt(V[] tab, int i, V c, V v) {
         return AA.weakCompareAndSet(tab, i, c, v);
     }
+    @SuppressWarnings("unchecked")
     private static <V> V caeTabAt(V[] tab, int i, V c, V v) {
         return (V) AA.compareAndExchange(tab, i, c, v);
     }
+    @SuppressWarnings("unchecked")
     private static <V> V getAndSetAt(V[] tab, int i, V v) {
         return (V) AA.getAndSet(tab, i, v);
     }

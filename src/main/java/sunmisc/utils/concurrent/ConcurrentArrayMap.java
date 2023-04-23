@@ -1,33 +1,43 @@
-package zelva.utils.concurrent;
+package sunmisc.utils.concurrent;
 
 import org.jetbrains.annotations.NotNull;
 
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.VarHandle;
 import java.util.*;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.IntUnaryOperator;
 
-public class LockArrayIndexMap<E> extends ConcurrentIndexMap<E> {
-    private final ReentrantReadWriteLock rwl = new ReentrantReadWriteLock();
-    private final Lock r = rwl.readLock();
-    private final Lock w = rwl.writeLock();
+/**
+ *
+ * @author Sunmisc Unsafe
+ * @param <E> The base class of elements held in this array
+ */
+public class ConcurrentArrayMap<E> extends ConcurrentIndexMap<E> {
+    // VarHandle mechanics
+    private static final VarHandle AA
+            = MethodHandles.arrayElementVarHandle(Object[].class);
+
+    private final ReentrantReadWriteLock rwl
+            = new ReentrantReadWriteLock();
+
     private E[] array;
     transient EntrySetView<E> entrySet;
 
-    public LockArrayIndexMap(int cap) {
+    public ConcurrentArrayMap(int cap) {
         this.array = (E[]) new Object[cap];
     }
 
-    public LockArrayIndexMap(E[] array) {
+    public ConcurrentArrayMap(E[] array) {
         this.array = (E[]) Arrays.copyOf(array, array.length, Object[].class);
     }
     @Override
     public E put(Integer i, E s) {
+        Lock w = rwl.readLock();
         w.lock();
         try {
-            E d = array[i];
-            array[i] = s;
-            return d;
+            return (E) AA.getAndSet(array, i, s);
         } finally {
             w.unlock();
         }
@@ -49,26 +59,25 @@ public class LockArrayIndexMap<E> extends ConcurrentIndexMap<E> {
 
 
     private E cae(int i, E c, E v) {
-        w.lock();
+        Lock r = rwl.readLock();
+        r.lock();
         try {
-            E p = array[i];
-            if (p != c)
-                return p;
-            array[i] = v;
-            return c;
+            return (E) AA.compareAndExchange(array, i, c, v);
         } finally {
-            w.unlock();
+            r.unlock();
         }
     }
     @Override
     public void resize(IntUnaryOperator operator) {
+        Lock w = rwl.writeLock();
         w.lock();
         try {
-            E[] arr = array;
+            E[] prev = array;
+
             array = Arrays.copyOf(
-                    arr,
-                    operator.applyAsInt(arr.length)
-            );
+                    prev,
+                    operator.applyAsInt(prev.length));
+            VarHandle.releaseFence(); // release array
         } finally {
             w.unlock();
         }
@@ -76,22 +85,16 @@ public class LockArrayIndexMap<E> extends ConcurrentIndexMap<E> {
 
     @Override
     public int size() {
-        r.lock();
-        try {
-            return array.length;
-        } finally {
-            r.unlock();
-        }
+        VarHandle.acquireFence();
+        return array.length;
     }
 
     @Override
     public E get(Object i) {
-        r.lock();
-        try {
-            return array[(int) i];
-        } finally {
-            r.unlock();
-        }
+        VarHandle.acquireFence();
+        E[] snap = array;
+
+        return (E) AA.getAcquire(snap);
     }
 
     @Override
@@ -111,8 +114,8 @@ public class LockArrayIndexMap<E> extends ConcurrentIndexMap<E> {
 
 
     static final class EntrySetView<E> extends AbstractSet<Entry<Integer,E>> {
-        final LockArrayIndexMap<E> array;
-        EntrySetView(LockArrayIndexMap<E> array) {
+        final ConcurrentArrayMap<E> array;
+        EntrySetView(ConcurrentArrayMap<E> array) {
             this.array = array;
         }
         @Override
@@ -123,16 +126,17 @@ public class LockArrayIndexMap<E> extends ConcurrentIndexMap<E> {
         @Override public int size() { return array.size(); }
     }
     static final class EntrySetItr<E> implements Iterator<Map.Entry<Integer,E>> {
-        final LockArrayIndexMap<E> es;
+        final ConcurrentArrayMap<E> es;
         int cursor = -1;
         E next;
 
-        EntrySetItr(LockArrayIndexMap<E> es) {
+        EntrySetItr(ConcurrentArrayMap<E> es) {
             this.es = es;
         }
         @Override
         public boolean hasNext() {
-            es.r.lock();
+            Lock r = es.rwl.readLock();
+            r.lock();
             try {
                 Object[] arr = es.array; int i;
                 if ((i = ++cursor) == arr.length) {
@@ -142,7 +146,7 @@ public class LockArrayIndexMap<E> extends ConcurrentIndexMap<E> {
                 next = (E) arr[i];
                 return true;
             } finally {
-                es.r.unlock();
+                r.unlock();
             }
         }
         @Override
