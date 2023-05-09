@@ -1,12 +1,13 @@
 package sunmisc.utils.concurrent;
 
 import org.jetbrains.annotations.NotNull;
+import sunmisc.utils.concurrent.lock.SpinReadWriteLock;
 
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.*;
 import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReentrantReadWriteLock;
+import java.util.concurrent.locks.ReadWriteLock;
 import java.util.function.IntUnaryOperator;
 
 /**
@@ -18,12 +19,9 @@ public class ConcurrentArrayMap<E> extends ConcurrentIndexMap<E> {
     // VarHandle mechanics
     private static final VarHandle AA
             = MethodHandles.arrayElementVarHandle(Object[].class);
-
-    private final ReentrantReadWriteLock rwl
-            = new ReentrantReadWriteLock();
-
     private E[] array;
     transient EntrySetView<E> entrySet;
+
 
     public ConcurrentArrayMap(int cap) {
         this.array = (E[]) new Object[cap];
@@ -32,18 +30,36 @@ public class ConcurrentArrayMap<E> extends ConcurrentIndexMap<E> {
     public ConcurrentArrayMap(E[] array) {
         this.array = (E[]) Arrays.copyOf(array, array.length, Object[].class);
     }
+    private final ReadWriteLock rwl = new SpinReadWriteLock();
+
+
     @Override
     public E put(Integer i, E s) {
-        Lock w = rwl.readLock();
-        w.lock();
+        Lock r = rwl.readLock();
+
+        r.lock();
         try {
             return (E) AA.getAndSet(array, i, s);
+        } finally {
+            r.unlock();
+        }
+    }
+    @Override
+    public void resize(IntUnaryOperator operator) {
+
+        Lock w = rwl.writeLock();
+        w.lock();
+        try {
+            E[] prev = array;
+            array = Arrays.copyOf(
+                    prev,
+                    operator.applyAsInt(prev.length));
+            VarHandle.releaseFence(); // release array
+
         } finally {
             w.unlock();
         }
     }
-
-
     @Override
     public E remove(Object i) {
         return put((int) i, null);
@@ -65,21 +81,6 @@ public class ConcurrentArrayMap<E> extends ConcurrentIndexMap<E> {
             return (E) AA.compareAndExchange(array, i, c, v);
         } finally {
             r.unlock();
-        }
-    }
-    @Override
-    public void resize(IntUnaryOperator operator) {
-        Lock w = rwl.writeLock();
-        w.lock();
-        try {
-            E[] prev = array;
-
-            array = Arrays.copyOf(
-                    prev,
-                    operator.applyAsInt(prev.length));
-            VarHandle.releaseFence(); // release array
-        } finally {
-            w.unlock();
         }
     }
 
@@ -135,19 +136,14 @@ public class ConcurrentArrayMap<E> extends ConcurrentIndexMap<E> {
         }
         @Override
         public boolean hasNext() {
-            Lock r = es.rwl.readLock();
-            r.lock();
-            try {
-                Object[] arr = es.array; int i;
-                if ((i = ++cursor) == arr.length) {
-                    cursor = -1;
-                    return false;
-                }
-                next = (E) arr[i];
-                return true;
-            } finally {
-                r.unlock();
+            Object[] arr = es.array;
+            int i;
+            if ((i = ++cursor) == arr.length) {
+                cursor = -1;
+                return false;
             }
+            next = (E) arr[i];
+            return true;
         }
         @Override
         public Map.Entry<Integer,E> next() {
@@ -164,6 +160,5 @@ public class ConcurrentArrayMap<E> extends ConcurrentIndexMap<E> {
             es.remove(c);
             next = null;
         }
-
     }
 }
