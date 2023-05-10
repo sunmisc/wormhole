@@ -1,20 +1,21 @@
 package sunmisc.utils.concurrent;
 
 import sunmisc.annotation.PreviewFeature;
-
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * @see java.util.concurrent.atomic.LongAdder
- * @author ZelvaLea
+ * @author Sunmisc Unsafe
  */
 @PreviewFeature
 public class IntAdder {
     static final int START_CAPACITY = 2;
     static final int NCPU = Runtime.getRuntime().availableProcessors();
 
-    private final UnblockingArrayMap<AtomicInteger> cells
-            = new UnblockingArrayMap<>(START_CAPACITY);
+    static final int CELLS_THRESHOLD = 8;
+
+    private final UnblockingArrayBuffer<AtomicInteger> cells
+            = new UnblockingArrayBuffer<>(START_CAPACITY);
 
 
     static int spread(long h) {
@@ -31,20 +32,18 @@ public class IntAdder {
 
         AtomicInteger prev = cells.get(h & (cells.size() - 1));
 
+
         if (prev == null) {
             prev = cells.putIfAbsent(
                     h & (cells.size() - 1),
-                    new AtomicInteger(delta)
-            );
-            if (prev != null) {
-                if (cells.size() < NCPU) {
-                    cells.resize(x -> x < NCPU ? x << 1 : x);
-                }
-            } else {
+                    new AtomicInteger(delta));
+            if (prev == null)
                 return;
-            }
         }
-        prev.getAndAdd(delta);
+        int p = prev.getAndAdd(delta) + delta;
+        if (p >= CELLS_THRESHOLD && cells.size() < NCPU) {
+            cells.resize(x -> x < NCPU ? x << 1 : x);
+        }
     }
 
     public void reset() {
