@@ -1,11 +1,15 @@
 package sunmisc.utils.concurrent;
 
 import org.jetbrains.annotations.NotNull;
+import sunmisc.utils.concurrent.locks.SpinReadWriteLock;
 
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.*;
-import java.util.concurrent.locks.StampedLock;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.atomic.LongAdder;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.IntUnaryOperator;
 
 /**
@@ -20,7 +24,10 @@ public class ConcurrentArrayBuffer<E> extends ConcurrentIndexMap<E> {
     private E[] array;
     transient EntrySetView<E> entrySet;
 
-    private final StampedLock lock = new StampedLock();
+    private final ReentrantLock lock = new ReentrantLock();
+    private final AtomicReference<LongAdder> adder = new AtomicReference<>(
+            new LongAdder()
+    );
 
 
     public ConcurrentArrayBuffer(int cap) {
@@ -33,38 +40,49 @@ public class ConcurrentArrayBuffer<E> extends ConcurrentIndexMap<E> {
 
     @Override
     public E put(Integer i, E s) {
-
-        StampedLock sl = lock;
-        long stamp = sl.tryOptimisticRead();
-        try {
-            for (;; stamp = sl.readLock()) {
-                if (sl.validate(stamp))
-                    return (E) AA.getAndSet(array, i, s);
+        // todo: закрутить гайки
+        LongAdder a = adder.get();
+        if (a == null) {
+            Lock lock = this.lock;
+            lock.lock();
+            try {
+                return (E) AA.getAndSet(array, i, s);
+            } finally {
+                lock.unlock();
             }
-      } finally {
-            if (StampedLock.isReadLockStamp(stamp)) {
-                sl.unlockRead(stamp);
+        } else {
+            a.increment();
+            if (adder.get() == null) {
+                a.decrement(); // signal
+                Lock lock = this.lock;
+                lock.lock();
+                try {
+                    return (E) AA.getAndSet(array, i, s);
+                } finally {
+                    lock.unlock();
+                }
+            } else {
+                E e = (E) AA.getAndSet(array, i, s);
+                a.decrement();
+                return e;
             }
         }
     }
-    public static void main(String[] args) {
-        ConcurrentArrayBuffer<Integer> concurrentArrayBuffer
-                = new ConcurrentArrayBuffer<>(10);
-        concurrentArrayBuffer.put(0, 21);
-    }
     @Override
     public void resize(IntUnaryOperator operator) {
-
-        long stamp = lock.writeLock();
+        Lock w = lock;
+        w.lock();
         try {
+            LongAdder p = adder.getAndSet(null);
+            while (p.sum() != 0)
+                Thread.onSpinWait();
             E[] prev = array;
-            array = Arrays.copyOf(
-                    prev,
+            array = Arrays.copyOf(prev,
                     operator.applyAsInt(prev.length));
             VarHandle.releaseFence(); // release array
-
+            adder.setRelease(p);
         } finally {
-            lock.unlockWrite(stamp);
+            w.unlock();
         }
     }
     @Override
@@ -82,18 +100,8 @@ public class ConcurrentArrayBuffer<E> extends ConcurrentIndexMap<E> {
 
 
     private E cae(int i, E c, E v) {
-        StampedLock sl = lock;
-        long stamp = sl.tryOptimisticRead();
 
-        try {
-            for (; ; stamp = sl.readLock()) {
-                if (sl.validate(stamp))
-                    return (E) AA.compareAndExchange(array, i, c, v);
-            }
-        } finally {
-            if (StampedLock.isReadLockStamp(stamp))
-                sl.unlockRead(stamp);
-        }
+        throw new UnsupportedOperationException();
     }
 
     @Override
