@@ -16,7 +16,7 @@ import java.util.function.IntUnaryOperator;
  * @author Sunmisc Unsafe
  * @param <E> The base class of elements held in this array
  */
-public class UnblockingArrayMap<E>
+public class UnblockingArrayBuffer<E>
         extends ConcurrentIndexMap<E>
         implements Serializable {
     /*
@@ -79,10 +79,10 @@ public class UnblockingArrayMap<E>
     transient EntrySetView<E> entrySet;
 
 
-    public UnblockingArrayMap(int size) {
+    public UnblockingArrayBuffer(int size) {
         this.shared = new QShared(new Object[size]);
     }
-    public UnblockingArrayMap(E[] array) {
+    public UnblockingArrayBuffer(E[] array) {
         int n; Object o;
         // parallelize copy using Stream API?
         Object[] nodes = new Object[n = array.length];
@@ -428,8 +428,8 @@ public class UnblockingArrayMap<E>
     }
 
     static final class EntrySetView<E> extends AbstractSet<Map.Entry<Integer,E>> {
-        final UnblockingArrayMap<E> array;
-        EntrySetView(UnblockingArrayMap<E> array) {
+        final UnblockingArrayBuffer<E> array;
+        EntrySetView(UnblockingArrayBuffer<E> array) {
             this.array = array;
         }
         @Override
@@ -440,11 +440,11 @@ public class UnblockingArrayMap<E>
         @Override public int size() { return array.size(); }
     }
     static final class EntrySetItr<E> implements Iterator<Map.Entry<Integer,E>> {
-        final UnblockingArrayMap<E> array;
+        final UnblockingArrayBuffer<E> array;
         int cursor = -1;
         E next;
 
-        EntrySetItr(UnblockingArrayMap<E> array) {
+        EntrySetItr(UnblockingArrayBuffer<E> array) {
             this.array = array;
         }
         @Override
@@ -597,7 +597,7 @@ public class UnblockingArrayMap<E>
     static {
         try {
             MethodHandles.Lookup l = MethodHandles.lookup();
-            LEVELS = l.findVarHandle(UnblockingArrayMap.class, "shared", Shared.class);
+            LEVELS = l.findVarHandle(UnblockingArrayBuffer.class, "shared", Shared.class);
         } catch (ReflectiveOperationException e) {
             throw new ExceptionInInitializerError(e);
         }

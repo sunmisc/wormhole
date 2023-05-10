@@ -1,13 +1,11 @@
 package sunmisc.utils.concurrent;
 
 import org.jetbrains.annotations.NotNull;
-import sunmisc.utils.concurrent.lock.SpinReadWriteLock;
 
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.*;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReadWriteLock;
+import java.util.concurrent.locks.StampedLock;
 import java.util.function.IntUnaryOperator;
 
 /**
@@ -15,40 +13,49 @@ import java.util.function.IntUnaryOperator;
  * @author Sunmisc Unsafe
  * @param <E> The base class of elements held in this array
  */
-public class ConcurrentArrayMap<E> extends ConcurrentIndexMap<E> {
+public class ConcurrentArrayBuffer<E> extends ConcurrentIndexMap<E> {
     // VarHandle mechanics
     private static final VarHandle AA
             = MethodHandles.arrayElementVarHandle(Object[].class);
     private E[] array;
     transient EntrySetView<E> entrySet;
 
+    private final StampedLock lock = new StampedLock();
 
-    public ConcurrentArrayMap(int cap) {
+
+    public ConcurrentArrayBuffer(int cap) {
         this.array = (E[]) new Object[cap];
     }
 
-    public ConcurrentArrayMap(E[] array) {
+    public ConcurrentArrayBuffer(E[] array) {
         this.array = (E[]) Arrays.copyOf(array, array.length, Object[].class);
     }
-    private final ReadWriteLock rwl = new SpinReadWriteLock();
-
 
     @Override
     public E put(Integer i, E s) {
-        Lock r = rwl.readLock();
 
-        r.lock();
+        StampedLock sl = lock;
+        long stamp = sl.tryOptimisticRead();
         try {
-            return (E) AA.getAndSet(array, i, s);
-        } finally {
-            r.unlock();
+            for (;; stamp = sl.readLock()) {
+                if (sl.validate(stamp))
+                    return (E) AA.getAndSet(array, i, s);
+            }
+      } finally {
+            if (StampedLock.isReadLockStamp(stamp)) {
+                sl.unlockRead(stamp);
+            }
         }
+    }
+    public static void main(String[] args) {
+        ConcurrentArrayBuffer<Integer> concurrentArrayBuffer
+                = new ConcurrentArrayBuffer<>(10);
+        concurrentArrayBuffer.put(0, 21);
     }
     @Override
     public void resize(IntUnaryOperator operator) {
 
-        Lock w = rwl.writeLock();
-        w.lock();
+        long stamp = lock.writeLock();
         try {
             E[] prev = array;
             array = Arrays.copyOf(
@@ -57,7 +64,7 @@ public class ConcurrentArrayMap<E> extends ConcurrentIndexMap<E> {
             VarHandle.releaseFence(); // release array
 
         } finally {
-            w.unlock();
+            lock.unlockWrite(stamp);
         }
     }
     @Override
@@ -75,12 +82,17 @@ public class ConcurrentArrayMap<E> extends ConcurrentIndexMap<E> {
 
 
     private E cae(int i, E c, E v) {
-        Lock r = rwl.readLock();
-        r.lock();
+        StampedLock sl = lock;
+        long stamp = sl.tryOptimisticRead();
+
         try {
-            return (E) AA.compareAndExchange(array, i, c, v);
+            for (; ; stamp = sl.readLock()) {
+                if (sl.validate(stamp))
+                    return (E) AA.compareAndExchange(array, i, c, v);
+            }
         } finally {
-            r.unlock();
+            if (StampedLock.isReadLockStamp(stamp))
+                sl.unlockRead(stamp);
         }
     }
 
@@ -115,8 +127,8 @@ public class ConcurrentArrayMap<E> extends ConcurrentIndexMap<E> {
 
 
     static final class EntrySetView<E> extends AbstractSet<Entry<Integer,E>> {
-        final ConcurrentArrayMap<E> array;
-        EntrySetView(ConcurrentArrayMap<E> array) {
+        final ConcurrentArrayBuffer<E> array;
+        EntrySetView(ConcurrentArrayBuffer<E> array) {
             this.array = array;
         }
         @Override
@@ -127,11 +139,11 @@ public class ConcurrentArrayMap<E> extends ConcurrentIndexMap<E> {
         @Override public int size() { return array.size(); }
     }
     static final class EntrySetItr<E> implements Iterator<Map.Entry<Integer,E>> {
-        final ConcurrentArrayMap<E> es;
+        final ConcurrentArrayBuffer<E> es;
         int cursor = -1;
         E next;
 
-        EntrySetItr(ConcurrentArrayMap<E> es) {
+        EntrySetItr(ConcurrentArrayBuffer<E> es) {
             this.es = es;
         }
         @Override
