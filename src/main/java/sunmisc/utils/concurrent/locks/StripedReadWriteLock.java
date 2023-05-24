@@ -71,9 +71,7 @@ public class StripedReadWriteLock { // todo: ReadWriteLock
         }
     }
     static class StripedReaders {
-        static final int NCPU = Runtime.getRuntime()
-                .availableProcessors();
-        private final Node[] nodes = new Node[NCPU];
+        private final Node[] nodes = new Node[8]; // todo: grow
 
 
         static int spread(long h) {
