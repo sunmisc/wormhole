@@ -4,20 +4,22 @@ import jdk.internal.vm.annotation.Contended;
 
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 
 public class StripedReadWriteLock { // todo: ReadWriteLock
-    private volatile StripedReaders adder = new StripedReaders();
+    private volatile Striped32 adder
+            = new Striped32();
     private final Object monitor = new Object();
 
     public <T> T readLock(Supplier<T> supplier) {
-        for (StripedReaders a;;) {
+        for (Striped32 a;;) {
             if ((a = adder) == null) {
                 synchronized (monitor) {
                     return supplier.get();
                 }
             } else {
-                Node x = a.inc();
+                Cell x = a.inc();
                 if (adder == null) {
                     x.getAndAdd(-1); // signal
                 } else {
@@ -31,84 +33,150 @@ public class StripedReadWriteLock { // todo: ReadWriteLock
     }
     public <T> T writeLock(Supplier<T> supplier) {
         synchronized (monitor) {
-            StripedReaders p = (StripedReaders)
+            Striped32 p = (Striped32)
                     ADDER.getAndSet(this, null);
             while (p.waiters() != 0)
                 Thread.onSpinWait();
             try {
                 return supplier.get();
             } finally {
-                adder = p;
+                ADDER.set(this, p);
             }
         }
     }
 
-    @Contended static final class Node {
+    @Contended static final class Cell {
         volatile int readers;
 
-        Node(int v) { this.readers = v; }
+        Cell(int v) { this.readers = v; }
 
-        private void getAndAdd(int delta) {
-            READERS.getAndAddRelease(this, delta);
+
+        public int getAndAdd(int delta) {
+            return (int) READERS.getAndAddRelease(this, delta);
         }
 
         @Override
         public String toString() {
             return Integer.toString(readers);
         }
+        // VarHandle mechanics
+        private static final VarHandle READERS;
+        static {
+            try {
+                MethodHandles.Lookup l = MethodHandles.lookup();
+                READERS = l.findVarHandle(Cell.class,
+                        "readers", int.class);
+            } catch (ReflectiveOperationException e) {
+                throw new ExceptionInInitializerError(e);
+            }
+        }
     }
     // VarHandle mechanics
-    private static final VarHandle ADDER, READERS;
+    private static final VarHandle ADDER;
     static {
         try {
             MethodHandles.Lookup l = MethodHandles.lookup();
             ADDER = l.findVarHandle(StripedReadWriteLock.class,
-                    "adder", StripedReaders.class);
-            READERS = l.findVarHandle(Node.class,
-                    "readers", int.class);
+                    "adder", Striped32.class);
         } catch (ReflectiveOperationException e) {
             throw new ExceptionInInitializerError(e);
         }
     }
-    static class StripedReaders {
-        private final Node[] nodes = new Node[8]; // todo: grow
+    static class Striped32 {
+        static final int NCPU =
+               Runtime.getRuntime().availableProcessors();
+        private static final AtomicInteger probeGenerator
+                = new AtomicInteger();
+        private volatile Object[] cells = new Object[2];
+        private volatile boolean busy;
 
+        private final ThreadLocal<Integer> threadLocal =
+                ThreadLocal.withInitial(probeGenerator::getAndIncrement);
 
-        static int spread(long h) {
-            h ^= h << 13;
-            h ^= h >>> 17;
-            h ^= h << 5;
-            return (int) h;
+        int getProbe() {
+            return threadLocal.get();
         }
 
+        private Cell inc() {
+            boolean collide = false;
+            for (Object[] cs = cells;;) {
+                int n = cs.length, h = getProbe() & (n - 1);
 
-        private Node inc() {
-            Thread thread = Thread.currentThread();
-            Node[] items = nodes;
-            int h = spread(thread.threadId()) & (items.length-1);
+                Object c = cs[h];
 
-            Node x = items[h];
-            if (x == null) {
-                Node newCell = new Node(1);
-                if ((x = (Node) AA.compareAndExchange(
-                        items, h, null, newCell)) == null)
-                    return newCell;
+                if (c instanceof Object[] ncs && cs != ncs) {
+                    cs = ncs;
+                } else {
+                    if (c == null) {
+                        Cell newCell = new Cell(1);
+                        if ((c = AA.compareAndExchange(
+                                cs, h, null, newCell)) == null)
+                            return newCell;
+                        else
+                            collide = true;
+                    }
+                    assert c instanceof Cell;
+                    Cell r = (Cell) c;
+                    if ((r.getAndAdd(1) > 0 || collide) &&
+                            n < NCPU && !busy &&
+                            BUSY.compareAndSet(this, false, true)) {
+                        try {
+                            Object[] newArray = new Object[n << 1];
+
+                            for (int i = 0; i < n; ++i) {
+                                Object o = cs[i];
+                                //               assert o == cs
+                                if (o == null || o instanceof Object[]) {
+                                    Object p = AA.compareAndExchange(cs,
+                                            i, o, newArray);
+
+                                    if (p == o)
+                                        continue;
+                                    else
+                                        o = p;
+                                }
+                                if (o != cs)
+                                    newArray[i] = o;
+                            }
+                            cells = newArray;
+                        } finally {
+                            busy = false;
+                        }
+                    }
+                    return r;
+                }
             }
-            x.getAndAdd(1);
-            return x;
         }
 
         public int waiters() {
             int sum = 0;
-            for (Node x : nodes) {
-                if (x == null)
-                    continue;
-                sum += x.readers;
+
+            Object[] cs = cells;
+
+            for (int i = 0, n = cs.length; i < n; ++i) {
+                Object o = cs[i];
+                if (o instanceof Object[] ncs)
+                    o = ncs[i];
+
+                if (o != null)
+                    sum += ((Cell)o).readers;
             }
             return sum;
         }
         private static final VarHandle AA
-                = MethodHandles.arrayElementVarHandle(Node[].class);
+                = MethodHandles.arrayElementVarHandle(Object[].class);
+
+        // VarHandle mechanics
+        private static final VarHandle BUSY;
+        static {
+            try {
+                MethodHandles.Lookup l = MethodHandles.lookup();
+                BUSY = l.findVarHandle(Striped32.class,
+                        "busy", boolean.class);
+            } catch (ReflectiveOperationException e) {
+                throw new ExceptionInInitializerError(e);
+            }
+        }
 
     }
 

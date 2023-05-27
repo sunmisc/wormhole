@@ -346,13 +346,16 @@ public class UnblockingArrayBuffer<E>
         }
         // non-volatile write
         a.pendingCount = a.bound;
+        // fence
+        a.prevCells = a.nextCells; // help gc
         return a;
     }
 
     static final class ForwardingPointer implements Shared {
         final int bound; // last index of elements from old to new
         final int stride; // the size of the transfer chunk can be from 1 to fence
-        final Object[] prevCells, nextCells; // owning array
+        volatile Object[] prevCells; // todo: clean for help gc
+        final Object[] nextCells; // owning array
 
         int strideIndex; // current transfer chunk
         int pendingCount; // total number of transferred chunks
@@ -379,6 +382,8 @@ public class UnblockingArrayBuffer<E>
         }
         void transferSlot(int i) {
             for (Object[] sh = prevCells;;) {
+                if (sh == nextCells) // todo:
+                    return;
                 Object o;
                 if ((o = arrayAt(sh, i)) == this ||
                         (o == null &&
