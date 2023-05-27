@@ -7,6 +7,23 @@ import java.lang.invoke.VarHandle;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 
+/**
+ * This implementation is much better than currently
+ * available lock mechanisms - ReadWriteLock for a very short read
+ * <p>
+ * low contention is achieved with a random access table of threads
+ * <p>
+ * the size of this dynamic table depends on the hardware number of cores
+ * <p>
+ * To save memory, the table expands with possible races by one cell,
+ * the principle is similar to UnblockingArrayBuffer,
+ * except for optimizations specifically for our case
+ * Our table has the following properties:
+ * Table expands and cannot be reduced
+ * need to provide atomic lazy initialization of each cell
+ *
+ * @author Sunmisc Unsafe
+ */
 public class StripedReadWriteLock { // todo: ReadWriteLock
     private volatile Striped32 adder
             = new Striped32();
