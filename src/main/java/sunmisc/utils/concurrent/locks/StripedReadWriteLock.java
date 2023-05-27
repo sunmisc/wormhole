@@ -69,7 +69,7 @@ public class StripedReadWriteLock { // todo: ReadWriteLock
         Cell(int v) { this.readers = v; }
 
 
-        public int getAndAdd(int delta) {
+        int getAndAdd(int delta) {
             return (int) READERS.getAndAddRelease(this, delta);
         }
 
