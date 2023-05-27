@@ -105,11 +105,13 @@ public class StripedReadWriteLock { // todo: ReadWriteLock
                Runtime.getRuntime().availableProcessors();
         private static final AtomicInteger probeGenerator
                 = new AtomicInteger();
-        private volatile Object[] cells = new Object[2];
-        private volatile boolean busy;
 
-        private final ThreadLocal<Integer> threadLocal =
+        private static final ThreadLocal<Integer> threadLocal =
                 ThreadLocal.withInitial(probeGenerator::getAndIncrement);
+
+        private volatile Object[] cells = new Object[2];
+        private boolean busy;
+
 
         int getProbe() {
             return threadLocal.get();
