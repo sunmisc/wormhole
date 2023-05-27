@@ -100,7 +100,7 @@ public class StripedReadWriteLock { // todo: ReadWriteLock
             throw new ExceptionInInitializerError(e);
         }
     }
-    static class Striped32 {
+    static final class Striped32 {
         static final int NCPU =
                Runtime.getRuntime().availableProcessors();
         private static final AtomicInteger probeGenerator
@@ -117,7 +117,7 @@ public class StripedReadWriteLock { // todo: ReadWriteLock
             return threadLocal.get();
         }
 
-        private Cell inc() {
+        Cell inc() {
             boolean collide = false;
             for (Object[] cs = cells;;) {
                 int n = cs.length, h = getProbe() & (n - 1);
@@ -168,7 +168,7 @@ public class StripedReadWriteLock { // todo: ReadWriteLock
             }
         }
 
-        public int waiters() {
+        int waiters() {
             int sum = 0;
 
             Object[] cs = cells;
