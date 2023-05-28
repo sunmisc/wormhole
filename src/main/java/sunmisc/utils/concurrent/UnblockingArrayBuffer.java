@@ -309,7 +309,7 @@ public class UnblockingArrayBuffer<E>
     }
     private Shared tryTransfer(ForwardingPointer a) {
         int startChunk;
-        outer: while ((startChunk = a.strideIndex) < a.bound) {
+        outer: while ((startChunk = a.getStrideIndex()) < a.bound) {
             int endChunk = Math.min(a.bound, startChunk + a.stride);
             if (!a.weakCasStride(startChunk, endChunk))
                 continue;
@@ -340,12 +340,11 @@ public class UnblockingArrayBuffer<E>
         }
         // recheck before commit and help
         for (int i = 0; i < startChunk; i++) {
-            if (a.pendingCount >= startChunk)
+            if (a.getPendingCount() >= startChunk)
                 return a;
             a.transferSlot(i);
         }
-        // non-volatile write
-        a.pendingCount = a.bound;
+        a.setPendingCount(a.bound);
         // fence
         a.prevCells = a.nextCells; // help gc
         return a;
@@ -367,6 +366,15 @@ public class UnblockingArrayBuffer<E>
             this.bound = n;
             // threshold
             this.stride = Math.max(MIN_TRANSFER_STRIDE, (n >>> 3) / NCPU);
+        }
+        int getStrideIndex() {
+            return (int) STRIDEINDEX.getOpaque(this);
+        }
+        int getPendingCount() {
+            return (int) PENDINGCOUNT.getOpaque(this);
+        }
+        void setPendingCount(int c) {
+            PENDINGCOUNT.setOpaque(this, c);
         }
         @Override public int capacity() { return nextCells.length; }
 
