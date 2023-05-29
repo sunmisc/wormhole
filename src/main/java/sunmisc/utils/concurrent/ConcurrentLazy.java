@@ -2,10 +2,10 @@ package sunmisc.utils.concurrent;
 
 import sunmisc.utils.Lazy;
 
+import java.io.Serial;
+import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
-import java.util.Optional;
 import java.util.function.Supplier;
-import java.util.function.UnaryOperator;
 
 /**
  * Lazy initialization respecting happens-before,
@@ -14,84 +14,66 @@ import java.util.function.UnaryOperator;
  * The lock mechanism refers to the current object,
  * so we can write our own wrappers for the Lazy class
  *
- * @author ZelvaLea
+ * @author Sunmisc Unsafe
  */
-public class ConcurrentLazy<V> extends Lazy<V> {
+public class ConcurrentLazy<V> extends Lazy<V>
+        implements java.io.Serializable {
+    @Serial
+    private static final long serialVersionUID = -2248881245212313449L;
+    private static final VarHandle VALUE;
+    static {
+        try {
+            MethodHandles.Lookup l = MethodHandles.lookup();
+            VALUE = l.findVarHandle(ConcurrentLazy.class, "value", Object.class);
+        } catch (ReflectiveOperationException e) {
+            throw new ExceptionInInitializerError(e);
+        }
+    }
 
-    /*
-     * Perhaps, one of the most surprising JMM behaviors
-     * is that volatile fields do not include
-     * the final field semantics. That is,
-     * if we publish the reference to the object racily,
-     * then we can see the null for the "volatile" field!
-     *
-     * It can be seen on some platforms
-     */
     private volatile V value;
 
     public ConcurrentLazy(Supplier<V> supplier) {
         super(supplier);
-        this.value = (V) NIL;
-        // Ensure writes can't be reordered
-        VarHandle.fullFence();
     }
 
     @Override
-    public synchronized Optional<V> clear() {
-        V val = value;
-        if (val != NIL) {
-            value = (V) NIL;
-            return Optional.ofNullable(val);
-        }
-        return Optional.empty();
-    }
-    @Override
-    public Optional<V> getIfPresent() {
-        final V val = value;
-        return val == NIL ? Optional.empty() : Optional.ofNullable(val);
-    }
-
-    @Override
-    public boolean isDone() {
-        return value != NIL;
-    }
-
-    @Override
-    public synchronized V compute(UnaryOperator<V> function) {
-        V val = value;
-        return value = function.apply(val == NIL
-                ? null
-                : val
-        );
-    }
-
-    @Override
-    public V computeIfAbsent(Supplier<? extends V> function) {
+    @SuppressWarnings("unchecked")
+    public final V get() {
         V val;
         if ((val = value) == NIL) {
             synchronized (this) {
-                // no need for volatile-read here
-                if ((val = value)
-                        == NIL) {
-                    return value = supplier.get();
+                /*
+                 * quite realistically, we can read field values with weak semantics,
+                 * we have guarantees that everything
+                 * is safely published in synchronized blocks,
+                 * and vice versa, in a synchronized block
+                 * we must safely publish a value for reading outside the
+                 * synchronized block, everything behind the
+                 * synchronized block must be read through a strong semantics,
+                 * for these readers we need a volatile write inside the lock,
+                 * the CAS mechanism can be bad practice in case
+                 * of high contention and the function from the supplier is quite heavy
+                 */
+                if ((val = (V) VALUE.get(this)) == NIL) {
+                    return value = decodeValue(supplier.get());
                 }
             }
         }
-        return val;
+        return (val == null) ? (V) NIL : val;
+    }
+    @Override
+    public final boolean isDone() {
+        return value != null;
+    }
+    @Override
+    public String toString() {
+        final V val;
+        return (val = value) == null
+                ? "not initialized"
+                : val.toString();
     }
 
-    @Override
-    public V computeIfPresent(UnaryOperator<V> function) {
-        V val = value;
-        if (val != NIL) {
-            synchronized (this) {
-                // no need for volatile-read here
-                if ((val = value)
-                        != NIL) {
-                    return value = function.apply(val);
-                }
-            }
-        }
-        return null;
+    static <T> T decodeValue(T t) {
+        return (t == NIL) ? null : t;
     }
 }

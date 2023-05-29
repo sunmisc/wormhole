@@ -2,9 +2,7 @@ package sunmisc.utils;
 
 import sunmisc.utils.concurrent.ConcurrentLazy;
 
-import java.util.Optional;
 import java.util.function.Supplier;
-import java.util.function.UnaryOperator;
 
 public abstract class Lazy<V> {
     protected static final Object NIL = new Object();
@@ -14,20 +12,9 @@ public abstract class Lazy<V> {
         this.supplier = supplier;
     }
 
-    public V get() {
-        return computeIfAbsent(supplier);
-    }
-    public abstract Optional<V> getIfPresent();
-
-    public abstract Optional<V> clear();
+    public abstract V get();
 
     public abstract boolean isDone();
-
-    public abstract V compute(UnaryOperator<V> function);
-
-    public abstract V computeIfAbsent(Supplier<? extends V> function);
-
-    public abstract V computeIfPresent(UnaryOperator<V> function);
 
 
     public static <V> Lazy<V> lazyOf(LazyType type, Supplier<V> supplier) {
