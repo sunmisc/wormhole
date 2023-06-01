@@ -122,7 +122,7 @@ public class UnblockingArrayBuffer<E>
                 arr = t.nextCells;
                 Objects.checkIndex(i, arr.length);
             } else if (o instanceof Cell<?> f)
-                return (E) f.getValue();
+                return (E) f.value();
         }
     }
 
@@ -149,7 +149,7 @@ public class UnblockingArrayBuffer<E>
             else if (o instanceof ForwardingPointer f)
                 arr = helpTransfer(f, i);
             else if (o instanceof Cell n) {
-                Object val = n.getValue();
+                Object val = n.value();
                 // Replacing a dead cell
                 if (val == null) {
                     if (weakCasAt(arr, i, n, new QCell<>(newValue)))
@@ -182,7 +182,7 @@ public class UnblockingArrayBuffer<E>
                 Thread.onSpinWait();
             else if (o instanceof Cell<?> n &&
                     weakCasAt(arr, i, o, null))
-                return (E) n.getValue();
+                return (E) n.value();
         }
     }
 
@@ -200,7 +200,7 @@ public class UnblockingArrayBuffer<E>
             else if (o instanceof ForwardingPointer f)
                 arr = helpTransfer(f, i);
             else if (o instanceof Cell<?> n) {
-                Object v = n.getValue();
+                Object v = n.value();
                 if (v == null) {
                     if (weakCasAt(arr, i, n, new QCell<>(val)))
                         return null;
@@ -239,7 +239,7 @@ public class UnblockingArrayBuffer<E>
             else if (o instanceof ForwardingPointer f)
                 arr = helpTransfer(f, i);
             else if (o instanceof Cell n) {
-                Object val = n.getValue();
+                Object val = n.value();
                 /*
                  * marks a dead cell; Dead cell - null value
                  * after that, we only have to change the cell,
@@ -297,6 +297,7 @@ public class UnblockingArrayBuffer<E>
             }
         }
     }
+
     private Object[]
     helpTransfer(ForwardingPointer a, int targetIndex) {
         Shared p = tryTransfer(a);
@@ -345,22 +346,21 @@ public class UnblockingArrayBuffer<E>
             a.transferSlot(i);
         }
         a.setPendingCount(a.bound);
-        // fence
-        a.prevCells = a.nextCells; // help gc
         return a;
     }
 
     static final class ForwardingPointer implements Shared {
         final int bound; // last index of elements from old to new
         final int stride; // the size of the transfer chunk can be from 1 to fence
-        volatile Object[] prevCells; // todo: clean for help gc
-        final Object[] nextCells; // owning array
+        final Object[] prevCells, nextCells; // owning array
 
+        //  @Contended
         int strideIndex; // current transfer chunk
         int pendingCount; // total number of transferred chunks
 
         ForwardingPointer(Shared prevShared, Object[] nextArray) {
-            this.prevCells = prevShared.array(); this.nextCells = nextArray;
+            this.prevCells = prevShared.array();
+            this.nextCells = nextArray;
             // calculate the last index
             int n = Math.min(prevShared.numberOfTransfers(), nextArray.length);
             this.bound = n;
@@ -480,7 +480,7 @@ public class UnblockingArrayBuffer<E>
                         return false;
                     }
                 } else if (o instanceof Cell<?> f) {
-                    next = (E) f.getValue();
+                    next = (E) f.value();
                     return true;
                 }
             }
@@ -558,13 +558,13 @@ public class UnblockingArrayBuffer<E>
     }
 
     interface Cell<E> {
-        E getValue();
+        E value();
 
         boolean cas(E c, E v);
     }
 
     record ForwardingCell<E>(Cell<E> main) implements Cell<E> {
-        @Override public E getValue() { return main.getValue(); }
+        @Override public E value() { return main.value(); }
         @Override public boolean cas(E c, E v) { return main.cas(c,v); }
         @Override public String toString() { return main.toString(); }
     }
@@ -573,7 +573,7 @@ public class UnblockingArrayBuffer<E>
         QCell(E val) { this.val = val; }
 
         @Override
-        public E getValue() {
+        public E value() {
             return val;
         }
 

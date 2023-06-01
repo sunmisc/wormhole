@@ -15,9 +15,8 @@ public class SequentialScope {
     final AtomicReference<CompletableFuture<?>> stack
             = new AtomicReference<>(completedFuture(null));
 
-    public <U> CompletableFuture<U> runOrSchedule(
-            Supplier<? extends CompletionStage<U>> supplier
-    ) {
+    public <U> CompletableFuture<U>
+    runOrSchedule(Supplier<? extends CompletionStage<U>> supplier) {
         CompletableFuture<U> d
                 = new CompletableFuture<>();
         stack.getAndSet(d)
@@ -29,18 +28,17 @@ public class SequentialScope {
 
     public void cancel() {
         stack.set(CompletableFuture.failedFuture(
-                new CancellationException())
-        );
+                new CancellationException()));
     }
 
-    private static <U> void complete(
-            CompletableFuture<U> cf,
-            U result,
-            Throwable t) {
-        if (t == null) {
+    private static <U> void
+    complete(CompletableFuture<U> cf,
+             U result,
+             Throwable t) {
+        if (t == null)
             cf.complete(result);
-        } else {
+        else
             cf.completeExceptionally(t);
-        }
+
     }
 }

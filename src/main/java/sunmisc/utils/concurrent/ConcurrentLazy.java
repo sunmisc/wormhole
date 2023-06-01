@@ -29,6 +29,20 @@ public class ConcurrentLazy<V> extends Lazy<V>
             throw new ExceptionInInitializerError(e);
         }
     }
+    /*
+     * on some platforms (for example, arm),
+     * we have very different semantics of volatile and final,
+     * after calling the constructor, we can read the value field through the race
+     * and see null there (which is not a valid execution)
+     * value = NIL; // not initialized
+     * any other values - initialized
+     * to do this, we wrap the user's null in NIL by doing a set from,
+     * so null (the field's default value) is not read through the race
+     * because I don’t have a normal opportunity to test it on arm,
+     * maybe you shouldn’t guess with barriers and do it this way
+     * the problem itself:
+     * https://github.com/openjdk/jcstress/blob/master/jcstress-samples/src/main/java/org/openjdk/jcstress/samples/jmm/advanced/AdvancedJMM_13_VolatileVsFinal.java
+     */
 
     private volatile V value;
 
@@ -40,7 +54,7 @@ public class ConcurrentLazy<V> extends Lazy<V>
     @SuppressWarnings("unchecked")
     public final V get() {
         V val;
-        if ((val = value) == NIL) {
+        if ((val = value) == null) {
             synchronized (this) {
                 /*
                  * quite realistically, we can read field values with weak semantics,
@@ -54,12 +68,12 @@ public class ConcurrentLazy<V> extends Lazy<V>
                  * the CAS mechanism can be bad practice in case
                  * of high contention and the function from the supplier is quite heavy
                  */
-                if ((val = (V) VALUE.get(this)) == NIL) {
+                if ((val = (V) VALUE.get(this)) == null) {
                     return value = decodeValue(supplier.get());
                 }
             }
         }
-        return (val == null) ? (V) NIL : val;
+        return (val == NIL) ? null : val;
     }
     @Override
     public final boolean isDone() {
@@ -73,7 +87,8 @@ public class ConcurrentLazy<V> extends Lazy<V>
                 : val.toString();
     }
 
+    @SuppressWarnings("unchecked")
     static <T> T decodeValue(T t) {
-        return (t == NIL) ? null : t;
+        return (t == null) ? (T) NIL : t;
     }
 }
