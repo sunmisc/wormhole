@@ -11,6 +11,7 @@ import java.util.function.IntUnaryOperator;
 /**
  *
  * @author Sunmisc Unsafe
+ *
  * @param <E> The base class of elements held in this array
  */
 @SuppressWarnings("unchecked")

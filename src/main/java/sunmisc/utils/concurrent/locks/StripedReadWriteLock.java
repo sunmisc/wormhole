@@ -7,11 +7,8 @@ import java.util.function.Supplier;
 /**
  * This implementation is much better than currently
  * available lock mechanisms - ReadWriteLock for a very short read
- * <p>
  * low contention is achieved with a random access table of threads
- * <p>
  * the size of this dynamic table depends on the hardware number of cores
- * <p>
  * To save memory, the table expands with possible races by one cell,
  * the principle is similar to
  * @see sunmisc.utils.concurrent.UnblockingArrayBuffer
