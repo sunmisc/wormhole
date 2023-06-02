@@ -11,6 +11,7 @@ import static java.util.concurrent.CompletableFuture.completedFuture;
 /**
  * This is a helper class for CompletableFuture that provides
  * the desired order of execution of the action chain in a common scope
+ *
  * @author Sunmisc Unsafe
  */
 public class SequentialScope {
