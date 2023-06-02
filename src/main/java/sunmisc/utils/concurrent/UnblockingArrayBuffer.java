@@ -229,7 +229,8 @@ public class UnblockingArrayBuffer<E>
     @Override
     @SuppressWarnings({"unchecked", "rawtypes"})
     public boolean remove(@NotNull Object idx, Object oldVal) {
-        if (oldVal == null) throw new NullPointerException();
+        Objects.requireNonNull(oldVal);
+
         int i = (int) idx;
         Object[] arr = shared.array();
         Objects.checkIndex(i, arr.length);
