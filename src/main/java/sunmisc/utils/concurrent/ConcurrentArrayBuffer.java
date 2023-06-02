@@ -20,7 +20,7 @@ public class ConcurrentArrayBuffer<E> extends ConcurrentIndexMap<E> {
     private static final VarHandle AA
             = MethodHandles.arrayElementVarHandle(Object[].class);
     private E[] array;
-    transient EntrySetView<E> entrySet;
+    private transient EntrySetView<E> entrySet;
 
     private final StripedReadWriteLock lock = new StripedReadWriteLock();
 
