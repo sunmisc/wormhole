@@ -69,7 +69,9 @@ public class ConcurrentLazy<V> extends Lazy<V>
                  * of high contention and the function from the supplier is quite heavy
                  */
                 if ((val = (V) VALUE.get(this)) == null) {
-                    return value = decodeValue(supplier.get());
+                    val = supplier.get();
+                    value = decodeValue(val);
+                    return val;
                 }
             }
         }
