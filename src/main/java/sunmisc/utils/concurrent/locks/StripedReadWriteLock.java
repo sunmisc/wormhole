@@ -155,7 +155,7 @@ public class StripedReadWriteLock { // todo: ReadWriteLock
                                         Object p = AA.compareAndExchange(cs,
                                                 i, o, newArray);
 
-                                        if (p == o)
+                                        if (p == null)
                                             continue;
                                         else
                                             o = p;
