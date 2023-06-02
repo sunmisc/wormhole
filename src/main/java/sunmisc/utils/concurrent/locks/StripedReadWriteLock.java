@@ -107,7 +107,7 @@ public class StripedReadWriteLock { // todo: ReadWriteLock
         static final int NCPU =
                 Runtime.getRuntime().availableProcessors();
 
-        public volatile Object[] cells;
+        private volatile Object[] cells;
         private boolean busy;
 
 

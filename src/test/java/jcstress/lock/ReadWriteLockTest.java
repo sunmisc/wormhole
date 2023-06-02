@@ -30,7 +30,7 @@ public class ReadWriteLockTest {
             for (int i = 0; i < 4; ++i) inc(2);
         }
 
-        @Actor
+        @Arbiter
         public void arbiter(L_Result s) {
             s.r1 = waiters();
         }

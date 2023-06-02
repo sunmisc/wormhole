@@ -1,5 +1,7 @@
 package sunmisc.utils.concurrent;
 
+import org.jetbrains.annotations.NotNull;
+
 import java.io.*;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
@@ -32,13 +34,14 @@ import java.util.function.Predicate;
  * This map differs from EnumMap in that it is thread-safe
  * and scales well
  *
- * @author ZelvaLea
- *
+ * @author Sunmisc Unsafe
+ * <p>
  * Type parameters:
  * <K> – the type of keys maintained by this map
  * <V> – the type of mapped values
  */
 
+@SuppressWarnings("unchecked")
 public class ConcurrentEnumMap<K extends Enum<K>,V>
         implements ConcurrentMap<K,V>, Serializable {
     @Serial
@@ -57,14 +60,12 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
     private transient ValuesView<K,V> values;
     private transient EntrySetView<K,V> entrySet;
 
-    @SuppressWarnings("unchecked")
     public ConcurrentEnumMap(Class<? extends K> keyType) {
         this.keyType = keyType;
         this.keys = keyType.getEnumConstants();
         this.counter = new LongAdder();
         this.table = (V[]) new Object[keys.length];
     }
-    @SuppressWarnings("unchecked")
     public ConcurrentEnumMap(Map<? extends K, ? extends V> m) {
         if (m instanceof ConcurrentEnumMap) {
             ConcurrentEnumMap<K,V> em = (ConcurrentEnumMap<K,V>)m;
@@ -96,8 +97,8 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
     }
     @Override
     public V put(K key, V value) {
-        if (key == null || value == null)
-            throw new NullPointerException();
+        Objects.requireNonNull(key);
+        Objects.requireNonNull(value);
         int i = key.ordinal();
         final V prev = getAndSetAt(table, i, value);
         if (prev == null)
@@ -117,8 +118,7 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
     }
     @Override
     public void forEach(BiConsumer<? super K, ? super V> action) {
-        if (action == null)
-            throw new NullPointerException();
+        Objects.requireNonNull(action);
         V[] tab = table;
         for (int i = 0, len = tab.length; i < len; ++i) {
             V v = tabAt(tab, i);
@@ -172,8 +172,7 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
 
     @Override
     public boolean containsValue(Object value) {
-        if (value == null)
-            throw new NullPointerException();
+        Objects.requireNonNull(value);
         V[] tab = table;
         for (int i = 0, len = tab.length; i < len; ++i) {
             if (Objects.equals(tabAt(tab, i), value))
@@ -183,9 +182,9 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
     }
 
     @Override
-    public V putIfAbsent(K key, V value) {
-        if (key == null || value == null)
-            throw new NullPointerException();
+    public V putIfAbsent(@NotNull K key, V value) {
+        Objects.requireNonNull(value);
+
         int i = key.ordinal();
         V[] tab = table; V p;
         if ((p = tabAt(tab, i)) == null &&
@@ -195,10 +194,9 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
     }
 
     @Override
-    public V compute(K key,
-                     BiFunction<? super K, ? super V, ? extends V> remappingFunction) {
-        if (key == null || remappingFunction == null)
-            throw new NullPointerException();
+    public V compute(K key, @NotNull
+    BiFunction<? super K, ? super V, ? extends V> remappingFunction) {
+        Objects.requireNonNull(key);
         int i = key.ordinal();
         V[] tab = table;
         for (V prev;;) {
@@ -213,10 +211,10 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
         }
     }
     @Override
-    public V computeIfAbsent(K key,
-                             Function<? super K, ? extends V> mappingFunction) {
-        if (key == null || mappingFunction == null)
-            throw new NullPointerException();
+    public V computeIfAbsent(K key, @NotNull
+    Function<? super K, ? extends V> mappingFunction) {
+        Objects.requireNonNull(key);
+
         int i = key.ordinal();
         V[] tab = table;
         for (V prev, newVal;;) {
@@ -231,10 +229,9 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
         }
     }
     @Override
-    public V computeIfPresent(K key,
-                              BiFunction<? super K, ? super V, ? extends V> remappingFunction) {
-        if (key == null || remappingFunction == null)
-            throw new NullPointerException();
+    public V computeIfPresent(K key, @NotNull
+    BiFunction<? super K, ? super V, ? extends V> remappingFunction) {
+        Objects.requireNonNull(key);
         int i = key.ordinal();
         V[] tab = table;
         for (V prev;;) {
@@ -250,10 +247,9 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
         }
     }
     @Override
-    public V merge(K key, V value,
-                   BiFunction<? super V, ? super V, ? extends V> remappingFunction) {
-        if (key == null || value == null || remappingFunction == null)
-            throw new NullPointerException();
+    public V merge(K key, @NotNull V value, @NotNull
+    BiFunction<? super V, ? super V, ? extends V> remappingFunction) {
+        Objects.requireNonNull(key);
         int i = key.ordinal();
         V[] tab = table;
         for (V prev;;) {
@@ -274,9 +270,8 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
     }
 
     @Override
-    public boolean remove(Object key, Object value) {
-        if (value == null)
-            throw new NullPointerException();
+    public boolean remove(@NotNull Object key, Object value) {
+        Objects.requireNonNull(value);
         if (isValidKey(key)) {
             int i = ((Enum<?>) key).ordinal();
             V[] tab = table;
@@ -290,9 +285,9 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
     }
 
     @Override
-    public boolean replace(K key, V oldValue, V newValue) {
-        if (key == null || oldValue == null || newValue == null)
-            throw new NullPointerException();
+    public boolean replace(@NotNull K key,
+                           @NotNull V oldValue,
+                           @NotNull V newValue) {
         int i = key.ordinal();
         V[] tab = table;
         return tabAt(tab, i) == oldValue &&
@@ -300,7 +295,7 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
     }
 
     @Override
-    public V replace(K key, V value) {
+    public V replace(@NotNull K key, @NotNull V value) {
         return put(key, value);
     }
 
@@ -329,7 +324,7 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
      * Helper method for EntrySetView.removeIf.
      */
     boolean removeEntryIf(Predicate<? super Entry<K,V>> function) {
-        if (function == null) throw new NullPointerException();
+        Objects.requireNonNull(function);
         V[] tab = table; boolean removed = false;
         for (int i = 0, len = tab.length; i < len; ++i) {
             V v = tabAt(tab, i);
@@ -348,7 +343,7 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
      * Helper method for ValuesView.removeIf.
      */
     boolean removeValueIf(Predicate<? super V> function) {
-        if (function == null) throw new NullPointerException();
+        Objects.requireNonNull(function);
         boolean removed = false;
         V[] tab = table;
         for (int i = 0, len = tab.length; i < len; ++i) {
@@ -377,7 +372,8 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
         @Override public boolean isEmpty() { return map.isEmpty(); }
         @Override public void clear() { map.clear(); }
 
-        @Override public Iterator<K> iterator() { return new KeyIterator<>(map); }
+        @Override public @NotNull
+        Iterator<K> iterator() { return new KeyIterator<>(map); }
         @Override public boolean contains(Object o) { return map.containsKey(o); }
         @Override public boolean remove(Object o) { return map.remove(o) != null; }
     }
@@ -397,7 +393,8 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
         @Override public void clear() { map.clear(); }
 
 
-        @Override public Iterator<V> iterator() { return new ValueIterator<>(map); }
+        @Override public @NotNull
+        Iterator<V> iterator() { return new ValueIterator<>(map); }
 
         @Override public boolean contains(Object o) { return map.containsValue(o); }
 
@@ -408,8 +405,7 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
 
         @Override
         public boolean remove(Object o) {
-            if (o == null)
-                throw new NullPointerException();
+            Objects.requireNonNull(o);
             V[] tab = map.table;
             for (int i = 0, len = tab.length; i < len; ++i) {
                 if (tabAt(tab, i) == o &&
@@ -435,7 +431,8 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
         @Override public boolean isEmpty() { return map.isEmpty(); }
         @Override public void clear() { map.clear(); }
 
-        @Override public Iterator<Map.Entry<K,V>> iterator() { return new EntryIterator<>(map); }
+        @Override public @NotNull
+        Iterator<Map.Entry<K,V>> iterator() { return new EntryIterator<>(map); }
 
         @Override
         public boolean removeIf(Predicate<? super Entry<K,V>> filter) {
@@ -444,18 +441,20 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
 
         @Override
         public boolean contains(Object o) {
-            Object k, v, r; Map.Entry<?,?> e;
+            Map.Entry<K,V> e;
+            K k; V v, r;
             return ((o instanceof Map.Entry) &&
-                    (k = (e = (Map.Entry<?,?>)o).getKey()) != null &&
+                    (k = (e = (Map.Entry<K,V>)o).getKey()) != null &&
                     (r = map.get(k)) != null &&
                     (v = e.getValue()) != null &&
                     (v == r || v.equals(r)));
         }
         @Override
         public boolean remove(Object o) {
-            Object k, v; Map.Entry<?,?> e;
+            Map.Entry<K,V> e;
+            K k; V v;
             return ((o instanceof Map.Entry) &&
-                    (k = (e = (Map.Entry<?,?>)o).getKey()) != null &&
+                    (k = (e = (Map.Entry<K,V>)o).getKey()) != null &&
                     (v = e.getValue()) != null &&
                     map.remove(k,v));
         }
@@ -568,7 +567,7 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
 
         @Override
         public V setValue(V value) {
-            if (value == null) throw new NullPointerException();
+            Objects.requireNonNull(value);
             V v = val;
             val = value;
             map.put(key, value);
@@ -628,7 +627,6 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
         s.writeObject(null);
     }
     @Serial
-    @SuppressWarnings("unchecked")
     private void readObject(ObjectInputStream s)
             throws IOException, ClassNotFoundException {
         this.keyType = (Class<K>) s.readObject();
@@ -648,6 +646,14 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
         }
     }
 
+    @Override
+    public String toString() {
+        StringJoiner joiner = new StringJoiner(
+                ", ", "[", "]");
+        forEach((k,v) -> joiner.add(k.toString() + '=' + v.toString()));
+        return joiner.toString();
+    }
+
     private boolean isValidKey(Object key) {
         if (key == null)
             return false;
@@ -659,7 +665,6 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
     /*
      * Atomic access methods are used for array
      */
-    @SuppressWarnings("unchecked")
     private static <V> V tabAt(V[] tab, int i) {
         return (V) AA.getAcquire(tab, i);
     }
@@ -669,11 +674,11 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
     private static <V> boolean weakCasTabAt(V[] tab, int i, V c, V v) {
         return AA.weakCompareAndSet(tab, i, c, v);
     }
-    @SuppressWarnings("unchecked")
+
     private static <V> V caeTabAt(V[] tab, int i, V c, V v) {
         return (V) AA.compareAndExchange(tab, i, c, v);
     }
-    @SuppressWarnings("unchecked")
+
     private static <V> V getAndSetAt(V[] tab, int i, V v) {
         return (V) AA.getAndSet(tab, i, v);
     }
