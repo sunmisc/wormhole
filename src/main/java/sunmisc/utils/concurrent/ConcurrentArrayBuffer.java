@@ -13,6 +13,7 @@ import java.util.function.IntUnaryOperator;
  * @author Sunmisc Unsafe
  * @param <E> The base class of elements held in this array
  */
+@SuppressWarnings("unchecked")
 public class ConcurrentArrayBuffer<E> extends ConcurrentIndexMap<E> {
     // VarHandle mechanics
     private static final VarHandle AA
@@ -26,15 +27,13 @@ public class ConcurrentArrayBuffer<E> extends ConcurrentIndexMap<E> {
     public ConcurrentArrayBuffer(int cap) {
         this.array = (E[]) new Object[cap];
     }
-
     public ConcurrentArrayBuffer(E[] array) {
         this.array = (E[]) Arrays.copyOf(array, array.length, Object[].class);
     }
 
     @Override
     public E put(Integer i, E s) {
-
-        return lock.readLock(() -> (E) AA.getAndSet(array, i, s));
+        return lock.readLock(() -> getAndSet(array, i, s));
     }
     @Override
     public void resize(IntUnaryOperator operator) {
@@ -63,7 +62,7 @@ public class ConcurrentArrayBuffer<E> extends ConcurrentIndexMap<E> {
 
     private E cae(int i, E c, E v) {
 
-        throw new UnsupportedOperationException();
+        return lock.readLock(() -> cae(array, i, c, v));
     }
 
     @Override
@@ -73,11 +72,14 @@ public class ConcurrentArrayBuffer<E> extends ConcurrentIndexMap<E> {
     }
 
     @Override
-    public E get(Object i) {
-        VarHandle.acquireFence();
-        E[] snap = array;
+    public E get(Object o) {
+        if (o instanceof Integer i) {
+            VarHandle.acquireFence();
+            E[] snap = array;
 
-        return (E) AA.getAcquire(snap, (int)i);
+            return tabAt(snap, i);
+        } else
+            throw new IllegalStateException();
     }
 
     @Override
@@ -95,6 +97,17 @@ public class ConcurrentArrayBuffer<E> extends ConcurrentIndexMap<E> {
         return cae(key,oldValue,newValue) == oldValue;
     }
 
+    static <E> E tabAt(E[] array, int slot) {
+        return (E) AA.getAcquire(array, slot);
+    }
+
+    static <E> E getAndSet(E[] array, int slot, E value) {
+        return (E) AA.getAndSet(array, slot, value);
+    }
+    static <E> E cae(E[] array, int slot, E expectedValue, E newValue) {
+        return (E) AA.compareAndExchange(array, slot, expectedValue, newValue);
+    }
+
 
     static final class EntrySetView<E> extends AbstractSet<Entry<Integer,E>> {
         final ConcurrentArrayBuffer<E> array;
@@ -102,13 +115,14 @@ public class ConcurrentArrayBuffer<E> extends ConcurrentIndexMap<E> {
             this.array = array;
         }
         @Override
-        public Iterator<Entry<Integer, E>> iterator() {
+        public @NotNull Iterator<Entry<Integer, E>> iterator() {
             return new EntrySetItr<>(array);
         }
 
         @Override public int size() { return array.size(); }
     }
-    static final class EntrySetItr<E> implements Iterator<Map.Entry<Integer,E>> {
+    static final class EntrySetItr<E>
+            implements Iterator<Map.Entry<Integer,E>> {
         final ConcurrentArrayBuffer<E> es;
         int cursor = -1;
         E next;
@@ -118,13 +132,13 @@ public class ConcurrentArrayBuffer<E> extends ConcurrentIndexMap<E> {
         }
         @Override
         public boolean hasNext() {
-            Object[] arr = es.array;
+            E[] arr = es.array;
             int i;
             if ((i = ++cursor) == arr.length) {
                 cursor = -1;
                 return false;
             }
-            next = (E) arr[i];
+            next = arr[i];
             return true;
         }
         @Override
