@@ -341,7 +341,8 @@ public class UnblockingArrayBuffer<E>
         }
         // recheck before commit and help
         for (int i = 0; i < startChunk; i++) {
-            if (a.getPendingCount() >= startChunk)
+            int p = a.getPendingCount() + i;
+            if (p >= a.bound)
                 return a;
             a.transferSlot(i);
         }
@@ -390,8 +391,6 @@ public class UnblockingArrayBuffer<E>
         }
         void transferSlot(int i) {
             for (Object[] sh = prevCells;;) {
-                if (sh == nextCells) // todo:
-                    return;
                 Object o;
                 if ((o = arrayAt(sh, i)) == this ||
                         (o == null &&

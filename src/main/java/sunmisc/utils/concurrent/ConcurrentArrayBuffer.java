@@ -1,15 +1,11 @@
 package sunmisc.utils.concurrent;
 
 import org.jetbrains.annotations.NotNull;
-import sunmisc.utils.concurrent.locks.SpinReadWriteLock;
+import sunmisc.utils.concurrent.locks.StripedReadWriteLock;
 
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.*;
-import java.util.concurrent.atomic.AtomicReference;
-import java.util.concurrent.atomic.LongAdder;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.IntUnaryOperator;
 
 /**
@@ -24,10 +20,7 @@ public class ConcurrentArrayBuffer<E> extends ConcurrentIndexMap<E> {
     private E[] array;
     transient EntrySetView<E> entrySet;
 
-    private final ReentrantLock lock = new ReentrantLock();
-    private final AtomicReference<LongAdder> adder = new AtomicReference<>(
-            new LongAdder()
-    );
+    private final StripedReadWriteLock lock = new StripedReadWriteLock();
 
 
     public ConcurrentArrayBuffer(int cap) {
@@ -40,50 +33,19 @@ public class ConcurrentArrayBuffer<E> extends ConcurrentIndexMap<E> {
 
     @Override
     public E put(Integer i, E s) {
-        // todo: закрутить гайки
-        LongAdder a = adder.get();
-        if (a == null) {
-            Lock lock = this.lock;
-            lock.lock();
-            try {
-                return (E) AA.getAndSet(array, i, s);
-            } finally {
-                lock.unlock();
-            }
-        } else {
-            a.increment();
-            if (adder.get() == null) {
-                a.decrement(); // signal
-                Lock lock = this.lock;
-                lock.lock();
-                try {
-                    return (E) AA.getAndSet(array, i, s);
-                } finally {
-                    lock.unlock();
-                }
-            } else {
-                E e = (E) AA.getAndSet(array, i, s);
-                a.decrement();
-                return e;
-            }
-        }
+
+        return lock.readLock(() -> (E) AA.getAndSet(array, i, s));
     }
     @Override
     public void resize(IntUnaryOperator operator) {
-        Lock w = lock;
-        w.lock();
-        try {
-            LongAdder p = adder.getAndSet(null);
-            while (p.sum() != 0)
-                Thread.onSpinWait();
+
+        lock.writeLock(() -> {
             E[] prev = array;
             array = Arrays.copyOf(prev,
                     operator.applyAsInt(prev.length));
             VarHandle.releaseFence(); // release array
-            adder.setRelease(p);
-        } finally {
-            w.unlock();
-        }
+            return null;
+        });
     }
     @Override
     public E remove(Object i) {
@@ -115,7 +77,7 @@ public class ConcurrentArrayBuffer<E> extends ConcurrentIndexMap<E> {
         VarHandle.acquireFence();
         E[] snap = array;
 
-        return (E) AA.getAcquire(snap);
+        return (E) AA.getAcquire(snap, (int)i);
     }
 
     @Override

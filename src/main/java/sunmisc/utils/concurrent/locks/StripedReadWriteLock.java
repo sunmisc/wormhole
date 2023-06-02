@@ -1,10 +1,7 @@
 package sunmisc.utils.concurrent.locks;
 
-import jdk.internal.vm.annotation.Contended;
-
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 
 /**
@@ -26,9 +23,15 @@ import java.util.function.Supplier;
  * @author Sunmisc Unsafe
  */
 public class StripedReadWriteLock { // todo: ReadWriteLock
-    private volatile Striped32 adder
-            = new Striped32();
+    private volatile Striped32 adder;
     private final Object monitor = new Object();
+
+    public StripedReadWriteLock() {
+        // for arm
+        synchronized (monitor) {
+            adder = new Striped32();
+        }
+    }
 
     public <T> T readLock(Supplier<T> supplier) {
         for (Striped32 a;;) {
@@ -37,10 +40,10 @@ public class StripedReadWriteLock { // todo: ReadWriteLock
                     return supplier.get();
                 }
             } else {
-                Cell x = a.inc();
-                if (adder == null) {
+                Cell x = a.inc(1);
+                if (adder == null)
                     x.getAndAdd(-1); // signal
-                } else {
+                else {
                     T result = supplier.get();
                     x.getAndAdd(-1);
                     return result;
@@ -51,23 +54,23 @@ public class StripedReadWriteLock { // todo: ReadWriteLock
     }
     public <T> T writeLock(Supplier<T> supplier) {
         synchronized (monitor) {
-            Striped32 p = (Striped32)
-                    ADDER.getAndSet(this, null);
+            Striped32 p = (Striped32) ADDER.get(this);
+            adder = null;
             while (p.waiters() != 0)
                 Thread.onSpinWait();
             try {
                 return supplier.get();
             } finally {
-                ADDER.set(this, p);
+                adder = p;
             }
         }
     }
-
-    @Contended static final class Cell {
+    static final class Cell {
         volatile int readers;
 
-        Cell(int v) { this.readers = v; }
-
+        Cell(int init) {
+            this.readers = init;
+        }
 
         int getAndAdd(int delta) {
             return (int) READERS.getAndAddRelease(this, delta);
@@ -100,65 +103,68 @@ public class StripedReadWriteLock { // todo: ReadWriteLock
             throw new ExceptionInInitializerError(e);
         }
     }
-    static final class Striped32 {
+    public static class Striped32 {
         static final int NCPU =
-               Runtime.getRuntime().availableProcessors();
-        private static final AtomicInteger probeGenerator
-                = new AtomicInteger();
+                Runtime.getRuntime().availableProcessors();
 
-        private static final ThreadLocal<Integer> threadLocal =
-                ThreadLocal.withInitial(probeGenerator::getAndIncrement);
-
-        private volatile Object[] cells = new Object[2];
+        public volatile Object[] cells;
         private boolean busy;
 
 
         int getProbe() {
-            return threadLocal.get();
+            return (int) Thread.currentThread().threadId();
         }
 
-        Cell inc() {
-            boolean collide = false;
-            for (Object[] cs = cells;;) {
-                int n = cs.length, h = getProbe() & (n - 1);
+        public Cell inc(int delta) {
+            final int probe = getProbe();
+            Object[] cs = cells;
+            if (cs == null) {
+                Object[] rs = new Object[2];
+                Cell x;
+                rs[probe & 1] = x = new Cell(delta);
 
-                Object c = cs[h];
+                if ((cs = (Object[]) CELLS.compareAndExchange(
+                        this, null, rs)) == null)
+                    return x;
+            }
+            for (;;) {
+                int n = cs.length, h = probe & (n - 1);
+                Object x = cs[h];
 
-                if (c instanceof Object[] ncs && cs != ncs) {
+                if (x instanceof Object[] ncs &&
+                        cs != ncs) {
                     cs = ncs;
-                } else {
-                    if (c == null) {
-                        Cell newCell = new Cell(1);
-                        if ((c = AA.compareAndExchange(
-                                cs, h, null, newCell)) == null)
-                            return newCell;
-                        else
-                            collide = true;
-                    }
-                    assert c instanceof Cell;
-                    Cell r = (Cell) c;
-                    if ((r.getAndAdd(1) > 0 || collide) &&
+                    continue;
+                } else if (x == null) {
+                    Cell newCell = new Cell(delta);
+                    if ((x = AA.compareAndExchange(
+                            cs, h, null, newCell)) == null)
+                        return newCell;
+                }
+                if (x instanceof Cell r) {
+                    if (r.getAndAdd(delta) > 0 &&
                             n < NCPU && !busy &&
                             BUSY.compareAndSet(this, false, true)) {
                         try {
-                            Object[] newArray = new Object[n << 1];
+                            if (cs == cells) {
+                                Object[] newArray = new Object[n << 1];
 
-                            for (int i = 0; i < n; ++i) {
-                                Object o = cs[i];
-                                //               assert o == cs
-                                if (o == null || o instanceof Object[]) {
-                                    Object p = AA.compareAndExchange(cs,
-                                            i, o, newArray);
+                                for (int i = 0; i < n; ++i) {
+                                    Object o = cs[i];
+                                    if (o == null || o instanceof Object[]) {
+                                        Object p = AA.compareAndExchange(cs,
+                                                i, o, newArray);
 
-                                    if (p == o)
-                                        continue;
-                                    else
-                                        o = p;
+                                        if (p == o)
+                                            continue;
+                                        else
+                                            o = p;
+                                    }
+                                    if (o != cs)
+                                        newArray[i] = o;
                                 }
-                                if (o != cs)
-                                    newArray[i] = o;
+                                cells = newArray;
                             }
-                            cells = newArray;
                         } finally {
                             busy = false;
                         }
@@ -168,18 +174,21 @@ public class StripedReadWriteLock { // todo: ReadWriteLock
             }
         }
 
-        int waiters() {
+        public int waiters() {
             int sum = 0;
-
             Object[] cs = cells;
-
-            for (int i = 0, n = cs.length; i < n; ++i) {
-                Object o = cs[i];
-                if (o instanceof Object[] ncs)
-                    o = ncs[i];
-
-                if (o != null)
-                    sum += ((Cell)o).readers;
+            if (cs != null) {
+                for (int i = 0, n = cs.length; i < n; ++i) {
+                    for (Object o = cs[i];;) {
+                        if (o instanceof Object[] ncs)
+                            o = ncs[i];
+                        else {
+                            if (o instanceof Cell r)
+                                sum += r.readers;
+                            break;
+                        }
+                    }
+                }
             }
             return sum;
         }
@@ -187,12 +196,14 @@ public class StripedReadWriteLock { // todo: ReadWriteLock
                 = MethodHandles.arrayElementVarHandle(Object[].class);
 
         // VarHandle mechanics
-        private static final VarHandle BUSY;
+        private static final VarHandle BUSY, CELLS;
         static {
             try {
                 MethodHandles.Lookup l = MethodHandles.lookup();
                 BUSY = l.findVarHandle(Striped32.class,
                         "busy", boolean.class);
+                CELLS = l.findVarHandle(Striped32.class,
+                        "cells", Object[].class);
             } catch (ReflectiveOperationException e) {
                 throw new ExceptionInInitializerError(e);
             }

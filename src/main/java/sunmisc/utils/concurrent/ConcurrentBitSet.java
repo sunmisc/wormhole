@@ -2,25 +2,28 @@ package sunmisc.utils.concurrent;
 
 import sunmisc.annotation.PreviewFeature;
 
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.VarHandle;
 import java.util.StringJoiner;
 
 @PreviewFeature
-public class ConcurrentBitSet {
+
+// todo:
+class ConcurrentBitSet {
     private static final int ADDRESS_BITS_PER_WORD
             = Integer.numberOfTrailingZeros(Long.SIZE);
 
     /* Used to shift left or right for a partial word mask */
     private static final long WORD_MASK = 0xFFFFFFFFFFFFFFFFL; // -1
 
-    private final ConcurrentArrayMap<Long> words
-            = new ConcurrentArrayMap<>(1);
+    private final UnblockingArrayBuffer<Long> words
+            = new UnblockingArrayBuffer<>(1);
 
     public void set(int bitIndex) {
         final int wordIndex = wordIndex(bitIndex);
 
-        if (wordIndex >= words.size()) {
+        if (wordIndex >= words.size())
             words.resize(x -> wordIndex >= x ? x << 1 : x);
-        }
 
         long mask = (1L << bitIndex);
 
@@ -73,5 +76,24 @@ public class ConcurrentBitSet {
     private static int wordIndex(int bitIndex) {
         return bitIndex >> ADDRESS_BITS_PER_WORD;
     }
+    static final class LongCell {
+        volatile long value;
 
+        public LongCell(long val) {
+            this.value = val;
+        }
+
+        long getAndBitwiseOr(long t) {
+            return (long) VALUE.getAndBitwiseOr(this, t);
+        }
+        private static final VarHandle VALUE;
+        static {
+            try {
+                MethodHandles.Lookup l = MethodHandles.lookup();
+                VALUE = l.findVarHandle(LongCell.class, "value", long.class);
+            } catch (ReflectiveOperationException e) {
+                throw new ExceptionInInitializerError(e);
+            }
+        }
+    }
 }
