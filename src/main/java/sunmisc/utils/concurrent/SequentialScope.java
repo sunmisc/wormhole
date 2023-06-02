@@ -9,7 +9,9 @@ import java.util.function.Supplier;
 import static java.util.concurrent.CompletableFuture.completedFuture;
 
 /**
- * @author ZelvaLea
+ * This is a helper class for CompletableFuture that provides
+ * the desired order of execution of the action chain in a common scope
+ * @author Sunmisc Unsafe
  */
 public class SequentialScope {
     final AtomicReference<CompletableFuture<?>> stack
