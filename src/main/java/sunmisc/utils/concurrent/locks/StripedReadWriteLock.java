@@ -24,10 +24,7 @@ public class StripedReadWriteLock { // todo: ReadWriteLock
     private final Object monitor = new Object();
 
     public StripedReadWriteLock() {
-        // for arm
-        synchronized (monitor) {
-            adder = new Striped32();
-        }
+        adder = new Striped32();
     }
 
     public <T> T readLock(Supplier<T> supplier) {
@@ -52,6 +49,7 @@ public class StripedReadWriteLock { // todo: ReadWriteLock
     public <T> T writeLock(Supplier<T> supplier) {
         synchronized (monitor) {
             Striped32 p = (Striped32) ADDER.get(this);
+            // check for null on arm?
             adder = null;
             while (p.waiters() != 0)
                 Thread.onSpinWait();
