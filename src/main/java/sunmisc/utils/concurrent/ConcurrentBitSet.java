@@ -1,12 +1,9 @@
 package sunmisc.utils.concurrent;
 
-import sunmisc.annotation.PreviewFeature;
-
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.StringJoiner;
 
-@PreviewFeature
 
 // todo:
 class ConcurrentBitSet {
