@@ -1,4 +1,4 @@
-package jcstress.lock;
+package lock;
 
 import org.openjdk.jcstress.Main;
 import org.openjdk.jcstress.annotations.*;

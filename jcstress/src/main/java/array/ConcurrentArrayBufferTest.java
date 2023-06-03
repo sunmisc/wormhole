@@ -1,4 +1,4 @@
-package jcstress.array;
+package array;
 
 import org.openjdk.jcstress.Main;
 import org.openjdk.jcstress.annotations.*;
