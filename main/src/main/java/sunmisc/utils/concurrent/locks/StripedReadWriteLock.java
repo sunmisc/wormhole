@@ -1,5 +1,7 @@
 package sunmisc.utils.concurrent.locks;
 
+import sunmisc.utils.concurrent.UnblockingArrayBuffer;
+
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.function.Supplier;
@@ -11,7 +13,7 @@ import java.util.function.Supplier;
  * the size of this dynamic table depends on the hardware number of cores
  * To save memory, the table expands with possible races by one cell,
  * the principle is similar to
- * @see sunmisc.utils.concurrent.UnblockingArrayBuffer
+ * @see UnblockingArrayBuffer
  * except for optimizations specifically for our case
  * Our table has the following properties:
  * Table expands and cannot be reduced

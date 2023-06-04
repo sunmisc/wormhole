@@ -1,4 +1,4 @@
-package utils.concurrent;
+package sunmisc.utils.concurrent;
 
 import org.openjdk.jmh.annotations.*;
 import org.openjdk.jmh.runner.Runner;
@@ -6,9 +6,6 @@ import org.openjdk.jmh.runner.RunnerException;
 import org.openjdk.jmh.runner.options.Options;
 import org.openjdk.jmh.runner.options.OptionsBuilder;
 import sunmisc.utils.MathUtils;
-import sunmisc.utils.concurrent.ConcurrentArrayBuffer;
-import sunmisc.utils.concurrent.ConcurrentIndexMap;
-import sunmisc.utils.concurrent.UnblockingArrayBuffer;
 
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;

@@ -1,11 +1,10 @@
-package utils;
+package sunmisc.utils;
 
 import org.openjdk.jmh.annotations.*;
 import org.openjdk.jmh.runner.Runner;
 import org.openjdk.jmh.runner.RunnerException;
 import org.openjdk.jmh.runner.options.Options;
 import org.openjdk.jmh.runner.options.OptionsBuilder;
-import sunmisc.utils.MathUtils;
 
 import java.util.concurrent.TimeUnit;
 
