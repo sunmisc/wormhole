@@ -95,6 +95,23 @@ public class UnblockingArrayBuffer<E>
     }
 
 
+    @Override
+    public String toString() {
+        StringJoiner joiner = new StringJoiner(
+                ", ", "[", "]");
+
+        ContainerBridge b = bridge;
+        if (b instanceof ForwardingPointer)
+            return "govno";
+        for (Object o : b.array) {
+            if ((o instanceof Cell<?> c && c.isDead())) {
+                joiner.add("d");
+            } else if (o instanceof ForwardingPointer f) {
+                joiner.add("f");
+            }
+        }
+        return joiner.toString();
+    }
     public void resizeTest(IntUnaryOperator operator, boolean parallel) {
         for (;;) {
             ContainerBridge p = bridge;
@@ -472,14 +489,14 @@ public class UnblockingArrayBuffer<E>
             } else if (o instanceof Cell<?>) {
                 Object v;
                 if ((v = caeAt(a.nextCells, i, null, o)) == null) {
-                    v = caeAt(sh, i, o, this);
+                    v = caeAt(sh, i, o, a);
                     if (v == o)
                         return TRANSFERRED;
-                    else if (v == this)
+                    else if (v == a)
                         break;
                     else
                         a.nextCells[i] = null;
-                } else if (v == this)
+                } else if (v == a)
                     break;
             }
         }
