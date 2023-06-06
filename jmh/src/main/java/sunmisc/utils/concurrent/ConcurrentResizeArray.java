@@ -11,50 +11,38 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 @State(Scope.Benchmark)
-@OutputTimeUnit(TimeUnit.MILLISECONDS)
-@BenchmarkMode(Mode.Throughput)
-@Warmup(iterations = 2, time = 1)
+@OutputTimeUnit(TimeUnit.MICROSECONDS)
+@BenchmarkMode(Mode.AverageTime)
+@Warmup(iterations = 3, time = 1)
 @Measurement(iterations = 5, time = 2)
+@Threads(1)
 @Fork(1)
 public class ConcurrentResizeArray {
     static final int INIT_CAPACITY = 1_000_000;
     static final double SC = Math.PI * 5;
     static final int DELTA = 700_000;
-    private AtomicInteger x;
-    private ConcurrentIndexMap<Integer> unblocking, concurrent;
+
+    private AtomicInteger adder;
+    private UnblockingArrayBuffer<Integer> unblocking;
 
 
     @Setup
     public void prepare() {
-        x = new AtomicInteger();
+        adder = new AtomicInteger();
         unblocking = new UnblockingArrayBuffer<>(INIT_CAPACITY);
-        concurrent = new ConcurrentArrayBuffer<>(INIT_CAPACITY);
-    }
-    @Benchmark
-    @Threads(Threads.MAX)
-    public int testUnblockingResizeContended() {
-        return resize(unblocking);
-    }
-    @Benchmark
-    @Threads(Threads.MAX)
-    public int testConcurrentResizeContended() {
-        return resize(concurrent);
     }
 
     @Benchmark
-    @Threads(1)
-    public int testUnblockingResize1Thread() {
-        return resize(unblocking);
-    }
-    @Benchmark
-    @Threads(1)
-    public int testConcurrentResize1Thread() {
-        return resize(concurrent);
+    public int resizeConcurrentSeq() {
+        int n = getNextSize(adder.getAndIncrement());
+        unblocking.resizeTest(x -> n, false);
+        return n;
     }
 
-    public int resize(ConcurrentIndexMap<Integer> arr) {
-        int n = getNextSize(x.getAndIncrement());
-        arr.resize(x -> n);
+    @Benchmark
+    public int resizeConcurrentParallel() {
+        int n = getNextSize(adder.getAndIncrement());
+        unblocking.resizeTest(x -> n, true);
         return n;
     }
 
