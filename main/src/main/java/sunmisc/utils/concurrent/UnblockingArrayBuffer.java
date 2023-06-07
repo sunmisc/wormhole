@@ -6,7 +6,6 @@ import java.io.*;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.*;
-import java.util.concurrent.CountedCompleter;
 import java.util.function.IntUnaryOperator;
 
 /**
@@ -92,71 +91,6 @@ public class UnblockingArrayBuffer<E>
                 nodes[i] = new Cell<>(o);
         }
         this.bridge = new ContainerBridge(nodes);
-    }
-
-
-    @Override
-    public String toString() {
-        StringJoiner joiner = new StringJoiner(
-                ", ", "[", "]");
-
-        ContainerBridge b = bridge;
-        if (b instanceof ForwardingPointer)
-            return "govno";
-        for (Object o : b.array) {
-            if ((o instanceof Cell<?> c && c.isDead())) {
-                joiner.add("d");
-            } else if (o instanceof ForwardingPointer f) {
-                joiner.add("f");
-            }
-        }
-        return joiner.toString();
-    }
-    public void resizeTest(IntUnaryOperator operator, boolean parallel) {
-        for (;;) {
-            ContainerBridge p = bridge;
-            int nextLen = operator.applyAsInt(p.array.length);
-            if (BRIDGE.weakCompareAndSet(
-                    this, p,
-                    new ForwardingPointer(p, new Object[nextLen]))) {
-                new ParallelResizeHelper<>(
-                        this, null, parallel
-                        ? 0 : Integer.MAX_VALUE).invoke();
-                return;
-            }
-        }
-    }
-    private static class ParallelResizeHelper<E> extends CountedCompleter<Void> {
-        private final UnblockingArrayBuffer<E> buffer;
-
-        private final int depth;
-
-
-        private ParallelResizeHelper(UnblockingArrayBuffer<E> buffer,
-                                     CountedCompleter<Void> parent,
-                                     int count) {
-            super(parent);
-            this.buffer = buffer;
-            this.depth = count;
-        }
-
-        @Override
-        public void compute() {
-            if (buffer.bridge instanceof ForwardingPointer r) {
-                if (depth < 8) {
-                    setPendingCount(1);
-                    new ParallelResizeHelper<>(buffer,
-                            this, depth + 1).fork();
-                }
-
-                if (buffer.tryTransfer(r) instanceof ForwardingPointer h) {
-                    BRIDGE.compareAndSet(
-                            buffer, h,
-                            new ContainerBridge((h.nextCells)));
-                }
-            }
-            propagateCompletion();
-        }
     }
 
     /**
@@ -341,7 +275,8 @@ public class UnblockingArrayBuffer<E>
                 // after a successful commit, you can be sure that
                 // we will commit either the same array or the next one
                 if (p instanceof ForwardingPointer f &&
-                        tryTransfer(f) instanceof ForwardingPointer r && // recheck
+                        // recheck
+                        tryTransfer(f) instanceof ForwardingPointer r &&
                         !BRIDGE.weakCompareAndSet(
                                 this, r,
                                 new ContainerBridge(r.nextCells)))
@@ -367,40 +302,75 @@ public class UnblockingArrayBuffer<E>
         return array;
     }
     private ContainerBridge tryTransfer(ForwardingPointer a) {
-        int i;
-        outer: while ((i = a.strideIndex) < a.bound) {
-            int last;
-            if (a.weakCasStride(i, last = i + a.stride)) {
-                int b = a.bound, committed = 0, fence;
-                for (fence = Math.min(b, last); i < fence; i++) {
-                    int t = tryTransferSlot(a, i);
-                    if (t == TRANSFERRED)
-                        committed++;
-                    else if (t == SWITCH) {
-                        ContainerBridge n = bridge;
-                        if (n instanceof ForwardingPointer f) {
-                            // trying to switch to a newer array
-                            a = f;
-                            continue outer;
-                        } else
-                            return n; // our mission is over
+        outer : for (int i, last;;) {
+            int b = a.bound;
+            if ((i = a.getStrideIndex()) < b) {
+                if (!a.weakCasStride(i, last = i + a.stride))
+                    continue;
+            } else {
+                i = 0; last = b;
+            }
+            for (boolean advance = false;;) {
+                int committed = 0, fence = Math.min(b, last);
+                for (; i < fence; i++) {
+                    int p = a.getPendingCount();
+                    if (p >= b)
+                        return a;
+                    else if (p + committed >= b)
+                        break;
+                    // transferSlot
+                    for (Object[] sh = a.array;;) {
+                        Object o;
+                        if ((o = arrayAt(sh, i)) == a)
+                            break;
+                        else if (o == null) {
+                            if ((o = caeAt(sh, i, null, a)) == null) {
+                                committed++; break;
+                            }
+                            else if (o == a)
+                                break;
+                        }
+                        else if (o instanceof ForwardingPointer f) {
+                            sh = f.nextCells;
+                            ContainerBridge n = bridge;
+                            if (n != a) {
+                                if (n instanceof ForwardingPointer r) {
+                                    // trying to switch to a newer array
+                                    a = r; continue outer;
+                                } else
+                                    return n; // our mission is over
+                            }
+                        } else if (o instanceof Cell<?>) {
+                            Object v;
+                            if ((v = caeAt(a.nextCells, i, null, o)) == null) {
+                                v = caeAt(sh, i, o, a);
+                                if (v == o) {
+                                    committed++; break;
+                                }
+                                else if (v == a)
+                                    break;
+                                else
+                                    a.nextCells[i] = null;
+                            } else if (v == a)
+                                break;
+                        }
                     }
                 }
-                /*
-                 * after a successful cas, we can read either
-                 * the set value or a value greater than the set value,
-                 * which is already out of scope of the array
-                 */
-                if (committed > 0 &&
+                if (advance) {
+                    a.setPendingCount(b);
+                    return a;
+                }
+                else if (committed > 0 &&
                         a.addAndGetPendingCount(committed) >= b)
                     return a;
-                else if (fence >= b)
-                    break;
+                else if (fence < b)
+                    continue outer;
+                else {
+                    // recheck before commit and help
+                    advance = true; i = 0;
+                }
             }
         }
-        // recheck before commit and help
-        ensureTransferOfAll(a);
-        return a;
     }
 
     static final class ForwardingPointer extends ContainerBridge {
@@ -408,7 +378,7 @@ public class UnblockingArrayBuffer<E>
         final int stride; // the size of the transfer chunk can be from 1 to fence
         final Object[] nextCells;
         // @Contended
-        volatile int strideIndex; // current transfer chunk
+        int strideIndex; // current transfer chunk
         int pendingCount; // total number of transferred chunks
 
         ForwardingPointer(ContainerBridge prevBridge, Object[] nextArray) {
@@ -431,6 +401,9 @@ public class UnblockingArrayBuffer<E>
         int addAndGetPendingCount(int v) {
             return (int) PENDINGCOUNT.getAndAddRelease(this, v) + v;
         }
+        int getStrideIndex() {
+            return (int) STRIDEINDEX.getOpaque(this);
+        }
         boolean weakCasStride(int c, int v) {
             return STRIDEINDEX.weakCompareAndSet(this, c, v);
         }
@@ -448,59 +421,6 @@ public class UnblockingArrayBuffer<E>
                 throw new ExceptionInInitializerError(e);
             }
         }
-    }
-    static final int ALREADY = 0;
-    static final int TRANSFERRED = 1;
-    static final int SWITCH = -1;
-
-    void ensureTransferOfAll(ForwardingPointer a) {
-        int f = a.bound, k = 0;
-        for (int i = 0; i < f; i++) {
-            int p = a.getPendingCount();
-            if (p >= f)
-                return;
-            else if (p + k >= f)
-                break;
-            else if (tryTransferSlot(a, i) < 0)
-                return;
-            else
-                k++;
-        }
-        a.setPendingCount(f);
-/*      // todo: figure out how to get rid of the FWD
-        // in the element of the new array
-        a.oldArray = a.nextCells; // help gc*/
-    }
-    int tryTransferSlot(ForwardingPointer a, int i) {
-        for (Object[] sh = a.array;;) {
-            Object o;
-            if ((o = arrayAt(sh, i)) == a)
-                break;
-            else if (o == null) {
-                if ((o = caeAt(sh, i, null, a)) == null)
-                    return TRANSFERRED;
-                else if (o == a)
-                    break;
-            }
-            else if (o instanceof ForwardingPointer f) {
-                sh = f.nextCells;
-                if (bridge != a)
-                    return SWITCH;
-            } else if (o instanceof Cell<?>) {
-                Object v;
-                if ((v = caeAt(a.nextCells, i, null, o)) == null) {
-                    v = caeAt(sh, i, o, a);
-                    if (v == o)
-                        return TRANSFERRED;
-                    else if (v == a)
-                        break;
-                    else
-                        a.nextCells[i] = null;
-                } else if (v == a)
-                    break;
-            }
-        }
-        return ALREADY;
     }
     @NotNull
     @Override
