@@ -350,7 +350,8 @@ public class UnblockingArrayBuffer<E>
                                 else if (v == a)
                                     break;
                                 else
-                                    a.nextCells[i] = null;
+                                    setAt(a.nextCells, i, null);
+                                    //a.nextCells[i] = null;
                             } else if (v == a)
                                 break;
                         }
