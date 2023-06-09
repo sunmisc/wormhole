@@ -127,14 +127,14 @@ public class ConcurrentBitSet {
     }
     private Cell putVal(int h, Long value,
                         Consumer<Cell> consumer) {
-        final int wordsRequired = h + 1;
+        final int minCap = h + 1;
         boolean expand = false;
         for (Object[] cs = cells; ; ) {
             int n = cs.length;
             if (expand) {
-                if (n < wordsRequired) {
+                if (n < minCap) {
                     try {
-                        int newLen = Math.max(wordsRequired, n << 1);
+                        int newLen = Math.max(minCap, n << 1);
                         Object[] newArray = new Object[newLen];
 
                         for (int i = 0; i < n; ++i) {
@@ -162,7 +162,7 @@ public class ConcurrentBitSet {
                         BUSY.setOpaque(this, false);
                     }
                 }
-            } else if (n < wordsRequired) {
+            } else if (n < minCap) {
                 if (BUSY.weakCompareAndSet(this, false, true))
                     expand = true;
                 cs = cells;
@@ -193,8 +193,7 @@ public class ConcurrentBitSet {
     public String toString() {
         StringJoiner joiner = new StringJoiner(
                 ", ",
-                "[",
-                "]");
+                "[", "]");
         for (int i = 0;;) {
             int t = nextSetBit(i);
             if (t < 0)
