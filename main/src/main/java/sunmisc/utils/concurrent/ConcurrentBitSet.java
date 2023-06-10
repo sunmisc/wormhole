@@ -68,7 +68,7 @@ public class ConcurrentBitSet {
         for (int i = start; i < cs.length; ++i) {
             for (Object o = cs[i]; ; ) {
                 if (o instanceof Object[] ncs) {
-                   // cs = cells;
+                    cs = cells;
                     o = ncs[i];
                 } else {
                     long val = o instanceof Cell r ? r.value : 0;
