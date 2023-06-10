@@ -301,6 +301,18 @@ public class UnblockingArrayBuffer<E>
 
         return array;
     }
+    /*
+     * transfer contract:
+     * First, until we see the ForwardingPointer in the old array,
+     * we should not read the new array
+     *
+     * Secondly, having received a new array, we should not iterate it!
+     * we only read the checked array cell,
+     * we have no guarantee that the new array will be up-to-date
+     *
+     * 2 rules: we read only if we saw ForwardingPointer in the old array
+     * and do not go beyond the current index
+     */
     private ContainerBridge tryTransfer(ForwardingPointer a) {
         outer : for (int i, last;;) {
             int b = a.bound;
