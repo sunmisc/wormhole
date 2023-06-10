@@ -53,7 +53,7 @@ public class StripedReadWriteLock { // todo: ReadWriteLock
             Striped32 p = (Striped32) ADDER.get(this);
             // check for null on arm?
             adder = null;
-            while (p.waiters() != 0)
+            while (p.isReadLocked())
                 Thread.onSpinWait();
             try {
                 return supplier.get();
@@ -101,8 +101,10 @@ public class StripedReadWriteLock { // todo: ReadWriteLock
         }
     }
     public static class Striped32 {
-        static final int NCPU =
-                Runtime.getRuntime().availableProcessors();
+        static final int MAX_CAPACITY = 16;
+        static final int NCPU = Math.min(
+                MAX_CAPACITY,
+                Runtime.getRuntime().availableProcessors());
 
         private volatile Object[] cells;
         private boolean busy;
@@ -171,8 +173,7 @@ public class StripedReadWriteLock { // todo: ReadWriteLock
             }
         }
 
-        public int waiters() {
-            int sum = 0;
+        public boolean isReadLocked() {
             Object[] cs = cells;
             if (cs != null) {
                 for (int i = 0, n = cs.length; i < n; ++i) {
@@ -180,14 +181,15 @@ public class StripedReadWriteLock { // todo: ReadWriteLock
                         if (o instanceof Object[] ncs)
                             o = ncs[i];
                         else {
-                            if (o instanceof Cell r)
-                                sum += r.readers;
+                            if (o instanceof Cell r &&
+                                    r.readers != 0)
+                                return true;
                             break;
                         }
                     }
                 }
             }
-            return sum;
+            return false;
         }
         private static final VarHandle AA
                 = MethodHandles.arrayElementVarHandle(Object[].class);

@@ -2,8 +2,6 @@ package sunmisc.utils.concurrent;
 
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
-import java.util.BitSet;
-import java.util.Objects;
 import java.util.StringJoiner;
 import java.util.function.Consumer;
 
@@ -16,8 +14,6 @@ public class ConcurrentBitSet {
     /* Used to shift left or right for a partial word mask */
     private static final long CELL_MASK = -1;
     private volatile Object[] cells;
-
-    private volatile int size; // todo:
     private boolean busy;
 
     public ConcurrentBitSet() {
@@ -72,7 +68,8 @@ public class ConcurrentBitSet {
         for (int i = start; i < cs.length; ++i) {
             for (Object o = cs[i]; ; ) {
                 if (o instanceof Object[] ncs) {
-                    cs = cells; o = ncs[i];
+                   // cs = cells;
+                    o = ncs[i];
                 } else {
                     long val = o instanceof Cell r ? r.value : 0;
                     if (i == start)
@@ -88,9 +85,9 @@ public class ConcurrentBitSet {
         return -1;
     }
     public int nextClearBit(int fromIndex) {
-        int start = cellIndex(fromIndex);
+        int start = cellIndex(fromIndex), i;
         Object[] cs = cells;
-        for (int i = start; i < cs.length; ++i) {
+        for (i = start; i < cs.length; ++i) {
             for (Object o = cs[i]; ; ) {
                 if (o instanceof Object[] ncs) {
                     cs = cells; o = ncs[i];
@@ -106,8 +103,8 @@ public class ConcurrentBitSet {
                         break;
                 }
             }
-        } // todo:
-        return fromIndex;
+        }
+        return start * BITS_PER_CELL;
     }
     public int cardinality() {
         int sum = 0;
@@ -204,6 +201,23 @@ public class ConcurrentBitSet {
 
         return joiner.toString();
     }
+
+    private int recalculateWordsInUse() {
+        Object[] cs = cells;
+        for (int i = cs.length-1; i >= 0; --i) {
+            for (Object o = cs[i]; ; ) {
+                if (o instanceof Object[] ncs) {
+                    o = ncs[i];
+                } else if (o instanceof Cell r) {
+                    if (r.value == 0)
+                        break;
+                    return i + 1;
+                }
+            }
+        }
+        return 0;
+    }
+
 
     static int cellIndex(int bitIndex) {
         return bitIndex >> ADDRESS_BITS_PER_CELL;
