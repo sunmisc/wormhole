@@ -1,9 +1,11 @@
 package sunmisc.utils.concurrent.locks;
 
+import org.openjdk.jol.info.ClassLayout;
 import sunmisc.utils.concurrent.UnblockingArrayBuffer;
 
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
+import java.util.concurrent.locks.*;
 import java.util.function.Supplier;
 
 /**
@@ -22,39 +24,69 @@ import java.util.function.Supplier;
  * @author Sunmisc Unsafe
  */
 public class StripedReadWriteLock { // todo: ReadWriteLock
-    private volatile Striped32 adder;
-    private final Object monitor = new Object();
 
-    public StripedReadWriteLock() {
-        adder = new Striped32();
+    // todo: queue
+    private final Object monitor = new Object();
+    private volatile Striped32 adder = new Striped32();
+    private volatile Thread waiter;
+
+
+    static {
+        // Reduce the risk of rare disastrous classloading in first call to
+        // LockSupport.park: https://bugs.openjdk.org/browse/JDK-8074773
+         Class<?> ensureLoaded = LockSupport.class;
     }
 
+
     public <T> T readLock(Supplier<T> supplier) {
-        for (Striped32 a;;) {
+        for (Striped32 a; ; ) {
             if ((a = adder) == null) {
                 synchronized (monitor) {
                     return supplier.get();
                 }
             } else {
                 Cell x = a.inc(1);
-                if (adder == null)
-                    x.getAndAdd(-1); // signal
-                else {
+                if (adder == null) {
+                    unlock(x, a);
+                } else {
                     T result = supplier.get();
-                    x.getAndAdd(-1);
+                    unlock(x, a);
                     return result;
                 }
             }
         }
-
     }
+
+    private void unlock(Cell x, Striped32 a) {
+        x.getAndAdd(-1);
+
+        if (PARKING && adder == null) {
+            Thread h = waiter;
+            if (h != null && !a.isReadLocked()) {
+                LockSupport.unpark(h);
+            }
+        }
+    }
+    static final boolean PARKING = true;
+
     public <T> T writeLock(Supplier<T> supplier) {
+        Thread owner = Thread.currentThread();
         synchronized (monitor) {
             Striped32 p = (Striped32) ADDER.get(this);
-            // check for null on arm?
+
+            // check null by arm?
+            waiter = owner;
             adder = null;
-            while (p.isReadLocked())
+            while (p.isReadLocked()) {
+                if (PARKING) {
+                    LockSupport.park();
+                    if (Thread.interrupted())
+                        throw new IllegalStateException(
+                                "Thread was interrupted while waiting for write lock");
+                }
                 Thread.onSpinWait();
+            }
+            waiter = null; // clear
             try {
                 return supplier.get();
             } finally {
@@ -101,11 +133,10 @@ public class StripedReadWriteLock { // todo: ReadWriteLock
         }
     }
     public static class Striped32 {
-        static final int MAX_CAPACITY = 16;
+        static final int MAX_CAPACITY = 32;
         static final int NCPU = Math.min(
                 MAX_CAPACITY,
                 Runtime.getRuntime().availableProcessors());
-
         private volatile Object[] cells;
         private boolean busy;
 
@@ -173,6 +204,24 @@ public class StripedReadWriteLock { // todo: ReadWriteLock
             }
         }
 
+        public int getReadLockCount() {
+            int sum = 0;
+            Object[] cs = cells;
+            if (cs != null) {
+                for (int i = 0, n = cs.length; i < n; ++i) {
+                    for (Object o = cs[i];;) {
+                        if (o instanceof Object[] ncs)
+                            o = ncs[i];
+                        else {
+                            if (o instanceof Cell r)
+                                sum += r.readers;
+                            break;
+                        }
+                    }
+                }
+            }
+            return sum;
+        }
         public boolean isReadLocked() {
             Object[] cs = cells;
             if (cs != null) {
@@ -191,6 +240,7 @@ public class StripedReadWriteLock { // todo: ReadWriteLock
             }
             return false;
         }
+
         private static final VarHandle AA
                 = MethodHandles.arrayElementVarHandle(Object[].class);
 
@@ -203,6 +253,7 @@ public class StripedReadWriteLock { // todo: ReadWriteLock
                         "busy", boolean.class);
                 CELLS = l.findVarHandle(Striped32.class,
                         "cells", Object[].class);
+
             } catch (ReflectiveOperationException e) {
                 throw new ExceptionInInitializerError(e);
             }
