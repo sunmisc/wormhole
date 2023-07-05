@@ -8,21 +8,28 @@ import java.lang.invoke.VarHandle;
 import java.util.*;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
-import java.util.function.Consumer;
 
 class ConcurrentLinkedHashMap<K,V> extends AbstractMap<K,V>
         implements ConcurrentMap<K,V> {
 
     static final int MAXIMUM_CAPACITY = 1 << 30;
-    private volatile PointerNode<K,V> last;
+    private final Node<K,V> head;
+    private volatile Node<K,V> tail;
     private final AtomicInteger size = new AtomicInteger();
 
     // todo: UnblockingArrayBuffer
-    private volatile PointerNode<K,V>[] table = new PointerNode[8];
+    private volatile Bin<K,V>[] table = new Bin[8];
 
     public ConcurrentLinkedHashMap() {
-        last = new PointerNode<>(null);
+        head = tail = new Node<>() {
+            @Override public K getKey() { return null; }
+
+            @Override public V getValue() { return null; }
+
+            @Override public boolean isDead() { return true; }
+        };
     }
 
     static int tableSizeFor(int cap) {
@@ -40,23 +47,29 @@ class ConcurrentLinkedHashMap<K,V> extends AbstractMap<K,V>
     }
 
     @Override
-    public boolean containsKey(Object key) {
-        return false;
-    }
-
-    @Override
-    public boolean containsValue(Object value) {
-        return false;
-    }
-
-    @Override
     public V get(Object key) {
         int h = spread(key.hashCode());
-        PointerNode<K,V>[] tab = table;
+        Bin<K,V>[] tab = table;
         int i = h & (tab.length - 1);
-        PointerNode<K,V> n = tabAt(tab, i);
-        Node<K,V> p;
-        return (p = n.find(h, key)) != null ? p.val : null;
+        Bin<K,V> n = tabAt(tab, i);
+        if (n == null)
+            return null;
+        Node<K,V> x = n.find((K)key);
+        return x == null ? null : x.getValue();
+    }
+
+    public K getFirstKey() {
+        Node<K,V> x = tryFindNextActiveNode(head);
+        return x.getKey();
+    }
+    @Override
+    public String toString() {
+        StringJoiner joiner = new StringJoiner(", ",
+                "[", "]");
+        for (Node<K,V> h = head; h != null; h = h.next) {
+            joiner.add(String.valueOf(h.getKey()));
+        }
+        return joiner.toString();
     }
 
     public static void main(String[] args) {
@@ -67,27 +80,27 @@ class ConcurrentLinkedHashMap<K,V> extends AbstractMap<K,V>
         map.put(1, 1);
         map.put(66, 1);
 
-        map.forEach(x -> {
-            System.out.println(x.getKey() + " " + x.getValue());
-        });
-        System.out.println(Arrays.toString(map.table));
+        map.remove(34);
+        System.out.println(map.getFirstKey());
+        System.out.println(map);
     }
 
     @Nullable
     @Override
     public V put(K key, V value) {
         int h = spread(key.hashCode());
-        for (PointerNode<K,V> x;;) {
-            PointerNode<K,V>[] tab = table;
+        for (Bin<K,V> x;;) {
+            Bin<K,V>[] tab = table;
             int n = h & (tab.length - 1);
             if ((x = tabAt(tab, n)) == null) {
 
-                Node<K,V> newNode = new Node<>(h, key, value);
+                Node<K,V> newNode = new HashNode<>(h, key, value);
 
-                PointerNode<K,V> start = new PointerNode<>(newNode);
+                Bin<K,V> bin = newBin(key);
+                bin.addIfAbsent(newNode);
 
-                if ((x = caeTabAt(tab, n, null, start)) == null) {
-                    offer(start);
+                if ((x = caeTabAt(tab, n, null, bin)) == null) {
+                    offer(newNode);
                     size.getAndIncrement();
                     return null;
                 }
@@ -96,14 +109,16 @@ class ConcurrentLinkedHashMap<K,V> extends AbstractMap<K,V>
             try {
                 if (table == tab) {
 
-                    Node<K,V> e = x.find(h, key);
+                    HashNode<K,V> e = new HashNode<>(h, key, value);
+                    Node<K,V> q = x.addIfAbsent(e);
 
-                    if (e != null) {
-                        e.val = value;
+                    if (q != null) {
+                        return q.setValue(value);
                     } else {
-                        x.linkLast(h, key, value);
+                        offer(e);
+
+                        return value;
                     }
-                    return null; // todo:
                 }
             } finally {
                 x.unlock();
@@ -114,49 +129,53 @@ class ConcurrentLinkedHashMap<K,V> extends AbstractMap<K,V>
     @Override
     public V remove(Object key) {
         int h = spread(key.hashCode());
-        for (PointerNode<K,V> x;;) {
-            PointerNode<K,V>[] tab = table;
+        for (Bin<K,V> f;;) {
+            Bin<K,V>[] tab = table;
             int n = h & (tab.length - 1);
 
-            if ((x = tabAt(tab, n)) == null)
+            if ((f = tabAt(tab, n)) == null)
                 return null;
             else {
-                x.lock();
+                f.lock();
                 try {
 
-                    if (x.unlink(key) &&
-                            casTabAt(tab, n, x, null)) {
+                    Node<K,V> x = f.remove((K) key);
 
-                        PointerNode<K,V> p = x.prev, q = x.next;
+                    if (x != null &&
+                            casTabAt(tab, n, f, null)) {
 
-                        for (PointerNode<K,V> a = q; a != null;) {
-                            PointerNode<K,V> f = a.prev;
-                            a = tryFindPrevActiveNode(a);
-                            if (PREV.weakCompareAndSet(q, f, a)) {
-                                break;
-                            }
+                        x.setValue(null); // mark
+
+                        Node<K,V> prev = x.prev, next = x.next;
+
+                        if (prev != null) {
+                            Node<K,V> activePrev
+                                    = tryFindPrevActiveNode(prev);
+                            skipDeletedSuccessors(activePrev);
+
+                            if (next == null)
+                                TAIL.compareAndSet(this, x, activePrev);
                         }
-                        for (PointerNode<K,V> a = p; a != null;) {
-                            PointerNode<K,V> f = a.next;
-                            a = tryFindNextActiveNode(a);
-                            if (NEXT.weakCompareAndSet(p, f, a)) {
-                                break;
-                            }
+                        if (next != null) {
+                            Node<K,V> activeNext
+                                    = tryFindNextActiveNode(next);
+
+                            skipDeletedPredecessors(activeNext);
                         }
                     }
                 } finally {
-                    x.lock();
+                    f.lock();
                 }
             }
         }
     }
 
-    private void offer(PointerNode<K,V> newNode) {
+    private void offer(Node<K,V> newNode) {
         for (;;) {
-            PointerNode<K,V> l = last;
+            Node<K,V> l = tail;
 
             for (;;) {
-                PointerNode<K,V> x = l.next;
+                Node<K,V> x = l.next;
                 if (x != null)
                     l = x;
                 else
@@ -171,15 +190,31 @@ class ConcurrentLinkedHashMap<K,V> extends AbstractMap<K,V>
         }
     }
 
-
-    @Override
-    public void putAll(@NotNull Map<? extends K, ? extends V> m) {
-
+    private void skipDeletedPredecessors(Node<K,V> x) {
+        Node<K,V> p = x.prev,
+                n = tryFindPrevActiveNode(p);
+        if (p != n)
+            PREV.setRelease(x, n);
     }
 
-    @Override
-    public void clear() {
+    private void skipDeletedSuccessors(Node<K,V> x) {
+        Node<K, V> p = x.next,
+                n = tryFindNextActiveNode(p);
+        if (p != n)
+            NEXT.setRelease(x, n);
+    }
+    Node<K,V> tryFindNextActiveNode(Node<K,V> src) {
+        Node<K,V> n = src, p;
+        while (n.isDead() && (p = n.next) != null)
+            n = p;
+        return n;
+    }
 
+    Node<K,V> tryFindPrevActiveNode(Node<K,V> src) {
+        Node<K,V> n = src, p;
+        while (n.isDead() && (p = n.prev) != null)
+            n = p;
+        return n;
     }
 
     @NotNull
@@ -208,132 +243,54 @@ class ConcurrentLinkedHashMap<K,V> extends AbstractMap<K,V>
         return null;
     }
 
-    static class PointerNode<K,V> extends ReentrantLock {
-
-        // todo: red-black tree
-        volatile Node<K,V> tail;
-
-        volatile boolean dead;
-        volatile PointerNode<K,V> prev, next;
-
-        PointerNode(Node<K,V> start) {
-            tail = start;
-        }
-
-
-        void linkLast(int h, K key, V val) {
-            // assert isLocked();
-            tail = new Node<>(h, key, val, tail);
-        }
-        // x y (z) t
-
-        boolean unlink(Object key) {
-            // assert isLocked();
-            for (Node<K,V> x = tail; x != null;) {
-
-                Node<K,V> n = x.prev;
-
-                if (Objects.equals(n.key, key)) {
-
-                    x.prev = n.prev;
-                    return false;
-                }
-                x = n;
-            }
-            return dead = true;
-        }
-
-        Node<K,V> find(int h, Object k) {
-            for (Node<K,V> x = tail; x != null; x = x.prev) {
-                K ek;
-                if (x.hash == h &&
-                        ((ek = x.key) == k || (k.equals(ek))))
-                    return x;
-            }
-            return null;
-        }
-        public void forEach(Consumer<Map.Entry<K,V>> action) {
-            if (!dead)
-                forEach0(tail, action);
-        }
-
-        private void forEach0(Node<K,V> x,
-                              Consumer<Map.Entry<K,V>> action) {
-            if (x != null) {
-                forEach0(x.prev, action);
-                action.accept(Map.entry(x.key, x.val));
-            }
-        }
-
-        @Override
-        public String toString() {
-            StringJoiner joiner = new StringJoiner(", ");
-
-            forEach(x -> joiner.add(x.getKey() + "=" + x.getValue()));
-            return joiner.toString();
-        }
-    }
-    PointerNode<K,V> tryFindNextActiveNode(PointerNode<K,V> src) {
-        PointerNode<K,V> n = src;
-        do { n = n.next; }
-        while (n != null && n.dead);
-        return n;
-    }
-
-    PointerNode<K,V> tryFindPrevActiveNode(PointerNode<K,V> src) {
-        PointerNode<K,V> p = src;
-        do { p = p.prev; }
-        while (p != null && p.dead);
-        return p;
-    }
-
-    public void forEach(Consumer<Map.Entry<K,V>> action) {
-        forEach0(last, action);
-    }
-
-    private void forEach0(PointerNode<K,V> x,
-                          Consumer<Map.Entry<K,V>> action) {
-        if (x != null) {
-            forEach0(x.prev, action);
-            x.forEach(action);
-        }
-    }
-
-
-    static class Node<K,V> extends ReentrantLock
-            implements Map.Entry<K,V> {
+    static class HashNode<K,V> extends Node<K,V> {
         final int hash;
         final K key;
-        volatile V val;
-        volatile Node<K,V> prev;
+        volatile V value;
 
-        Node(int hash, K key, V value) {
+        HashNode(int hash, K key, V value) {
             this.hash = hash;
             this.key = key;
-            this.val = value;
+            this.value = value;
         }
-        Node(int hash, K key, V value, Node<K,V> prev) {
-            this(hash, key, value);
-            this.prev = prev;
+
+        @Override public K getKey() { return key; }
+
+        @Override public V getValue() { return value; }
+
+        @Override
+        public V setValue(V val) {
+            V v = value;
+            value = val;
+            return v;
+        }
+    }
+
+    static abstract class Node<K,V> implements Map.Entry<K,V> {
+        volatile Node<K,V> prev, next;
+
+        boolean isDead() {
+            return getValue() == null;
         }
 
         @Override
-        public final K getKey()     { return key; }
-        @Override
-        public final V getValue()   { return val; }
-        @Override
-        public final int hashCode() { return hash ^ val.hashCode(); }
-        @Override
         public final String toString() {
-            return key + "=" + val;
+            return getKey() + "=" + getValue();
         }
         @Override
-        public final V setValue(V value) {
+        public V setValue(V value) {
             throw new UnsupportedOperationException();
+        }
+        @Override
+        public int hashCode() {
+            return Objects.hashCode(getKey()) ^ Objects.hashCode(getValue());
         }
         @Override
         public final boolean equals(Object o) {
             Object k, v, u; Map.Entry<?,?> e;
+
+            K key = getKey();
+            V val = getValue();
             return ((o instanceof Map.Entry) &&
                     (k = (e = (Map.Entry<?,?>)o).getKey()) != null &&
                     (v = e.getValue()) != null &&
@@ -344,31 +301,26 @@ class ConcurrentLinkedHashMap<K,V> extends AbstractMap<K,V>
     /*
      * Atomic access methods are used for array
      */
-    private static <K,V> PointerNode<K,V>
-    tabAt(PointerNode<K,V>[] tab, int i) {
-        return (PointerNode<K, V>) AA.getAcquire(tab, i);
+    private static <K,V> Bin<K,V>
+    tabAt(Bin<K,V>[] tab, int i) {
+        return (Bin<K, V>) AA.getAcquire(tab, i);
     }
-    private static <K,V> PointerNode<K,V>
-    caeTabAt(PointerNode<K,V>[] tab, int i,
-             PointerNode<K,V> c,
-             PointerNode<K,V> v) {
-        return (PointerNode<K, V>) AA.compareAndExchange(tab, i, c, v);
+    private static <K,V> Bin<K,V>
+    caeTabAt(Bin<K,V>[] tab, int i,
+             Bin<K,V> c,
+             Bin<K,V> v) {
+        return (Bin<K, V>) AA.compareAndExchange(tab, i, c, v);
     }
     private static <K,V> boolean
-    casTabAt(PointerNode<K,V>[] tab, int i,
-             PointerNode<K,V> c,
-             PointerNode<K,V> v) {
+    casTabAt(Bin<K,V>[] tab, int i,
+             Bin<K,V> c,
+             Bin<K,V> v) {
         return AA.compareAndSet(tab, i, c, v);
     }
-    private static <K,V> PointerNode<K,V>
-    getAndSetAt(PointerNode<K,V>[] tab, int i, PointerNode<K,V> v) {
-        return (PointerNode<K, V>) AA.getAndSet(tab, i, v);
+    private static <K,V> Bin<K,V>
+    getAndSetAt(Bin<K,V>[] tab, int i, Bin<K,V> v) {
+        return (Bin<K, V>) AA.getAndSet(tab, i, v);
     }
-
-    private record Index<K,V>(
-            PointerNode<K,V> prev,
-            PointerNode<K,V> next
-    ) { }
 
     // VarHandle mechanics
     private static final VarHandle TAIL;
@@ -376,20 +328,132 @@ class ConcurrentLinkedHashMap<K,V> extends AbstractMap<K,V>
     private static final VarHandle PREV, NEXT;
 
     private static final VarHandle AA
-            = MethodHandles.arrayElementVarHandle(PointerNode[].class);
+            = MethodHandles.arrayElementVarHandle(Bin[].class);
 
     static {
         try {
             MethodHandles.Lookup l = MethodHandles.lookup();
-            TAIL = l.findVarHandle(ConcurrentLinkedHashMap.class, "last",
-                    PointerNode.class);
+            TAIL = l.findVarHandle(ConcurrentLinkedHashMap.class, "tail",
+                    Node.class);
 
-            NEXT = l.findVarHandle(PointerNode.class, "next",
-                    PointerNode.class);
-            PREV = l.findVarHandle(PointerNode.class, "prev",
-                    PointerNode.class);
+            NEXT = l.findVarHandle(Node.class, "next",
+                    Node.class);
+            PREV = l.findVarHandle(Node.class, "prev",
+                    Node.class);
         } catch (ReflectiveOperationException e) {
             throw new ExceptionInInitializerError(e);
         }
+    }
+
+    private static <K,V> AbstractBin<K,V> newBin(K key) {
+        return key instanceof Comparable<?>
+                ? new TreeBin<>()
+                : new LinkedBin<>();
+    }
+    private static class TreeBin<K,V> extends AbstractBin<K,V> {
+
+        private final TreeMap<K, Node<K,V>> tree
+                = new TreeMap<>();
+
+        @Override
+        public Node<K,V> addIfAbsent(Node<K, V> n) {
+            return tree.putIfAbsent(n.getKey(), n);
+        }
+
+        @Override
+        public Node<K, V> remove(K key) {
+            return tree.remove(key);
+        }
+
+        @Override
+        public Node<K, V> find(K key) {
+            return tree.get(key);
+        }
+
+        @Override
+        public int size() {
+            return tree.size();
+        }
+
+        @NotNull
+        @Override
+        public Iterator<Node<K, V>> iterator() {
+            return tree.values().iterator();
+        }
+        @Override
+        public String toString() {
+            return tree.values().toString();
+        }
+    }
+
+    private static class LinkedBin<K,V> extends AbstractBin<K,V> {
+        private final LinkedList<Node<K,V>> list
+                = new LinkedList<>(); // todo:
+
+        @Override
+        public Node<K,V> addIfAbsent(Node<K, V> n) {
+            Node<K,V> f = find(n.getKey());
+
+            if (f != null)
+                return f;
+            list.add(n);
+            return null;
+        }
+
+        @Override
+        public Node<K,V> remove(K key) {
+            Iterator<Node<K,V>> itr = iterator();
+            while (itr.hasNext()) {
+                Node<K,V> x = itr.next();
+                if (Objects.equals(x.getKey(), key)) {
+                    itr.remove();
+                    return x;
+                }
+            }
+            return null;
+        }
+
+        @Override
+        public Node<K, V> find(K key) {
+
+            for (Node<K,V> n : list) {
+                if (Objects.equals(n.getKey(), key)) {
+                    return n;
+                }
+            }
+            return null;
+        }
+
+        @Override
+        public int size() {
+            return list.size();
+        }
+
+        @NotNull
+        @Override
+        public Iterator<Node<K, V>> iterator() {
+            return list.iterator();
+        }
+
+        @Override
+        public String toString() {
+            return list.toString();
+        }
+    }
+
+
+    private abstract static class AbstractBin<K,V>
+            extends ReentrantLock implements Bin<K,V> {
+
+    }
+    private interface Bin<K,V>
+            extends Iterable<Node<K,V>>, Lock {
+        Node<K,V> addIfAbsent(Node<K,V> n);
+
+        Node<K,V> remove(K key);
+
+        Node<K,V> find(K key);
+
+        int size();
     }
 }
