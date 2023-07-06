@@ -8,33 +8,48 @@ import java.lang.invoke.VarHandle;
 import java.util.*;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
 class ConcurrentLinkedHashMap<K,V> extends AbstractMap<K,V>
         implements ConcurrentMap<K,V> {
-
     static final int MAXIMUM_CAPACITY = 1 << 30;
     private final Node<K,V> head;
     private volatile Node<K,V> tail;
     private final AtomicInteger size = new AtomicInteger();
 
     // todo: UnblockingArrayBuffer
-    private volatile Bin<K,V>[] table = new Bin[8];
+    private volatile Bucket<K,V>[] table = new Bucket[8];
 
     public ConcurrentLinkedHashMap() {
-        head = tail = new Node<>() {
-            @Override public K getKey() { return null; }
+        head = tail = new DummyNode<>();
+    }
 
-            @Override public V getValue() { return null; }
+    public static void main(String[] args) {
+        ConcurrentLinkedHashMap<Integer,Integer> map
+                = new ConcurrentLinkedHashMap<>();
 
-            @Override public boolean isDead() { return true; }
-        };
+        for (int i = 0; i < 4; ++i) {
+            map.put(i,i);
+        }
+        map.pollFirst();
+
+        System.out.println(Arrays.toString(map.table));
+        System.out.println(map);
     }
 
     static int tableSizeFor(int cap) {
         int n = -1 >>> Integer.numberOfLeadingZeros(cap - 1);
         return (n < 0) ? 1 : (n >= MAXIMUM_CAPACITY) ? MAXIMUM_CAPACITY : n + 1;
+    }
+
+    public void pollFirst() {
+        for (Node<K,V> h = head; h != null; h = h.next) {
+            if (!h.isDead() && remove(h.getKey()) != null)
+                return;
+        }
+
     }
 
     static int spread(int h) {
@@ -48,10 +63,10 @@ class ConcurrentLinkedHashMap<K,V> extends AbstractMap<K,V>
 
     @Override
     public V get(Object key) {
-        int h = spread(key.hashCode());
-        Bin<K,V>[] tab = table;
+        final int h = spread(key.hashCode());
+        Bucket<K,V>[] tab = table;
         int i = h & (tab.length - 1);
-        Bin<K,V> n = tabAt(tab, i);
+        Bucket<K,V> n = tabAt(tab, i);
         if (n == null)
             return null;
         Node<K,V> x = n.find((K)key);
@@ -67,126 +82,147 @@ class ConcurrentLinkedHashMap<K,V> extends AbstractMap<K,V>
         StringJoiner joiner = new StringJoiner(", ",
                 "[", "]");
         for (Node<K,V> h = head; h != null; h = h.next) {
-            joiner.add(String.valueOf(h.getKey()));
+            joiner.add(h.toString());
         }
         return joiner.toString();
     }
 
-    public static void main(String[] args) {
-        ConcurrentLinkedHashMap<Integer,Integer> map
-                = new ConcurrentLinkedHashMap<>();
-        map.put(34, 1);
-        map.put(23, 1);
-        map.put(1, 1);
-        map.put(66, 1);
 
-        map.remove(34);
-        System.out.println(map.getFirstKey());
-        System.out.println(map);
-    }
-
-    @Nullable
-    @Override
-    public V put(K key, V value) {
-        int h = spread(key.hashCode());
-        for (Bin<K,V> x;;) {
-            Bin<K,V>[] tab = table;
+    private V putVal(K key, V value, boolean ifAbsent) {
+        final int h = spread(key.hashCode());
+        for (Bucket<K,V> x;;) {
+            Bucket<K,V>[] tab = table;
             int n = h & (tab.length - 1);
             if ((x = tabAt(tab, n)) == null) {
 
+
+                Bucket<K,V> bucket = newBin(key);
                 Node<K,V> newNode = new HashNode<>(h, key, value);
+                bucket.addIfAbsent(newNode);
 
-                Bin<K,V> bin = newBin(key);
-                bin.addIfAbsent(newNode);
-
-                if ((x = caeTabAt(tab, n, null, bin)) == null) {
-                    offer(newNode);
-                    size.getAndIncrement();
+                if ((x = caeTabAt(tab, n, null, bucket)) == null) {
+                    linkLast(newNode);
                     return null;
                 }
-            }
-            x.lock();
-            try {
-                if (table == tab) {
-
-                    HashNode<K,V> e = new HashNode<>(h, key, value);
-                    Node<K,V> q = x.addIfAbsent(e);
+            } else {
+                x.lock();
+                try {
+                    HashNode<K, V> e = new HashNode<>(h, key, value);
+                    Node<K, V> q = x.addIfAbsent(e);
 
                     if (q != null) {
-                        return q.setValue(value);
+                        return ifAbsent ? q.getValue() : q.setValue(value);
                     } else {
-                        offer(e);
+                        linkLast(e);
 
                         return value;
                     }
+                } finally {
+                    x.unlock();
                 }
+            }
+        }
+    }
+    @Nullable
+    @Override
+    public V put(K key, V value) {
+        return putVal(key, value, false);
+    }
+    @Override
+    public boolean replace(@NotNull K key,
+                           @NotNull V oldValue,
+                           @NotNull V newValue) {
+        final int h = spread(key.hashCode());
+        Bucket<K,V>[] tab = table;
+        int n = h & (tab.length - 1);
+        Bucket<K,V> x = tabAt(tab, n);
+
+
+        if (x == null) {
+            return false;
+        } else {
+            x.lock();
+            try {
+                Node<K, V> e = x.find(key);
+
+                if (Objects.equals(e.getValue(), oldValue)) {
+                    e.setValue(newValue);
+                    return true;
+                } else
+                    return false;
             } finally {
                 x.unlock();
+            }
+        }
+    }
+    private V removeVal(K key, V expected) {
+        final int h = spread(key.hashCode());
+        Bucket<K,V>[] tab = table;
+
+        int n = h & (tab.length - 1);
+
+        Bucket<K,V> f = tabAt(tab, n);
+
+        if (f == null)
+            return null;
+        else {
+            f.lock();
+            try {
+                Node<K, V> x = expected == null
+                        ? f.remove(key)
+                        : f.remove(key, expected);
+
+                if (x == null)
+                    return null;
+                else if (f.size() == 0)
+                    casTabAt(tab, n, f, null);
+
+                V val = x.setValue(null); // mark
+
+                unlink(x);
+
+                return val;
+            } finally {
+                f.lock();
             }
         }
     }
 
     @Override
     public V remove(Object key) {
-        int h = spread(key.hashCode());
-        for (Bin<K,V> f;;) {
-            Bin<K,V>[] tab = table;
-            int n = h & (tab.length - 1);
-
-            if ((f = tabAt(tab, n)) == null)
-                return null;
-            else {
-                f.lock();
-                try {
-
-                    Node<K,V> x = f.remove((K) key);
-
-                    if (x != null &&
-                            casTabAt(tab, n, f, null)) {
-
-                        x.setValue(null); // mark
-
-                        Node<K,V> prev = x.prev, next = x.next;
-
-                        if (prev != null) {
-                            Node<K,V> activePrev
-                                    = tryFindPrevActiveNode(prev);
-                            skipDeletedSuccessors(activePrev);
-
-                            if (next == null)
-                                TAIL.compareAndSet(this, x, activePrev);
-                        }
-                        if (next != null) {
-                            Node<K,V> activeNext
-                                    = tryFindNextActiveNode(next);
-
-                            skipDeletedPredecessors(activeNext);
-                        }
-                    }
-                } finally {
-                    f.lock();
-                }
-            }
-        }
+        return removeVal((K) key, null);
     }
 
-    private void offer(Node<K,V> newNode) {
+    private void linkLast(Node<K,V> newNode) {
         for (;;) {
             Node<K,V> l = tail;
 
-            for (;;) {
-                Node<K,V> x = l.next;
-                if (x != null)
-                    l = x;
-                else
-                    break;
-            }
             PREV.set(newNode, l);
 
             if (NEXT.weakCompareAndSet(l, null, newNode)) {
                 TAIL.compareAndSet(this, l, newNode);
+
+                size.getAndIncrement();
                 return;
             }
+        }
+    }
+    private void unlink(Node<K,V> x) {
+        Node<K,V> prev = x.prev, next = x.next;
+
+        if (prev != null) {
+            Node<K,V> activePrev
+                    = tryFindPrevActiveNode(prev);
+            skipDeletedSuccessors(activePrev);
+
+            if (next == null)
+                TAIL.compareAndSet(this, x, activePrev);
+        }
+        if (next != null) {
+            Node<K,V> activeNext
+                    = tryFindNextActiveNode(next);
+
+            skipDeletedPredecessors(activeNext);
         }
     }
 
@@ -225,22 +261,18 @@ class ConcurrentLinkedHashMap<K,V> extends AbstractMap<K,V>
 
     @Override
     public V putIfAbsent(@NotNull K key, V value) {
-        return null;
+        return putVal(key, value, true);
     }
 
     @Override
     public boolean remove(@NotNull Object key, Object value) {
-        return false;
+        return removeVal((K) key, (V) value) == value;
     }
 
-    @Override
-    public boolean replace(@NotNull K key, @NotNull V oldValue, @NotNull V newValue) {
-        return false;
-    }
 
     @Override
     public V replace(@NotNull K key, @NotNull V value) {
-        return null;
+        return put(key, value);
     }
 
     static class HashNode<K,V> extends Node<K,V> {
@@ -301,25 +333,25 @@ class ConcurrentLinkedHashMap<K,V> extends AbstractMap<K,V>
     /*
      * Atomic access methods are used for array
      */
-    private static <K,V> Bin<K,V>
-    tabAt(Bin<K,V>[] tab, int i) {
-        return (Bin<K, V>) AA.getAcquire(tab, i);
+    private static <K,V> Bucket<K,V>
+    tabAt(Bucket<K,V>[] tab, int i) {
+        return (Bucket<K, V>) AA.getAcquire(tab, i);
     }
-    private static <K,V> Bin<K,V>
-    caeTabAt(Bin<K,V>[] tab, int i,
-             Bin<K,V> c,
-             Bin<K,V> v) {
-        return (Bin<K, V>) AA.compareAndExchange(tab, i, c, v);
+    private static <K,V> Bucket<K,V>
+    caeTabAt(Bucket<K,V>[] tab, int i,
+             Bucket<K,V> c,
+             Bucket<K,V> v) {
+        return (Bucket<K, V>) AA.compareAndExchange(tab, i, c, v);
     }
     private static <K,V> boolean
-    casTabAt(Bin<K,V>[] tab, int i,
-             Bin<K,V> c,
-             Bin<K,V> v) {
+    casTabAt(Bucket<K,V>[] tab, int i,
+             Bucket<K,V> c,
+             Bucket<K,V> v) {
         return AA.compareAndSet(tab, i, c, v);
     }
-    private static <K,V> Bin<K,V>
-    getAndSetAt(Bin<K,V>[] tab, int i, Bin<K,V> v) {
-        return (Bin<K, V>) AA.getAndSet(tab, i, v);
+    private static <K,V> Bucket<K,V>
+    getAndSetAt(Bucket<K,V>[] tab, int i, Bucket<K,V> v) {
+        return (Bucket<K, V>) AA.getAndSet(tab, i, v);
     }
 
     // VarHandle mechanics
@@ -328,7 +360,7 @@ class ConcurrentLinkedHashMap<K,V> extends AbstractMap<K,V>
     private static final VarHandle PREV, NEXT;
 
     private static final VarHandle AA
-            = MethodHandles.arrayElementVarHandle(Bin[].class);
+            = MethodHandles.arrayElementVarHandle(Bucket[].class);
 
     static {
         try {
@@ -345,15 +377,18 @@ class ConcurrentLinkedHashMap<K,V> extends AbstractMap<K,V>
         }
     }
 
-    private static <K,V> AbstractBin<K,V> newBin(K key) {
+    private static <K,V> AbstractBucket<K,V> newBin(K key) {
         return key instanceof Comparable<?>
-                ? new TreeBin<>()
-                : new LinkedBin<>();
+                ? new TreeBucket<>()
+                : new LinkedBucket<>();
     }
-    private static class TreeBin<K,V> extends AbstractBin<K,V> {
+
+    // todo: need volatile for safe reading from bucket
+    private static class TreeBucket<K,V> extends AbstractBucket<K,V> {
 
         private final TreeMap<K, Node<K,V>> tree
                 = new TreeMap<>();
+
 
         @Override
         public Node<K,V> addIfAbsent(Node<K, V> n) {
@@ -363,6 +398,21 @@ class ConcurrentLinkedHashMap<K,V> extends AbstractMap<K,V>
         @Override
         public Node<K, V> remove(K key) {
             return tree.remove(key);
+        }
+
+        @Override
+        public Node<K, V> remove(K key, V expected) {
+            AtomicReference<Node<K,V>> ref = new AtomicReference<>();
+            tree.computeIfPresent(key,
+                    (k,v) -> {
+
+                        if (Objects.equals(v.getValue(), expected)) {
+                            ref.setPlain(v);
+                            return null;
+                        }
+                        return v;
+                    });
+            return ref.getPlain();
         }
 
         @Override
@@ -386,7 +436,7 @@ class ConcurrentLinkedHashMap<K,V> extends AbstractMap<K,V>
         }
     }
 
-    private static class LinkedBin<K,V> extends AbstractBin<K,V> {
+    private static class LinkedBucket<K,V> extends AbstractBucket<K,V> {
         private final LinkedList<Node<K,V>> list
                 = new LinkedList<>(); // todo:
 
@@ -406,6 +456,20 @@ class ConcurrentLinkedHashMap<K,V> extends AbstractMap<K,V>
             while (itr.hasNext()) {
                 Node<K,V> x = itr.next();
                 if (Objects.equals(x.getKey(), key)) {
+                    itr.remove();
+                    return x;
+                }
+            }
+            return null;
+        }
+
+        @Override
+        public Node<K, V> remove(K key, V expected) {
+            Iterator<Node<K,V>> itr = iterator();
+            while (itr.hasNext()) {
+                Node<K,V> x = itr.next();
+                if (Objects.equals(x.getKey(), key) &&
+                        Objects.equals(x.getValue(), expected)) {
                     itr.remove();
                     return x;
                 }
@@ -442,15 +506,37 @@ class ConcurrentLinkedHashMap<K,V> extends AbstractMap<K,V>
     }
 
 
-    private abstract static class AbstractBin<K,V>
-            extends ReentrantLock implements Bin<K,V> {
-
+    private abstract static class AbstractBucket<K,V>
+            extends ReentrantLock
+            implements Bucket<K,V> {
     }
-    private interface Bin<K,V>
+
+    private static class DummyNode<K,V> extends Node<K,V> {
+
+
+        @Override
+        public K getKey() {
+            return null;
+        }
+
+        @Override
+        public V getValue() {
+            return null;
+        }
+
+        @Override
+        boolean isDead() {
+            return true;
+        }
+    }
+
+    private interface Bucket<K,V>
             extends Iterable<Node<K,V>>, Lock {
         Node<K,V> addIfAbsent(Node<K,V> n);
 
         Node<K,V> remove(K key);
+
+        Node<K,V> remove(K key, V expected);
 
         Node<K,V> find(K key);
 

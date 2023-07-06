@@ -71,7 +71,7 @@ public class UnblockingArrayBuffer<E>
      * The minimum number of beginnings per transfer step
      * Ranges are subdivided to allow multiple resizing threads
      */
-    static final int MIN_TRANSFER_STRIDE = 16;
+    static final int MIN_TRANSFER_STRIDE = 64;
 
     /* ---------------- Field -------------- */
     transient volatile ContainerBridge bridge; // current array claimant
@@ -352,7 +352,7 @@ public class UnblockingArrayBuffer<E>
                                 } else
                                     return n; // our mission is over
                             }
-                        } else if (o instanceof Cell<?>) {
+                        } else {
                             Object v;
                             if ((v = caeAt(a.nextCells, i, null, o)) == null) {
                                 v = caeAt(sh, i, o, a);
@@ -362,8 +362,7 @@ public class UnblockingArrayBuffer<E>
                                 else if (v == a)
                                     break;
                                 else
-                                    setAt(a.nextCells, i, null);
-                                    //a.nextCells[i] = null;
+                                    a.nextCells[i] = null; // opaque
                             } else if (v == a)
                                 break;
                         }
@@ -564,10 +563,6 @@ public class UnblockingArrayBuffer<E>
 
         boolean cas(E cmp, E val) {
             return VAL.compareAndSet(this, cmp, val);
-        }
-
-        boolean isDead() {
-            return value == null;
         }
 
         @Override
