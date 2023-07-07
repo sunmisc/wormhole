@@ -39,11 +39,6 @@ class ConcurrentLinkedHashMap<K,V> extends AbstractMap<K,V>
         System.out.println(map);
     }
 
-    static int tableSizeFor(int cap) {
-        int n = -1 >>> Integer.numberOfLeadingZeros(cap - 1);
-        return (n < 0) ? 1 : (n >= MAXIMUM_CAPACITY) ? MAXIMUM_CAPACITY : n + 1;
-    }
-
     public void pollFirst() {
         for (Node<K,V> h = head; h != null; h = h.next) {
             if (!h.isDead() && remove(h.getKey()) != null)
@@ -90,37 +85,35 @@ class ConcurrentLinkedHashMap<K,V> extends AbstractMap<K,V>
 
     private V putVal(K key, V value, boolean ifAbsent) {
         final int h = spread(key.hashCode());
-        for (Bucket<K,V> x;;) {
-            Bucket<K,V>[] tab = table;
-            int n = h & (tab.length - 1);
-            if ((x = tabAt(tab, n)) == null) {
+        Bucket<K, V>[] tab = table;
+        int n = h & (tab.length - 1);
 
+        Bucket<K, V> x = tabAt(tab, n);
+        if (x == null) {
 
-                Bucket<K,V> bucket = newBin(key);
-                Node<K,V> newNode = new HashNode<>(h, key, value);
-                bucket.addIfAbsent(newNode);
+            Bucket<K, V> bucket = newBin(key);
+            Node<K, V> newNode = new HashNode<>(h, key, value);
+            bucket.addIfAbsent(newNode);
 
-                if ((x = caeTabAt(tab, n, null, bucket)) == null) {
-                    linkLast(newNode);
-                    return null;
-                }
-            } else {
-                x.lock();
-                try {
-                    HashNode<K, V> e = new HashNode<>(h, key, value);
-                    Node<K, V> q = x.addIfAbsent(e);
-
-                    if (q != null) {
-                        return ifAbsent ? q.getValue() : q.setValue(value);
-                    } else {
-                        linkLast(e);
-
-                        return value;
-                    }
-                } finally {
-                    x.unlock();
-                }
+            if ((x = caeTabAt(tab, n, null, bucket)) == null) {
+                linkLast(newNode);
+                return null;
             }
+        }
+        x.lock();
+        try {
+            HashNode<K, V> e = new HashNode<>(h, key, value);
+            Node<K, V> q = x.addIfAbsent(e);
+
+            if (q != null) {
+                return ifAbsent ? q.getValue() : q.setValue(value);
+            } else {
+                linkLast(e);
+
+                return value;
+            }
+        } finally {
+            x.unlock();
         }
     }
     @Nullable
@@ -196,6 +189,14 @@ class ConcurrentLinkedHashMap<K,V> extends AbstractMap<K,V>
     private void linkLast(Node<K,V> newNode) {
         for (;;) {
             Node<K,V> l = tail;
+
+            for (;;) {
+                Node<K,V> x = l.next;
+                if (x != null)
+                    l = x;
+                else
+                    break;
+            }
 
             PREV.set(newNode, l);
 
@@ -292,8 +293,8 @@ class ConcurrentLinkedHashMap<K,V> extends AbstractMap<K,V>
 
         @Override
         public V setValue(V val) {
-            V v = value;
-            value = val;
+            V v = value; // plain-read
+            value = val; // release
             return v;
         }
     }
