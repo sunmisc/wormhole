@@ -5,6 +5,7 @@ import sunmisc.utils.Lazy;
 import java.io.Serial;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
+import java.util.Objects;
 import java.util.function.Supplier;
 
 /**
@@ -75,22 +76,36 @@ public class ConcurrentLazy<V> extends Lazy<V>
                 }
             }
         }
-        return (val == NIL) ? null : val;
+        return encodeValue(val);
     }
     @Override
     public final boolean isDone() {
         return value != null;
     }
-    @Override
-    public String toString() {
-        final V val;
-        return (val = value) == null
-                ? "not initialized"
-                : val.toString();
+    @SuppressWarnings("unchecked")
+    static <T> T encodeValue(T val) {
+        return (val == NIL) ? null : val;
+    }
+    @SuppressWarnings("unchecked")
+    static <T> T decodeValue(T val) {
+        return (val == null) ? (T) NIL : val;
     }
 
-    @SuppressWarnings("unchecked")
-    static <T> T decodeValue(T t) {
-        return (t == null) ? (T) NIL : t;
+    @Override
+    public String toString() {
+        final V val = value;
+        return val == null ? "not initialized" : val.toString();
+    }
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        ConcurrentLazy<?> that = (ConcurrentLazy<?>) o;
+        return Objects.equals(value, that.value);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hashCode(encodeValue(value));
     }
 }

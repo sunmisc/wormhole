@@ -5,7 +5,12 @@ import sunmisc.utils.concurrent.ConcurrentLazy;
 import java.util.function.Supplier;
 
 public abstract class Lazy<V> {
-    protected static final Object NIL = new Object();
+    protected static final Object NIL = new Object() {
+        @Override
+        public String toString() {
+            return "null";
+        }
+    };
     protected final Supplier<V> supplier;
 
     protected Lazy(Supplier<V> supplier) {
