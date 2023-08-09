@@ -106,6 +106,6 @@ public class ConcurrentLazy<V> extends Lazy<V>
 
     @Override
     public int hashCode() {
-        return Objects.hashCode(encodeValue(value));
+        return Objects.hashCode(value);
     }
 }
