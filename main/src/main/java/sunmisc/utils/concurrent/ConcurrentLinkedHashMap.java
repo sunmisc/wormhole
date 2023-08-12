@@ -7,7 +7,7 @@ import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.*;
 import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
@@ -15,12 +15,10 @@ import java.util.concurrent.locks.ReentrantLock;
 @SuppressWarnings("unchecked")
 class ConcurrentLinkedHashMap<K,V> extends AbstractMap<K,V>
         implements ConcurrentMap<K,V> {
-    private static final Object NOT_INIT = new Object();
     static final int MAXIMUM_CAPACITY = 1 << 30;
-
-    private final Node<K,V> head, tail;
-
-    private final AtomicInteger size = new AtomicInteger();
+    private final Head<K,V> head;
+    private final Tail<K,V> tail;
+    private volatile int size;
 
     // todo: UnblockingArrayBuffer
     private volatile Bucket<K,V>[] table = new Bucket[1 << 7];
@@ -28,35 +26,13 @@ class ConcurrentLinkedHashMap<K,V> extends AbstractMap<K,V>
     public ConcurrentLinkedHashMap() {
         Node<K,V> share = new DummyNode<>();
 
-        Node<K,V> head = new DummyNode<>();
+        Head<K,V> head = new Head<>();
         head.next = share;
-        Node<K,V> tail = new DummyNode<>();
+        Tail<K,V> tail = new Tail<>();
         tail.prev = share;
 
         this.head = head;
         this.tail = tail;
-    }
-
-    public static void main(String[] args) {
-        ConcurrentLinkedHashMap<Integer,Integer> map
-                = new ConcurrentLinkedHashMap<>();
-
-        for (int i = 0; i < 4; ++i) {
-            map.put(i,i);
-        }
-        map.pollFirst();
-        map.pollFirst();
-        map.pollFirst();
-     //   System.out.println(Arrays.toString(map.table));
-        System.out.println(map);
-    }
-
-    public void pollFirst() {
-        for (Node<K,V> h = head; h != null; h = h.next) {
-            if (!h.isDead() && remove(h.getKey()) != null)
-                return;
-        }
-
     }
 
     static int spread(int h) {
@@ -65,7 +41,7 @@ class ConcurrentLinkedHashMap<K,V> extends AbstractMap<K,V>
 
     @Override
     public int size() {
-        return size.get();
+        return size;
     }
 
     @Override
@@ -76,23 +52,24 @@ class ConcurrentLinkedHashMap<K,V> extends AbstractMap<K,V>
         Bucket<K,V> n = tabAt(tab, i);
         if (n == null)
             return null;
-        Node<K,V> x = n.find((K)key);
+        return n.find((K)key)
+                .map(Entry::getValue)
+                .orElse(null);
+    }
 
-        if (x == null)
-            return null;
-        final V val = x.getValue();
-        return val == NOT_INIT ? null : val;
+    private Node<K,V> firstNode() {
+        return head.tryFindNextActiveNode();
     }
 
     public K getFirstKey() {
-        Node<K,V> x = tryFindNextActiveNode(head);
-        return x.getKey();
+        return firstNode().getKey();
     }
     @Override
     public String toString() {
         StringJoiner joiner = new StringJoiner(", ",
                 "[", "]");
-        for (Node<K,V> h = head; h != null; h = h.next) {
+
+        for (Node<K,V> h = firstNode(); h != null; h = h.next) {
             V val = h.getValue();
             if (val != null)
                 joiner.add(val.toString());
@@ -106,34 +83,34 @@ class ConcurrentLinkedHashMap<K,V> extends AbstractMap<K,V>
         Bucket<K,V>[] tab = table;
         int n = h & (tab.length - 1);
 
-        Bucket<K,V> x = tabAt(tab, n);
-        if (x == null) {
+        Node<K,V> newNode = new HashNode<>(h, key);
 
-            Bucket<K,V> bucket = newBin(key);
-            Node<K,V> newNode = new HashNode<>(h, key, value);
-            bucket.addIfAbsent(newNode);
+        outer: {
+            Bucket<K,V> x = tabAt(tab, n);
+            if (x == null) {
+                x = newBin(key);
+                x.addIfAbsent(newNode);
+                if ((x = caeTabAt(tab, n, null, x)) == null) {
+                    break outer;
+                }
+            }
+            x.lock();
+            try {
+                Optional<Node<K,V>> old = x.addIfAbsent(newNode);
 
-            if ((x = caeTabAt(tab, n, null, bucket)) == null) {
-                linkLast(newNode);
-                return null;
+                if (old.isPresent()) {
+                    Node<K,V> q = old.get();
+                    return ifAbsent ? q.getValue() : q.setValue(value);
+                }
+            } finally {
+                x.unlock();
             }
         }
-        x.lock();
-        try {
-            HashNode<K,V> e = new HashNode<>(h, key, (V) NOT_INIT);
-            Node<K,V> q = x.addIfAbsent(e);
-
-            if (q != null) {
-                return ifAbsent ? q.getValue() : q.setValue(value);
-            } else {
-                linkLast(e);
-
-                e.setValue(value); // committed
-                return value;
-            }
-        } finally {
-            x.unlock();
-        }
+        tail.linkLast(newNode);
+        // committed;
+        V val = newNode.setValue(value);
+        SIZE.getAndAdd(this, 1);
+        return val;
     }
     @Nullable
     @Override
@@ -149,19 +126,20 @@ class ConcurrentLinkedHashMap<K,V> extends AbstractMap<K,V>
         int n = h & (tab.length - 1);
         Bucket<K,V> x = tabAt(tab, n);
 
-
         if (x == null) {
             return false;
         } else {
             x.lock();
             try {
-                Node<K,V> e = x.find(key);
-
-                if (Objects.equals(e.getValue(), oldValue)) {
-                    e.setValue(newValue);
-                    return true;
-                } else
-                    return false;
+                return x.find(key)
+                        .map(e -> {
+                            if (Objects.equals(e.getValue(), oldValue)) {
+                                e.setValue(newValue);
+                                return true;
+                            }
+                            return false;
+                        })
+                        .orElse(false);
             } finally {
                 x.unlock();
             }
@@ -180,23 +158,24 @@ class ConcurrentLinkedHashMap<K,V> extends AbstractMap<K,V>
         else {
             f.lock();
             try {
-                Node<K,V> x = expected == null
+                Optional<Node<K,V>> x = expected == null
                         ? f.remove(key)
                         : f.remove(key, expected);
 
-                if (x == null)
+                if (x.isEmpty())
                     return null;
-                else if (f.size() == 0)
-                    casTabAt(tab, n, f, null);
 
-                V val = x.setValue(null); // mark
+                Node<K,V> e = x.get();
+                expected = e.setValue(null); // mark
 
-                unlink(x);
-
-                return val;
+                if (f.empty())
+                    setAt(tab, n, null);
+                unlink(e);
             } finally {
                 f.unlock();
             }
+            SIZE.getAndAdd(this, -1);
+            return expected;
         }
     }
 
@@ -205,36 +184,25 @@ class ConcurrentLinkedHashMap<K,V> extends AbstractMap<K,V>
         return removeVal((K) key, null);
     }
 
-    private void linkLast(Node<K,V> newNode) {
-        Node<K,V> t = tail;
-        for (;;) {
-            Node<K,V> realTail = t.prev;
-
-            newNode.prev = realTail;
-
-            if (realTail.casNext(null, newNode)) {
-                t.casPrev(realTail, newNode);
-                break;
-            }
-        }
-    }
     private void unlink(Node<K,V> x) {
         Node<K,V> prev = x.prev, next = x.next;
         if (prev != null) {
             Node<K,V> activePrev
-                    = tryFindPrevActiveNode(prev);
+                    = prev.tryFindPrevActiveNode();
             skipDeadNodesAndSetNext(activePrev);
         }
         if (next != null) {
             Node<K,V> activeNext
-                    = tryFindNextActiveNode(next);
+                    = next.tryFindNextActiveNode();
             skipDeadNodesAndSetPrev(activeNext);
         }
     }
     private void skipDeadNodesAndSetNext(Node<K,V> x) {
         for (;;) {
-            Node<K,V> p = x.next,
-                    n = tryFindNextActiveNode(p);
+            Node<K,V> p = x.next;
+            if (p == null)
+                break;
+            Node<K,V> n = p.tryFindNextActiveNode();
             if (p != n) {
                 if (x.casNext(p, n)) {
                     break;
@@ -245,28 +213,16 @@ class ConcurrentLinkedHashMap<K,V> extends AbstractMap<K,V>
 
     private void skipDeadNodesAndSetPrev(Node<K,V> x) {
         for (;;) {
-            Node<K,V> p = x.prev,
-                    n = tryFindPrevActiveNode(p);
+            Node<K,V> p = x.prev;
+            if (p == null)
+                break;
+            Node<K,V> n = p.tryFindPrevActiveNode();
             if (p != n) {
                 if (x.casPrev(p, n)) {
                     break;
                 }
             } else break;
         }
-    }
-
-    Node<K,V> tryFindNextActiveNode(Node<K,V> src) {
-        Node<K,V> n = src, p;
-        while (n.isDead() && (p = n.next) != null)
-            n = p;
-        return n;
-    }
-
-    Node<K,V> tryFindPrevActiveNode(Node<K,V> src) {
-        Node<K,V> n = src, p;
-        while (n.isDead() && (p = n.prev) != null)
-            n = p;
-        return n;
     }
 
     @NotNull
@@ -292,41 +248,85 @@ class ConcurrentLinkedHashMap<K,V> extends AbstractMap<K,V>
     }
 
     static class HashNode<K,V> extends Node<K,V> {
-        final int hash; // todo: for bucket
+        final int hash;
         final K key;
-        V value;
+        volatile V value;
 
-        HashNode(int hash, K key, V value) {
+        HashNode(int hash, K key) {
             this.hash = hash;
             this.key = key;
-            VAL.setRelease(this, value);
         }
 
         @Override public K getKey() { return key; }
 
         @Override
         public V getValue() {
-            return (V) VAL.getAcquire(this);
-        }
-        @Override
-        public boolean isDead() {
-            return value == null; // plain
+            return value;
         }
         @Override
         public V setValue(V val) {
             V v = value;
-            VAL.setRelease(this, val);
+            value = val;
             return v;
         }
     }
+
+    private static final class Head<K,V> extends DummyNode<K,V> {
+        void linkFirst(Node<K,V> newNode) {
+            for (Node<K,V> head;;) {
+                // plain
+                NEXT.set(newNode, head = next);
+                // memory barrier
+                if (head.casPrev(null, newNode)) {
+                    casNext(head, newNode);
+                    break;
+                }
+            }
+        }
+
+        @Override
+        Node<K, V> tryFindNextActiveNode() {
+            return next.tryFindNextActiveNode();
+        }
+
+        @Override
+        Node<K, V> tryFindPrevActiveNode() {
+            throw new IllegalStateException();
+        }
+
+        @Override public String toString() { return "head"; }
+    }
+    private static final class Tail<K,V> extends DummyNode<K,V> {
+        void linkLast(Node<K,V> newNode) {
+            for (Node<K,V> tail;;) {
+                // plain
+                PREV.set(newNode, tail = prev);
+                // memory barrier
+                if (tail.casNext(null, newNode)) {
+                    casPrev(tail, newNode);
+                    break;
+                }
+            }
+        }
+        @Override
+        Node<K, V> tryFindNextActiveNode() {
+            throw new IllegalStateException();
+        }
+
+        @Override
+        Node<K, V> tryFindPrevActiveNode() {
+            return prev.tryFindNextActiveNode();
+        }
+        @Override public String toString() { return "tail"; }
+    }
     static abstract class Node<K,V> implements Map.Entry<K,V> {
-        Node<K,V> prev, next;
+        volatile Node<K,V> prev, next;
 
         boolean isDead() {
             return getValue() == null;
         }
         @Override
-        public final String toString() {
+        public String toString() {
             return getKey() + "=" + getValue();
         }
         @Override
@@ -344,12 +344,18 @@ class ConcurrentLinkedHashMap<K,V> extends AbstractMap<K,V>
         final boolean casPrev(Node<K,V> expected, Node<K,V> newNode) {
             return PREV.compareAndSet(this, expected, newNode);
         }
-
-        final void setPrev(Node<K,V> prev) {
-            PREV.setRelease(this, prev);
+        Node<K,V> tryFindNextActiveNode() {
+            Node<K,V> n = this, p;
+            while (n.isDead() && (p = n.next) != null)
+                n = p;
+            return n;
         }
-        final void setNext(Node<K,V> prev) {
-            NEXT.setRelease(this, prev);
+
+        Node<K,V> tryFindPrevActiveNode() {
+            Node<K,V> n = this, p;
+            while (n.isDead() && (p = n.prev) != null)
+                n = p;
+            return n;
         }
         @Override
         public final boolean equals(Object o) {
@@ -387,12 +393,13 @@ class ConcurrentLinkedHashMap<K,V> extends AbstractMap<K,V>
     getAndSetAt(Bucket<K,V>[] tab, int i, Bucket<K,V> v) {
         return (Bucket<K,V>) AA.getAndSet(tab, i, v);
     }
+    private static <K,V> void
+    setAt(Bucket<K,V>[] tab, int i, Bucket<K,V> v) {
+        AA.setRelease(tab, i, v);
+    }
 
     // VarHandle mechanics
-
     private static final VarHandle PREV, NEXT;
-
-    private static final VarHandle VAL;
 
     private static final VarHandle AA
             = MethodHandles.arrayElementVarHandle(Bucket[].class);
@@ -405,9 +412,6 @@ class ConcurrentLinkedHashMap<K,V> extends AbstractMap<K,V>
                     Node.class);
             PREV = l.findVarHandle(Node.class, "prev",
                     Node.class);
-
-            VAL = l.findVarHandle(HashNode.class, "value",
-                    Object.class);
         } catch (ReflectiveOperationException e) {
             throw new ExceptionInInitializerError(e);
         }
@@ -419,26 +423,26 @@ class ConcurrentLinkedHashMap<K,V> extends AbstractMap<K,V>
                 : new LinkedBucket<>();
     }
 
-    // todo: need volatile for safe reading from bucket
     private static class TreeBucket<K,V> extends AbstractBucket<K,V> {
 
-        private final TreeMap<K, Node<K,V>> tree
-                = new TreeMap<>();
+        private final ConcurrentSkipListMap<K, Node<K,V>> tree
+                = new ConcurrentSkipListMap<>();
 
 
         @Override
-        public Node<K,V> addIfAbsent(Node<K,V> n) {
-            return tree.putIfAbsent(n.getKey(), n);
+        public Optional<Node<K,V>> addIfAbsent(Node<K,V> n) {
+            return Optional.ofNullable(tree.putIfAbsent(n.getKey(), n));
         }
 
         @Override
-        public Node<K,V> remove(K key) {
-            return tree.remove(key);
+        public Optional<Node<K,V>> remove(K key) {
+            return Optional.ofNullable(tree.remove(key));
         }
 
         @Override
-        public Node<K,V> remove(K key, V expected) {
+        public Optional<Node<K,V>> remove(K key, V expected) {
             AtomicReference<Node<K,V>> ref = new AtomicReference<>();
+
             tree.computeIfPresent(key,
                     (k,v) -> {
 
@@ -448,24 +452,19 @@ class ConcurrentLinkedHashMap<K,V> extends AbstractMap<K,V>
                         }
                         return v;
                     });
-            return ref.getPlain();
+            return Optional.ofNullable(ref.getPlain());
         }
 
         @Override
-        public Node<K,V> find(K key) {
-            return tree.get(key);
+        public Optional<Node<K,V>> find(K key) {
+            return Optional.ofNullable(tree.get(key));
         }
 
         @Override
-        public int size() {
-            return tree.size();
+        public boolean empty() {
+            return tree.isEmpty();
         }
 
-        @NotNull
-        @Override
-        public Iterator<Node<K,V>> iterator() {
-            return tree.values().iterator();
-        }
         @Override
         public String toString() {
             return tree.values().toString();
@@ -473,71 +472,81 @@ class ConcurrentLinkedHashMap<K,V> extends AbstractMap<K,V>
     }
 
     private static class LinkedBucket<K,V> extends AbstractBucket<K,V> {
-        private final LinkedList<Node<K,V>> list
-                = new LinkedList<>(); // todo:
+
+        private final Entry<K,V> head = new Entry<>(null);
 
         @Override
-        public Node<K,V> addIfAbsent(Node<K,V> n) {
-            Node<K,V> f = find(n.getKey());
-
-            if (f != null)
-                return f;
-            list.add(n);
-            return null;
-        }
-
-        @Override
-        public Node<K,V> remove(K key) {
-            Iterator<Node<K,V>> itr = iterator();
-            while (itr.hasNext()) {
-                Node<K,V> x = itr.next();
-                if (Objects.equals(x.getKey(), key)) {
-                    itr.remove();
-                    return x;
-                }
+        public Optional<Node<K,V>> addIfAbsent(Node<K,V> n) {
+            final K key = n.getKey();
+            Entry<K,V> h = head;
+            for (;;) {
+                Node<K,V> x = h.node;
+                if (x != null &&
+                        Objects.equals(x.getKey(), key))
+                    return Optional.of(x);
+                Entry<K,V> next = h.next;
+                if (next == null)
+                    break;
+                h = next;
             }
-            return null;
+            h.next = new Entry<>(n);
+            return Optional.empty();
         }
 
         @Override
-        public Node<K,V> remove(K key, V expected) {
-            Iterator<Node<K,V>> itr = iterator();
-            while (itr.hasNext()) {
-                Node<K,V> x = itr.next();
-                if (Objects.equals(x.getKey(), key) &&
+        public Optional<Node<K,V>> remove(K key) {
+            for (Entry<K,V> h = head; h != null;) {
+                Node<K,V> x = h.node;
+                Entry<K,V> next = h.next;
+                if (x != null &&
+                        Objects.equals(x.getKey(), key)) {
+                    h.next = next.next;
+                    return Optional.of(x);
+                }
+                h = next;
+            }
+            return Optional.empty();
+        }
+
+        @Override
+        public Optional<Node<K,V>> remove(K key, V expected) {
+            for (Entry<K,V> h = head; h != null;) {
+                Node<K,V> x = h.node;
+                Entry<K,V> next = h.next;
+                if (x != null &&
+                        Objects.equals(x.getKey(), key) &&
                         Objects.equals(x.getValue(), expected)) {
-                    itr.remove();
-                    return x;
+                    h.next = next.next;
+                    return Optional.of(x);
                 }
+                h = next;
             }
-            return null;
+            return Optional.empty();
         }
 
         @Override
-        public Node<K,V> find(K key) {
-
-            for (Node<K,V> n : list) {
-                if (Objects.equals(n.getKey(), key)) {
-                    return n;
-                }
+        public Optional<Node<K,V>> find(K key) {
+            for (Entry<K,V> h = head; h != null; h = h.next) {
+                Node<K,V> x = h.node;
+                if (Objects.equals(x.getKey(), key))
+                    return Optional.of(x);
             }
-            return null;
+            return Optional.empty();
         }
 
         @Override
-        public int size() {
-            return list.size();
+        public boolean empty() {
+            return head.next == null;
         }
 
-        @NotNull
-        @Override
-        public Iterator<Node<K,V>> iterator() {
-            return list.iterator();
-        }
+        private static class Entry<K,V> {
+            volatile Entry<K,V> next;
 
-        @Override
-        public String toString() {
-            return list.toString();
+            final Node<K,V> node;
+
+            Entry(Node<K,V> node) {
+                this.node = node;
+            }
         }
     }
 
@@ -549,33 +558,33 @@ class ConcurrentLinkedHashMap<K,V> extends AbstractMap<K,V>
 
     private static class DummyNode<K,V> extends Node<K,V> {
 
+        @Override public K getKey() { return null; }
 
-        @Override
-        public K getKey() {
-            return null;
-        }
-
-        @Override
-        public V getValue() {
-            return null;
-        }
-
-        @Override
-        boolean isDead() {
-            return true;
-        }
+        @Override public V getValue() { return null; }
     }
 
-    private interface Bucket<K,V>
-            extends Iterable<Node<K,V>>, Lock {
-        Node<K,V> addIfAbsent(Node<K,V> n);
+    private interface Bucket<K,V> extends Lock {
+        Optional<Node<K,V>> addIfAbsent(Node<K,V> n);
 
-        Node<K,V> remove(K key);
+        Optional<Node<K,V>> remove(K key);
 
-        Node<K,V> remove(K key, V expected);
+        Optional<Node<K,V>> remove(K key, V expected);
 
-        Node<K,V> find(K key);
+        Optional<Node<K,V>> find(K key);
 
-        int size();
+        boolean empty();
+    }
+
+    private static final VarHandle SIZE;
+
+    static {
+        try {
+            MethodHandles.Lookup l = MethodHandles.lookup();
+
+            SIZE = l.findVarHandle(ConcurrentLinkedHashMap.class,
+                    "size", int.class);
+        } catch (ReflectiveOperationException e) {
+            throw new ExceptionInInitializerError(e);
+        }
     }
 }
