@@ -3,6 +3,7 @@ package sunmisc.utils.concurrent;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.*;
+import java.util.function.Consumer;
 
 public class UnblockingLinkedDeque<E> {
     private final Node<E> head, tail;
@@ -119,25 +120,22 @@ public class UnblockingLinkedDeque<E> {
         for (; n.isDead() && (p = n.prev) != null; n = p);
         return n;
     }
-    public String naturalOrder() {
-        StringJoiner joiner =
-                new StringJoiner(", ", "[", "]");
+    public void forEach(Consumer<? super E> action) {
+        Objects.requireNonNull(action);
         for (Node<E> x = head(); x != null; x = x.next) {
             E item = x.item;
-        //    if (item != null)
-            joiner.add(Objects.toString(item));
+            if (item != null)
+                action.accept(item);
         }
-        return joiner.toString();
     }
-    public String reversedOrder() {
-        StringJoiner joiner =
-                new StringJoiner(", ", "[", "]");
-        for (Node<E> x = tail(); x != null; x = x.prev) {
-            joiner.add(Objects.toString(x.item));
-        }
-        return joiner.toString();
-    }
+    @Override
+    public String toString() {
+        StringJoiner joiner = new StringJoiner(
+                ", ", "[", "]");
+        forEach(x -> joiner.add(x.toString()));
 
+        return joiner.toString();
+    }
     private static class Node<E> {
 
         volatile Node<E> prev, next;
