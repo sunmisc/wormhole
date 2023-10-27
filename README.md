@@ -12,12 +12,10 @@ these are just sketches of ideas and thoughts
 **Not goals:**
 * Rewriting existing solutions in the standard jdk library
 
-This shitty library is just a sharp instrument, rushing
+This library is just a sharp instrument, rushing
 fill holes in the standard library
 There's always some kind of obscure shit going on here,
 using super-greedy optimization techniques, I often like
-contradict oneself, confusing even experienced people
-intellectuals
+contradict oneself, confusing even experienced people intellectuals
 Take these or those tools with a cool head, KNOWING WHAT THEY ARE
-DO, select more profitable methods specifically for your
-case.
+DO, select more profitable methods specifically for your case.
