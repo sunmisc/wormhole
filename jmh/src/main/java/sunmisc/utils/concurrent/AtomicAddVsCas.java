@@ -14,7 +14,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 @BenchmarkMode({Mode.Throughput})
 @Warmup(iterations = 2, time = 1)
 @Measurement(iterations = 5, time = 1)
-@Threads(Threads.MAX)
 @Fork(1)
 public class AtomicAddVsCas {
 
@@ -26,14 +25,34 @@ public class AtomicAddVsCas {
     }
 
     @Benchmark
+    @Threads(1)
     public int testAddAndGet() {
-        return x.getAndUpdate(x -> x + 1);
+        return testAddAndGetContended();
     }
 
     @Benchmark
-    public int testLambdaAddAndGet() {
+    @Threads(Threads.MAX)
+    public int testAddAndGetContended() {
+        int i;
+        do {
+            i = x.getOpaque();
+        } while (!x.weakCompareAndSetVolatile(i, i + 1));
+        return i;
+    }
+
+    @Benchmark
+    @Threads(1)
+    public int getAndAdd() {
         return x.getAndIncrement();
     }
+
+    @Benchmark
+    @Threads(Threads.MAX)
+    public int getAndAddContended() {
+        return x.getAndIncrement();
+    }
+
+
 
     public static void main(String[] args) throws RunnerException {
         Options opt = new OptionsBuilder()

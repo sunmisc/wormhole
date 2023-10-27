@@ -88,7 +88,7 @@ public class ConcurrentLazy<V> extends Lazy<V>
     }
     @SuppressWarnings("unchecked")
     static <T> T decodeValue(T val) {
-        return (val == null) ? (T) NIL : val;
+        return Objects.requireNonNullElse(val, (T) NIL);
     }
 
     @Override

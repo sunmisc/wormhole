@@ -76,6 +76,9 @@ public class UnblockingArrayBuffer<E>
     /* ---------------- Field -------------- */
     transient volatile ContainerBridge bridge; // current array claimant
 
+    // todo: delete the field,
+    //  create a new object for each entrySet call,
+    //  but ValueBased (hello Valhalla)
     transient EntrySetView<E> entrySet;
 
 
@@ -249,15 +252,16 @@ public class UnblockingArrayBuffer<E>
                     return false;
 
                 for (o = arrayAt(arr, i);;) {
-                    if (o == null)
-                        return false;
-                    else if (o instanceof ForwardingPointer f)
-                        arr = helpTransfer(f, i);
-                    else if (o instanceof Cell<?> p) {
-                        if (n != p)
-                            return false;
-                        else if ((o = caeAt(arr, i, p, null)) == p)
-                            return true;
+                    switch (o) {
+                        case null -> { return false; }
+                        case ForwardingPointer f -> arr = helpTransfer(f, i);
+                        case Cell<?> p -> {
+                            if (n != p)
+                                return false;
+                            else if ((o = caeAt(arr, i, p, null)) == p)
+                                return true;
+                        }
+                        default -> {}
                     }
                 }
             }
@@ -283,7 +287,8 @@ public class UnblockingArrayBuffer<E>
                     continue;
                 return;
             }
-            int n = p.array.length, nextSize = operator.applyAsInt(n);
+            int n = p.array.length,
+                    nextSize = operator.applyAsInt(n);
             if (n == nextSize || BRIDGE.weakCompareAndSet(
                     this, p,
                     new ForwardingPointer(p, new Object[nextSize])))
@@ -325,7 +330,7 @@ public class UnblockingArrayBuffer<E>
             for (boolean advance = false;;) {
                 int committed = 0, fence = Math.min(b, last);
                 for (; i < fence; i++) {
-                    int p = a.getPendingCount();
+                    int p = a.pendingCount();
                     if (p >= b)
                         return a;
                     else if (p + committed >= b)
@@ -369,7 +374,7 @@ public class UnblockingArrayBuffer<E>
                     }
                 }
                 if (advance) {
-                    a.setPendingCount(b);
+                    a.pendingCount(b);
                     return a;
                 }
                 else if (committed > 0 &&
@@ -385,7 +390,7 @@ public class UnblockingArrayBuffer<E>
         }
     }
 
-    static final class ForwardingPointer extends ContainerBridge {
+    private static final class ForwardingPointer extends ContainerBridge {
         final int bound; // last index of elements from old to new
         final int stride; // the size of the transfer chunk can be from 1 to fence
         final Object[] nextCells;
@@ -403,10 +408,10 @@ public class UnblockingArrayBuffer<E>
             this.stride = Math.max(MIN_TRANSFER_STRIDE, (n >>> 3) / NCPU);
         }
 
-        int getPendingCount() {
+        int pendingCount() {
             return (int) PENDINGCOUNT.getOpaque(this);
         }
-        void setPendingCount(int c) {
+        void pendingCount(int c) {
             PENDINGCOUNT.setOpaque(this, c);
         }
 
@@ -547,7 +552,7 @@ public class UnblockingArrayBuffer<E>
         return AA.compareAndExchange(arr, i, cmp, val);
     }
 
-    static class ContainerBridge {
+    private static class ContainerBridge {
 
         final Object[] array;
 
@@ -557,7 +562,7 @@ public class UnblockingArrayBuffer<E>
     }
 
 
-    static final class Cell<E>{
+    static final class Cell<E> {
         volatile E value;
         Cell(E val) { this.value = val; }
 

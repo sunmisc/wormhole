@@ -1,4 +1,4 @@
-package sunmisc.utils.concurrent;
+package sunmisc.utils.concurrent.maps;
 
 import org.jetbrains.annotations.NotNull;
 
@@ -15,32 +15,29 @@ import java.util.function.Predicate;
 
 /**
  * A specialized implementation of the map for use with enumeration type keys.
- * All keys in the enumeration map must belong to the same enumeration type,
+ * <p>All keys in the enumeration map must belong to the same enumeration type,
  * which is explicitly or implicitly specified when creating the map.
  * Enumeration maps are internally represented as arrays.
- * This view is extremely compact and efficient.
- * Enumeration maps are maintained in the natural order of their keys
+ * <p>This view is extremely compact and efficient.
+ * <p>Enumeration maps are maintained in the natural order of their keys
  * (the order in which enumeration constants are declared).
- * This is reflected in the iterators returned by the collection views
+ * <p>This is reflected in the iterators returned by the collection views
  * (keySet (), entrySet() and values ()).
- * The iterators returned by the collection views are poorly consistent:
- * they will never throw a ConcurrentModificationException
+ * <p>The iterators returned by the collection views are poorly consistent:
+ * <p>they will never throw a ConcurrentModificationException
  * and may or may not show the effects of any map changes,
- * which occur during the execution of the iteration.
- * Null keys are not allowed.
- * Attempts to insert a null key will cause a NullPointerException.
- * However, attempts to check for the presence of a null key or delete it will work properly.
+ * which occur during the execution of the iteration.</p>
+ * <p>Null keys are not allowed.
  * Zero values are allowed.
- * This map differs from EnumMap in that it is thread-safe
- * and scales well
+ * <p>Attempts to insert a null key will cause a NullPointerException.
+ * <p>However, attempts to check for the presence of a null key or delete it will work properly.
+ * <p>This map differs from EnumMap in that it is thread-safe and scales well
  *
  * @author Sunmisc Unsafe
- * <p>
- * Type parameters:
- * <K> – the type of keys maintained by this map
- * <V> – the type of mapped values
+ *
+ * @param <K> the type of keys maintained by this map
+ * @param <V> the type of mapped values
  */
-
 @SuppressWarnings("unchecked")
 public class ConcurrentEnumMap<K extends Enum<K>,V>
         implements ConcurrentMap<K,V>, Serializable {
@@ -56,6 +53,11 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
     private transient V[] table;
 
     // views
+
+    // todo: delete the field,
+    //  create a new object for each call,
+    //  but ValueBased (hello Valhalla)
+
     private transient KeySetView<K,V> keySet;
     private transient ValuesView<K,V> values;
     private transient EntrySetView<K,V> entrySet;
@@ -63,30 +65,26 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
     public ConcurrentEnumMap(Class<? extends K> keyType) {
         this.keyType = keyType;
         this.keys = keyType.getEnumConstants();
-        this.counter = new LongAdder();
         this.table = (V[]) new Object[keys.length];
     }
     public ConcurrentEnumMap(Map<? extends K, ? extends V> m) {
-        if (m instanceof ConcurrentEnumMap) {
-            ConcurrentEnumMap<K,V> em = (ConcurrentEnumMap<K,V>)m;
-            this.keys = em.keys;
-            this.keyType = em.keyType;
-            this.table = em.table.clone();
-            this.counter = em.counter;
-        } else {
-            if (m.isEmpty())
-                throw new IllegalArgumentException("Specified map is empty");
-            this.keys = (K[]) m.keySet().toArray(Enum[]::new);
-            this.keyType = keys[0].getDeclaringClass();
-            this.table = (V[]) new Object[keyType.getEnumConstants().length];
-            this.counter = new LongAdder();
-            putAll(m);
-        }
+        this.keys = (K[]) m.keySet().toArray(Enum[]::new);
+        this.keyType = keys[0].getDeclaringClass();
+        this.table = (V[]) new Object[keyType.getEnumConstants().length];
+        putAll(m);
     }
 
     private void addCount(long c) {
         if (c == 0L) return;
-        counter.add(c);
+        LongAdder a = counter;
+        if (a == null) {
+            LongAdder newAdder = new LongAdder();
+
+            if ((a = (LongAdder) ADDER.compareAndExchange(
+                    this, null, newAdder)) == null)
+                a = newAdder;
+        }
+        a.add(c);
     }
 
     @Override
@@ -155,14 +153,17 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
 
     @Override
     public int size() {
+        LongAdder a = counter;
+        if (a == null)
+            return 0;
         // let's handle the overflow
-        long n = counter.sum();
-        return n < 0L ? 0 : n >= Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) n;
+        return Math.clamp(a.sum(), 0, Integer.MAX_VALUE);
     }
 
     @Override
     public boolean isEmpty() {
-        return counter.sum() <= 0L;
+        LongAdder a = counter;
+        return a == null || a.sum() <= 0L;
     }
 
     @Override
@@ -570,7 +571,9 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
             Objects.requireNonNull(value);
             V v = val;
             val = value;
+            //Object o =
             map.put(key, value);
+            //assert o == v;
             return v;
         }
     }
@@ -631,7 +634,6 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
             throws IOException, ClassNotFoundException {
         this.keyType = (Class<K>) s.readObject();
         this.keys = keyType.getEnumConstants();
-        this.counter = new LongAdder();
         this.table = (V[]) new Object[keys.length];
         for (long delta = 0L;;) {
             K k = (K) s.readObject();
@@ -686,4 +688,15 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
     // VarHandle mechanics
     private static final VarHandle AA
             = MethodHandles.arrayElementVarHandle(Object[].class);
+    private static final VarHandle ADDER;
+
+    static {
+        try {
+            MethodHandles.Lookup l = MethodHandles.lookup();
+            ADDER = l.findVarHandle(ConcurrentEnumMap.class, "counter",
+                    LongAdder.class);
+        } catch (ReflectiveOperationException e) {
+            throw new ExceptionInInitializerError(e);
+        }
+    }
 }

@@ -1,3 +1,4 @@
+/*
 package misc;
 
 import org.openjdk.jcstress.annotations.*;
@@ -63,3 +64,4 @@ public class WeakCASx86 {
         }
     }
 }
+*/

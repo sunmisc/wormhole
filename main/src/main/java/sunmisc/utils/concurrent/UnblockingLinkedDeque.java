@@ -2,7 +2,8 @@ package sunmisc.utils.concurrent;
 
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
-import java.util.*;
+import java.util.Objects;
+import java.util.StringJoiner;
 import java.util.function.Consumer;
 
 public class UnblockingLinkedDeque<E> {
@@ -61,18 +62,38 @@ public class UnblockingLinkedDeque<E> {
             }
         }
     }
+    public E remove(E o) {
+        for (Node<E> h = head(); h != null; h = h.next) {
 
+            for (;;) {
+                E item = h.item;
+                if (!Objects.equals(o, item))
+                    break;
+
+                E exp = h.caeItem(item, null);
+                if (exp == item) {
+                    unlink(h);
+                    return item;
+                } else if (exp == null)
+                    break;
+            }
+        }
+        return null;
+    }
     public E poll() {
         for (Node<E> h = head(); h != null; h = h.next) {
 
             for (;;) {
                 E item = h.item;
-                if (item == null) {
+                if (item == null)
                     break;
-                } else if (h.casItem(item, null)) {
+
+                E exp = h.caeItem(item, null);
+                if (exp == item) {
                     unlink(h);
                     return item;
-                }
+                } else if (exp == null)
+                    break;
             }
         }
         return null;
@@ -95,8 +116,8 @@ public class UnblockingLinkedDeque<E> {
     private void updatePrev(Node<E> x) {
         Node<E> p, n;
         do {
-            if ((p = x.prev) == null)
-                break;
+            if ((p = x.prev) == null) // todo: head.prev = ?
+               break;
             n = tryFindPrevActiveNode(p);
         } while (p != n && !x.casPrev(p, n));
     }
@@ -104,7 +125,7 @@ public class UnblockingLinkedDeque<E> {
     private void updateNext(Node<E> x) {
         Node<E> p, n;
         do {
-            if ((p = x.next) == null)
+            if ((p = x.next) == null) // todo: tail.next = ?
                 break;
             n = tryFindNextActiveNode(p);
         } while (p != n && !x.casNext(p, n));
@@ -124,15 +145,23 @@ public class UnblockingLinkedDeque<E> {
         Objects.requireNonNull(action);
         for (Node<E> x = head(); x != null; x = x.next) {
             E item = x.item;
-            if (item != null)
+           // if (item != null)
                 action.accept(item);
+        }
+    }
+    public void forEachDesc(Consumer<? super E> action) {
+        Objects.requireNonNull(action);
+        for (Node<E> x = tail(); x != null; x = x.prev) {
+            E item = x.item;
+            // if (item != null)
+            action.accept(item);
         }
     }
     @Override
     public String toString() {
         StringJoiner joiner = new StringJoiner(
                 ", ", "[", "]");
-        forEach(x -> joiner.add(x.toString()));
+        forEach(x -> joiner.add(Objects.toString(x)));
 
         return joiner.toString();
     }
@@ -149,6 +178,11 @@ public class UnblockingLinkedDeque<E> {
 
         boolean isDead() {
             return item == null;
+        }
+
+        @SuppressWarnings("unchecked")
+        final E caeItem(E expected, E newItem) {
+            return (E) ITEM.compareAndExchange(this, expected, newItem);
         }
 
         final boolean casItem(E expected, E newItem) {

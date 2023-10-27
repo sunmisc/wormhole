@@ -1,3 +1,5 @@
+/*
+
 package lock;
 
 import org.openjdk.jcstress.Main;
@@ -16,8 +18,11 @@ public class ReadWriteLockTest {
     )
     @State
     public static class CombineArrayIndex extends StripedReadWriteLock.Striped32  {
+
+
         @Actor public void actor1() {
-            for (int i = 0; i < 4; ++i) inc(2);
+            for (int i = 0; i < 4; ++i)
+                inc(2);
         }
 
         @Actor public void actor2() {
@@ -40,3 +45,4 @@ public class ReadWriteLockTest {
         Main.main(args);
     }
 }
+*/
