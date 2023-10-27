@@ -107,7 +107,7 @@ public class ConcurrentSegmentBuffers<E> {
 
         E[] array = (E[]) new Object[newLen];
 
-        setSegmentAt(x, new Segment<>(array));
+        casSegmentAt(x, null, new Segment<>(array));
 
         return newLen;
     }
