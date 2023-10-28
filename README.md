@@ -19,3 +19,6 @@ using super-greedy optimization techniques, I often like
 contradict oneself, confusing even experienced people intellectuals
 Take these or those tools with a cool head, KNOWING WHAT THEY ARE
 DO, select more profitable methods specifically for your case.
+
+![image](https://github.com/sunmisc/MyConcurrencyWorld/assets/49918694/43fb0920-1fcb-441e-b72f-f64e42008f64)
+
