@@ -1,4 +1,4 @@
-package sunmisc.utils.concurrent;
+package sunmisc.utils;
 
 import org.openjdk.jmh.annotations.*;
 import org.openjdk.jmh.runner.Runner;
@@ -20,10 +20,12 @@ import java.util.concurrent.TimeUnit;
 public class JoinerVsBuilder {
 
     private Cell[] cells;
+    @Param({"5", "512", "1024"})
+    private int len;
 
     @Setup
     public void prepare() {
-        cells = new Cell[1024];
+        cells = new Cell[len];
         for (int i = 0; i < cells.length; ++i)
             cells[i] = new Cell(i);
     }

@@ -1,4 +1,4 @@
-package sunmisc.utils.concurrent;
+package sunmisc.utils;
 
 import org.openjdk.jmh.annotations.*;
 import org.openjdk.jmh.runner.Runner;
@@ -10,7 +10,7 @@ import java.util.Arrays;
 import java.util.concurrent.TimeUnit;
 
 @State(Scope.Benchmark)
-@OutputTimeUnit(TimeUnit.NANOSECONDS)
+@OutputTimeUnit(TimeUnit.MILLISECONDS)
 @BenchmarkMode(Mode.Throughput)
 @Warmup(iterations = 2, time = 1)
 @Measurement(iterations = 5, time = 1)
@@ -38,7 +38,7 @@ public class ReferenceArrayCopy {
     public int copyDefault() {
         final Cell[] cs = prevDef; int n = cs.length;
 
-        final int newLen = Math.min(128, n << 1);
+        final int newLen = Math.min(4096, n << 1);
         final Cell[] next = new Cell[newLen];
         for (int i = 0; i < n; i++) {
             Cell o = cs[i];
@@ -51,7 +51,7 @@ public class ReferenceArrayCopy {
     @Benchmark
     public int copyIntrinsic() {
         Cell[] cs = prevIntrinsic;
-        int n = cs.length, newLen = Math.min(128, n << 1);
+        int n = cs.length, newLen = Math.min(4096, n << 1);
 
         prevIntrinsic = Arrays.copyOf(cs, newLen);
         return newLen;

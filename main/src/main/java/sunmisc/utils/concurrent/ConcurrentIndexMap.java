@@ -10,7 +10,7 @@ public abstract class ConcurrentIndexMap<E>
         extends AbstractMap<Integer,E>
         implements ConcurrentMap<Integer,E>/*, todo: ListIterator<E> */ {
 
-    transient KeySetView<E> keySetView;
+    private transient KeySetView<E> keySetView;
 
     public abstract void resize(IntUnaryOperator resize);
 

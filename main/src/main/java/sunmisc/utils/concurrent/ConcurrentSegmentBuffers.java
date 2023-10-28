@@ -26,27 +26,35 @@ import java.util.function.Consumer;
  * hashmaps, queues, lists, sets, etc.
  *
  * @author Sunmisc Unsafe
- * @param <E> The base class of elements held in this array
+ * @param <U> The base class of elements held in this array
  */
 @SuppressWarnings("unchecked")
-public class ConcurrentSegmentBuffers<E> {
+public class ConcurrentSegmentBuffers<U> {
     private static final int MAXIMUM_CAPACITY  = 1 << 30;
-    private final Segment<E>[] segments = new Segment[30];
-    private volatile int cursor;
+    private final Segment<U>[] segments = new Segment[30]; {
 
+            segments[0] = new Segment<>((U[]) new Object[2]);
+    }
+    private volatile int cursor = 1;
+    private volatile int size = 2; // alignment gap
 
     @Override
     public String toString() {
-        StringJoiner joiner = new StringJoiner(", ",
-                "[", "]");
-        forEach(e -> joiner.add(Objects.toString(e)));
+        StringJoiner joiner = new StringJoiner("\n");
+        for (int i = 0, n = segments.length; i < n; ++i) {
+            Segment<U> segment = segmentAt(i);
+
+            if (segment == null) break;
+
+            joiner.add(segment.toString());
+        }
         return joiner.toString();
     }
 
-    public void forEach(Consumer<? super E> action) {
+    public void forEach(Consumer<? super U> action) {
         Objects.requireNonNull(action);
         for (int x = 0, n = segments.length; x < n; ++x) {
-            Segment<E> segment = segmentAt(x);
+            Segment<U> segment = segmentAt(x);
 
             if (segment == null) return;
 
@@ -55,100 +63,104 @@ public class ConcurrentSegmentBuffers<E> {
         }
     }
 
-    public E get(int index) {
-        int exponent = segmentForIndex(index);
-        Segment<E> segment = segmentAt(exponent);
+    public U get(int index) {
+        Objects.checkIndex(index, size);
 
-        if (segment == null)
-            throw new IndexOutOfBoundsException();
+        int exponent = segmentForIndex(index);
+        Segment<U> segment = segmentAt(exponent);
 
         int i = indexForSegment(segment, index);
         return segment.arrayAt(i);
     }
 
-    public E compareAndExchange(int index, E expected, E value) {
+    public U compareAndExchange(int index, U expected, U value) {
+        Objects.checkIndex(index, size);
 
         int exponent = segmentForIndex(index);
-        Segment<E> segment = segmentAt(exponent);
-        if (segment == null)
-            throw new IndexOutOfBoundsException();
+        Segment<U> segment = segmentAt(exponent);
         int i = indexForSegment(segment, index);
         return segment.cae(i, expected, value);
     }
 
-    public E set(int index, E e) {
-
+    public U set(int index, U e) {
+        Objects.checkIndex(index, size);
         int exponent = segmentForIndex(index);
 
-        Segment<E> segment = segmentAt(exponent);
-        if (segment == null)
-            throw new IndexOutOfBoundsException();
+        Segment<U> segment = segmentAt(exponent);
+
         int i = indexForSegment(segment, index);
         return segment.setAt(i, e);
     }
 
-    public int size() {
-        return size(cursor);
+    public int length() {
+        return size;
     }
+
     private static <E> int
-    indexForSegment(Segment<E> segment, int index) {
-        int h = size(segment.segmentIndex());
+    indexForSegment(final Segment<E> segment, final int index) {
+        if (index < 2)
+            return index;
+        final int h = Integer.highestOneBit(index) << 1;
+
         return index - (h - segment.length());
     }
 
-    private static int segmentForIndex(int index) {
-        return 31 - Integer.numberOfLeadingZeros(index + 2) - 1;
+    private static int segmentForIndex(final int index) {
+        return index < 2 ? 0
+                : 31 - Integer.numberOfLeadingZeros(index);
     }
 
     public int expand() {
         int x = (int) CURSOR.getAndAdd(this, 1);
 
-        int newLen = 1 << (x + 1);
+        int newLen = 1 << x;
 
-        E[] array = (E[]) new Object[newLen];
+        U[] array = (U[]) new Object[newLen];
 
-        casSegmentAt(x, null, new Segment<>(array));
+        if (casSegmentAt(x, null, new Segment<>(array))) {
+
+            // sum g.progression
+            // (2^n - 1)
+
+            int u;
+            do {
+                u = (int) SIZE.getOpaque(this);
+            } while (!SIZE.weakCompareAndSetRelease(this, u, u << 1));
+        }
+
 
         return newLen;
     }
-    public int reduce() {
+    int reduce() {
         int x = (int) CURSOR.getAndAdd(this, -1);
 
         setSegmentAt(x - 1, null);
 
-        return 1 << x >> 1;
+        int u;
+        do {
+            u = (int) SIZE.getOpaque(this);
+        } while (!SIZE.weakCompareAndSetRelease(this, u, u >> 1));
+        return u;
     }
 
     public static int maximumCapacity() {
         return MAXIMUM_CAPACITY;
     }
 
-    private Segment<E> segmentAt(int i) {
-        return (Segment<E>) AA.getAcquire(segments, i);
+    private Segment<U> segmentAt(int i) {
+        return (Segment<U>) AA.getAcquire(segments, i);
     }
-    private void setSegmentAt(int i, Segment<E> segment) {
+    private void setSegmentAt(int i, Segment<U> segment) {
         AA.setRelease(segments, i, segment);
     }
     private boolean casSegmentAt(int i,
-                                 Segment<E> expected,
-                                 Segment<E> segment) {
+                                 Segment<U> expected,
+                                 Segment<U> segment) {
         return AA.compareAndSet(segments, i, expected, segment);
-    }
-    private static int size(int bucket) {
-        // sum g.progression
-        // 2 * (2^n - 1)
-        int p = bucket;
-        p = 1 << p;
-        p -= 1;
-        p <<= 1;
-        return p;
     }
     private record Segment<E>(E[] array) {
         int length() {
             return array.length;
-        }
-        int segmentIndex() {
-            return 31 - Integer.numberOfLeadingZeros(length());
         }
         E arrayAt(int index) {
             return (E) AA.getAcquire(array, index);
@@ -159,19 +171,30 @@ public class ConcurrentSegmentBuffers<E> {
         E cae(int i, E expected, E value) {
             return (E)AA.compareAndExchange(array, i, expected, value);
         }
+
+        @Override
+        public String toString() {
+            StringJoiner joiner = new StringJoiner(
+                    ", ", "[", "]");
+            for (int i = 0, n = length(); i < n; ++i)
+                joiner.add(Objects.toString(arrayAt(i)));
+            return joiner.toString();
+        }
     }
 
 
     // VarHandle mechanics
     private static final VarHandle AA
             = MethodHandles.arrayElementVarHandle(Object[].class);
-    private static final VarHandle CURSOR;
+    private static final VarHandle CURSOR, SIZE;
 
     static {
         try {
             MethodHandles.Lookup l = MethodHandles.lookup();
             CURSOR = l.findVarHandle(ConcurrentSegmentBuffers.class,
                     "cursor", int.class);
+            SIZE = l.findVarHandle(ConcurrentSegmentBuffers.class,
+                    "size", int.class);
         } catch (ReflectiveOperationException e) {
             throw new ExceptionInInitializerError(e);
         }
