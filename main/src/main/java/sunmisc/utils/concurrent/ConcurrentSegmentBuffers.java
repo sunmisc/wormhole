@@ -6,6 +6,8 @@ import java.util.Objects;
 import java.util.StringJoiner;
 import java.util.function.Consumer;
 
+import static java.lang.Integer.numberOfLeadingZeros;
+
 
 /**
  * This implementation is based on segments
@@ -64,7 +66,7 @@ public class ConcurrentSegmentBuffers<U> {
     }
 
     public U get(int index) {
-        Objects.checkIndex(index, size);
+        Objects.checkIndex(index, length());
 
         int exponent = segmentForIndex(index);
         Segment<U> segment = segmentAt(exponent);
@@ -74,16 +76,17 @@ public class ConcurrentSegmentBuffers<U> {
     }
 
     public U compareAndExchange(int index, U expected, U value) {
-        Objects.checkIndex(index, size);
+        Objects.checkIndex(index, length());
 
         int exponent = segmentForIndex(index);
         Segment<U> segment = segmentAt(exponent);
+
         int i = indexForSegment(segment, index);
         return segment.cae(i, expected, value);
     }
 
     public U set(int index, U e) {
-        Objects.checkIndex(index, size);
+        Objects.checkIndex(index, length());
         int exponent = segmentForIndex(index);
 
         Segment<U> segment = segmentAt(exponent);
@@ -93,21 +96,16 @@ public class ConcurrentSegmentBuffers<U> {
     }
 
     public int length() {
-        return size;
+        return (int) SIZE.getAcquire(this);
     }
 
     private static <E> int
     indexForSegment(final Segment<E> segment, final int index) {
-        if (index < 2)
-            return index;
-        final int h = Integer.highestOneBit(index) << 1;
-
-        return index - (h - segment.length());
+        return index < 2 ? index : index - segment.length();
     }
 
     private static int segmentForIndex(final int index) {
-        return index < 2 ? 0
-                : 31 - Integer.numberOfLeadingZeros(index);
+        return index < 2 ? 0 : 31 - numberOfLeadingZeros(index);
     }
 
     public int expand() {
