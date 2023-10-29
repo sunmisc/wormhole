@@ -1,7 +1,5 @@
 package sunmisc.utils.concurrent.maps;
 
-import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
 import sunmisc.utils.concurrent.ConcurrentSegmentBuffers;
 
 import java.lang.invoke.MethodHandles;
@@ -9,6 +7,8 @@ import java.lang.invoke.VarHandle;
 import java.util.*;
 import java.util.concurrent.ConcurrentMap;
 import java.util.function.BiConsumer;
+
+import static java.util.Objects.requireNonNull;
 
 @SuppressWarnings("unchecked")
 public class ConcurrentLinkedHashMap<K,V>
@@ -105,15 +105,16 @@ public class ConcurrentLinkedHashMap<K,V>
             tab.expand();
         return val;
     }
-    @Nullable
     @Override
     public V put(K key, V value) {
         return putVal(key, value, false);
     }
     @Override
-    public boolean replace(@NotNull K key,
-                           @NotNull V oldValue,
-                           @NotNull V newValue) {
+    public boolean replace(K key, V oldValue, V newValue) {
+        requireNonNull(key);
+        requireNonNull(oldValue);
+        requireNonNull(newValue);
+
         final int h = spread(key.hashCode());
         var tab = table;
         int n = h & tab.length();
@@ -200,22 +201,21 @@ public class ConcurrentLinkedHashMap<K,V>
 
 
     @Override
-    public V putIfAbsent(@NotNull K key, V value) {
+    public V putIfAbsent(K key, V value) {
         return putVal(key, value, true);
     }
 
     @Override
-    public boolean remove(@NotNull Object key, Object value) {
+    public boolean remove(Object key, Object value) {
         return removeVal((K) key, (V) value) == value;
     }
 
 
     @Override
-    public V replace(@NotNull K key, @NotNull V value) {
+    public V replace(K key, V value) {
         return put(key, value);
     }
 
-    @NotNull
     @Override
     public Set<Entry<K,V>> entrySet() {
         return new EntrySetView();
@@ -223,7 +223,7 @@ public class ConcurrentLinkedHashMap<K,V>
 
     @Override
     public void forEach(BiConsumer<? super K, ? super V> action) {
-        Objects.requireNonNull(action);
+        requireNonNull(action);
         for (Node<K,V> x = head.head(); x != null; x = x.prev) {
             if (x.isDead()) continue;
             action.accept(x.getKey(), x.getValue());

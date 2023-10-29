@@ -38,10 +38,5 @@
             <artifactId>jol-core</artifactId>
             <version>0.17</version>
         </dependency>
-        <dependency>
-            <groupId>org.jetbrains</groupId>
-            <artifactId>annotations</artifactId>
-            <version>23.0.0</version>
-        </dependency>
     </dependencies>
 </project>

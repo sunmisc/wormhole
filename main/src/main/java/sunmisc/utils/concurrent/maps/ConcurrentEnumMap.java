@@ -1,7 +1,5 @@
 package sunmisc.utils.concurrent.maps;
 
-import org.jetbrains.annotations.NotNull;
-
 import java.io.*;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
@@ -12,6 +10,8 @@ import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.Predicate;
+
+import static java.util.Objects.requireNonNull;
 
 /**
  * A specialized implementation of the map for use with enumeration type keys.
@@ -95,8 +95,9 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
     }
     @Override
     public V put(K key, V value) {
-        Objects.requireNonNull(key);
-        Objects.requireNonNull(value);
+        requireNonNull(key);
+        requireNonNull(value);
+
         int i = key.ordinal();
         final V prev = getAndSetAt(table, i, value);
         if (prev == null)
@@ -106,6 +107,8 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
 
     @Override
     public void putAll(Map<? extends K, ? extends V> m) {
+        requireNonNull(m);
+
         long delta = 0L; V[] tab = table;
         for (Map.Entry<? extends K, ? extends V> e : m.entrySet()) {
             Enum<?> key = e.getKey(); Object val = e.getValue();
@@ -116,13 +119,14 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
     }
     @Override
     public void forEach(BiConsumer<? super K, ? super V> action) {
-        Objects.requireNonNull(action);
-        V[] tab = table;
+        requireNonNull(action);
+
+        K[] ks = keys; V[] tab = table;
         for (int i = 0, len = tab.length; i < len; ++i) {
             V v = tabAt(tab, i);
             if (v == null)
                 continue;
-            action.accept(keys[i], v);
+            action.accept(ks[i], v);
         }
     }
 
@@ -162,7 +166,7 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
 
     @Override
     public boolean isEmpty() {
-        LongAdder a = counter;
+        final LongAdder a = counter;
         return a == null || a.sum() <= 0L;
     }
 
@@ -173,7 +177,8 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
 
     @Override
     public boolean containsValue(Object value) {
-        Objects.requireNonNull(value);
+        requireNonNull(value);
+
         V[] tab = table;
         for (int i = 0, len = tab.length; i < len; ++i) {
             if (Objects.equals(tabAt(tab, i), value))
@@ -183,8 +188,9 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
     }
 
     @Override
-    public V putIfAbsent(@NotNull K key, V value) {
-        Objects.requireNonNull(value);
+    public V putIfAbsent(K key, V value) {
+        requireNonNull(key);
+        requireNonNull(value);
 
         int i = key.ordinal();
         V[] tab = table; V p;
@@ -195,52 +201,65 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
     }
 
     @Override
-    public V compute(K key, @NotNull
+    public V compute(K key,
     BiFunction<? super K, ? super V, ? extends V> remappingFunction) {
-        Objects.requireNonNull(key);
-        int i = key.ordinal();
-        V[] tab = table;
-        for (V prev;;) {
-            V newVal = remappingFunction.apply(key, prev = tabAt(tab, i));
-            if (newVal == null && prev == null)
-                return null;
-                // strong CAS to minimize function call
-            else if (casTabAt(tab, i, prev, newVal)) {
-                addCount(prev == null ? 1L : newVal == null ? -1L : 0);
-                return newVal;
-            }
-        }
-    }
-    @Override
-    public V computeIfAbsent(K key, @NotNull
-    Function<? super K, ? extends V> mappingFunction) {
-        Objects.requireNonNull(key);
+        requireNonNull(key);
+        requireNonNull(remappingFunction);
 
         int i = key.ordinal();
         V[] tab = table;
-        for (V prev, newVal;;) {
-            if ((prev = tabAt(tab, i)) != null ||
-                    (newVal = mappingFunction.apply(key)) == null)
-                return prev;
-                // strong CAS to minimize function call
-            else if (casTabAt(tab, i, null, newVal)) {
-                addCount(1L);
+        for (V oldVal;;) {
+            V newVal = remappingFunction.apply(key, oldVal = tabAt(tab, i));
+            if (newVal == null && oldVal == null)
+                return null;
+            else if (oldVal == newVal) // only reference comparison
+                return oldVal;
+            // strong CAS to minimize function call
+            else if (casTabAt(tab, i, oldVal, newVal)) {
+                addCount(oldVal == null ? 1L : newVal == null ? -1L : 0);
                 return newVal;
             }
         }
     }
     @Override
-    public V computeIfPresent(K key, @NotNull
-    BiFunction<? super K, ? super V, ? extends V> remappingFunction) {
-        Objects.requireNonNull(key);
+    public V computeIfAbsent(K key,
+    Function<? super K, ? extends V> mappingFunction) {
+        requireNonNull(key);
+        requireNonNull(mappingFunction);
+
         int i = key.ordinal();
         V[] tab = table;
-        for (V prev;;) {
-            if ((prev = tabAt(tab, i)) == null)
+        V oldVal = tabAt(tab, i), newVal;
+        if (oldVal != null ||
+                (newVal = mappingFunction.apply(key)) == null)
+            return oldVal;
+        // strong CAS to minimize function call
+        var witness = caeTabAt(tab, i, null, newVal);
+        if (witness == null) {
+            addCount(1L);
+            return newVal;
+        }
+        return witness;
+    }
+    @Override
+    public V computeIfPresent(K key,
+    BiFunction<? super K, ? super V, ? extends V> remappingFunction) {
+        requireNonNull(key);
+        requireNonNull(remappingFunction);
+
+        int i = key.ordinal();
+        V[] tab = table;
+        for (V oldVal;;) {
+            if ((oldVal = tabAt(tab, i)) == null)
                 return null;
-            V newVal = remappingFunction.apply(key, prev);
+            V newVal = remappingFunction.apply(key, oldVal);
+            if (oldVal == newVal) // only reference comparison
+                return oldVal;
             // strong CAS to minimize function call
-            if (casTabAt(tab, i, prev, newVal)) {
+            var witness = caeTabAt(tab, i, oldVal, newVal);
+            if (witness == null)
+                return null;
+            else if (witness == oldVal) {
                 if (newVal == null)
                     addCount(-1L);
                 return newVal;
@@ -248,55 +267,80 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
         }
     }
     @Override
-    public V merge(K key, @NotNull V value, @NotNull
+    public V merge(K key, V value,
     BiFunction<? super V, ? super V, ? extends V> remappingFunction) {
-        Objects.requireNonNull(key);
+        requireNonNull(key);
+        requireNonNull(value);
+        requireNonNull(remappingFunction);
+
         int i = key.ordinal();
         V[] tab = table;
-        for (V prev;;) {
-            if ((prev = tabAt(tab, i)) == null) {
+        for (V oldVal;;) {
+            if ((oldVal = tabAt(tab, i)) == null) {
                 if (weakCasTabAt(tab, i, null, value)) {
                     addCount(1L);
                     return value;
-                } else
-                    continue;
-            }
-            V newVal = remappingFunction.apply(prev, value);
-            if (casTabAt(tab, i, prev, newVal)) {
-                if (newVal == null)
-                    addCount(-1L);
-                return newVal;
+                }
+            } else {
+                V newVal = remappingFunction.apply(oldVal, value);
+                if (oldVal == newVal) // only reference comparison
+                    return value;
+                // strong CAS to minimize function call
+                else if (casTabAt(tab, i, oldVal, newVal)) {
+                    if (newVal == null)
+                        addCount(-1L);
+                    return newVal;
+                }
             }
         }
     }
 
     @Override
-    public boolean remove(@NotNull Object key, Object value) {
-        Objects.requireNonNull(value);
+    public boolean remove(Object key, Object value) {
+        requireNonNull(value);
+
         if (isValidKey(key)) {
-            int i = ((Enum<?>) key).ordinal();
-            V[] tab = table;
-            if (tabAt(tab, i) == value &&
-                    casTabAt(tab, i, value, null)) {
-                addCount(-1);
-                return true;
+            final int i = ((Enum<?>) key).ordinal();
+            for (V[] tab = table;;) {
+                V v = tabAt(tab, i);
+                if (Objects.equals(v, value)) {
+                    var witness = caeTabAt(tab, i, v, null);
+                    if (witness == null)
+                        return false;
+                    else if (witness == v) {
+                        addCount(-1);
+                        return true;
+                    }
+                } else
+                    break;
             }
         }
         return false;
     }
 
     @Override
-    public boolean replace(@NotNull K key,
-                           @NotNull V oldValue,
-                           @NotNull V newValue) {
-        int i = key.ordinal();
-        V[] tab = table;
-        return tabAt(tab, i) == oldValue &&
-                casTabAt(tab, i, oldValue, newValue);
+    public boolean replace(K key, V oldValue, V newValue) {
+        requireNonNull(key);
+        requireNonNull(oldValue);
+        requireNonNull(newValue);
+
+        final int i = key.ordinal();
+        for (V[] tab = table;;) {
+            V v = tabAt(tab, i);
+            if (Objects.equals(v, oldValue)) {
+                var witness = caeTabAt(tab, i, v, newValue);
+
+                if (witness == null)
+                    return false;
+                else if (witness == v)
+                    return true;
+            } else
+                return false;
+        }
     }
 
     @Override
-    public V replace(@NotNull K key, @NotNull V value) {
+    public V replace(K key, V value) {
         return put(key, value);
     }
 
@@ -325,13 +369,15 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
      * Helper method for EntrySetView.removeIf.
      */
     boolean removeEntryIf(Predicate<? super Entry<K,V>> function) {
-        Objects.requireNonNull(function);
-        V[] tab = table; boolean removed = false;
+        requireNonNull(function);
+
+        boolean removed = false;
+        K[] ks = keys; V[] tab = table;
         for (int i = 0, len = tab.length; i < len; ++i) {
             V v = tabAt(tab, i);
             if (v == null)
                 continue;
-            K k = keys[i];
+            K k = ks[i];
             Map.Entry<K,V> entry = Map.entry(k,v);
 
             if (function.test(entry) && remove(k,v))
@@ -344,14 +390,15 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
      * Helper method for ValuesView.removeIf.
      */
     boolean removeValueIf(Predicate<? super V> function) {
-        Objects.requireNonNull(function);
+        requireNonNull(function);
+
         boolean removed = false;
-        V[] tab = table;
+        K[] ks = keys; V[] tab = table;
         for (int i = 0, len = tab.length; i < len; ++i) {
             V v = tabAt(tab, i);
             if (v != null &&
                     function.test(v) &&
-                    remove(keys[i],v))
+                    remove(ks[i],v))
                 removed = true;
         }
         return removed;
@@ -373,10 +420,12 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
         @Override public boolean isEmpty() { return map.isEmpty(); }
         @Override public void clear() { map.clear(); }
 
-        @Override public @NotNull
-        Iterator<K> iterator() { return new KeyIterator<>(map); }
-        @Override public boolean contains(Object o) { return map.containsKey(o); }
-        @Override public boolean remove(Object o) { return map.remove(o) != null; }
+        @Override public Iterator<K>
+        iterator() { return new KeyIterator<>(map); }
+        @Override public boolean
+        contains(Object o) { return map.containsKey(o); }
+        @Override public boolean
+        remove(Object o) { return map.remove(o) != null; }
     }
 
     static final class ValuesView<K extends Enum<K>,V>
@@ -394,25 +443,36 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
         @Override public void clear() { map.clear(); }
 
 
-        @Override public @NotNull
-        Iterator<V> iterator() { return new ValueIterator<>(map); }
+        @Override public Iterator<V>
+        iterator() { return new ValueIterator<>(map); }
 
-        @Override public boolean contains(Object o) { return map.containsValue(o); }
+        @Override public boolean
+        contains(Object o) { return map.containsValue(o); }
 
         @Override
-        public boolean removeIf(Predicate<? super V> filter) {
+        public boolean
+        removeIf(Predicate<? super V> filter) {
             return map.removeValueIf(filter);
         }
 
         @Override
         public boolean remove(Object o) {
-            Objects.requireNonNull(o);
+            requireNonNull(o);
+
             V[] tab = map.table;
             for (int i = 0, len = tab.length; i < len; ++i) {
-                if (tabAt(tab, i) == o &&
-                        casTabAt(tab, i, o, null)) {
-                    map.addCount(-1L);
-                    return true;
+                for (;;) {
+                    V val = tabAt(tab, i);
+                    if (Objects.equals(val, o)) {
+                        var witness = caeTabAt(tab, i, val, null);
+                        if (witness == null)
+                            break;
+                        else if (witness == val) {
+                            map.addCount(-1L);
+                            return true;
+                        }
+                    } else
+                        break;
                 }
             }
             return false;
@@ -432,8 +492,8 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
         @Override public boolean isEmpty() { return map.isEmpty(); }
         @Override public void clear() { map.clear(); }
 
-        @Override public @NotNull
-        Iterator<Map.Entry<K,V>> iterator() { return new EntryIterator<>(map); }
+        @Override public Iterator<Map.Entry<K,V>>
+        iterator() { return new EntryIterator<>(map); }
 
         @Override
         public boolean removeIf(Predicate<? super Entry<K,V>> filter) {
@@ -442,20 +502,16 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
 
         @Override
         public boolean contains(Object o) {
-            Map.Entry<K,V> e;
-            K k; V v, r;
-            return ((o instanceof Map.Entry) &&
-                    (k = (e = (Map.Entry<K,V>)o).getKey()) != null &&
-                    (r = map.get(k)) != null &&
-                    (v = e.getValue()) != null &&
-                    (v == r || v.equals(r)));
+            Object k;
+            return o instanceof Map.Entry<?,?> e &&
+                    (k = e.getKey()) != null &&
+                    Objects.equals(map.get(k), e.getValue());
         }
         @Override
         public boolean remove(Object o) {
-            Map.Entry<K,V> e;
-            K k; V v;
-            return ((o instanceof Map.Entry) &&
-                    (k = (e = (Map.Entry<K,V>)o).getKey()) != null &&
+            Object k; Object v;
+            return ((o instanceof Map.Entry<?,?> e) &&
+                    (k = e.getKey()) != null &&
                     (v = e.getValue()) != null &&
                     map.remove(k,v));
         }
@@ -479,7 +535,7 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
         }
     }
 
-    static final class ValueIterator<K extends Enum<K>,V>
+    private static final class ValueIterator<K extends Enum<K>,V>
             extends EnumMapIterator<K,V,V> {
         ValueIterator(ConcurrentEnumMap<K,V> map) {
             super(map);
@@ -496,7 +552,7 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
         }
     }
 
-    static final class EntryIterator<K extends Enum<K>,V>
+    private static final class EntryIterator<K extends Enum<K>,V>
             extends EnumMapIterator<K,V,Map.Entry<K,V>> {
         EntryIterator(ConcurrentEnumMap<K,V> map) {
             super(map);
@@ -512,7 +568,7 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
         }
     }
 
-    abstract static sealed class EnumMapIterator<K extends Enum<K>,V,E>
+    private abstract static sealed class EnumMapIterator<K extends Enum<K>,V,E>
             implements Iterator<E>
             permits KeyIterator, ValueIterator, EntryIterator {
         final ConcurrentEnumMap<K,V> map;
@@ -569,21 +625,18 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
         @Override public K getKey() { return key; }
         @Override public V getValue() { return val; }
         @Override public int hashCode() { return key.hashCode() ^ val.hashCode(); }
-        @Override public String toString() { return key.toString() + ' ' + val.toString(); }
+        @Override public String toString() { return key.toString() + "=" + val.toString(); }
 
         @Override
         public boolean equals(Object o) {
-            Object k, v, v1; Map.Entry<?,?> e;
-            return ((o instanceof Map.Entry) &&
-                    (k = (e = (Map.Entry<?,?>)o).getKey()) != null &&
-                    (v = e.getValue()) != null &&
-                    (k == key || k.equals(key)) &&
-                    (v == (v1 = val) || v.equals(v1)));
+            return o instanceof Map.Entry<?,?> e
+                    && Objects.equals(e.getKey(), key)
+                    && Objects.equals(e.getValue(), val);
         }
 
         @Override
         public V setValue(V value) {
-            Objects.requireNonNull(value);
+            requireNonNull(value);
             V v = val;
             val = value;
             //Object o =
@@ -596,38 +649,34 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
     @Override
     public int hashCode() {
         int h = 0;
-        V[] tab = table;
+        K[] ks = keys; V[] tab = table;
         for (int i = 0, len = tab.length; i < len; ++i) {
             V val;
             if ((val = tabAt(tab, i)) == null)
                 continue;
-            h += keys[i].hashCode() ^ val.hashCode();
+            h += ks[i].hashCode() ^ val.hashCode();
         }
         return h;
     }
+
     @Override
     public boolean equals(Object o) {
         if (o == this)
             return true;
-        if (!(o instanceof Map<?,?> m))
-            return false;
-        V[] tab = table;
-        for (int i = 0, len = tab.length; i < len; ++i) {
-            Object v1,v2;
-            if ((v1 = m.get(keys[i])) == null)
+        else if (o instanceof Map<?,?> m) {
+            K[] ks = keys; V[] tab = table;
+            int maxSize = ks.length, sz = m.size();
+            if (sz > maxSize || sz != size())
                 return false;
-            else if (v1 != (v2 = tabAt(tab, i)) && !v1.equals(v2))
-                return false;
+            for (int i = 0, n = tab.length; i < n; ++i) {
+                V value = tabAt(tab, i);
+                if (value != null &&
+                        !value.equals(m.get(ks[i])))
+                    return false;
+            }
+            return true;
         }
-        for (Map.Entry<?, ?> e : m.entrySet()) {
-            Object mk, mv, v;
-            if ((mk = e.getKey()) == null ||
-                    (mv = e.getValue()) == null ||
-                    (v = get(mk)) == null ||
-                    (mv != v && !mv.equals(v)))
-                return false;
-        }
-        return true;
+        return false;
     }
 
     @Serial
@@ -662,7 +711,6 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
             }
         }
     }
-
     @Override
     public String toString() {
         StringJoiner joiner = new StringJoiner(
@@ -672,11 +720,10 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
     }
 
     private boolean isValidKey(Object key) {
-        if (key == null)
-            return false;
+        requireNonNull(key);
         // Cheaper than instanceof Enum followed by getDeclaringClass
-        Class<?> keyClass = key.getClass();
-        return keyClass == keyType || keyClass.getSuperclass() == keyType;
+        Class<?> keyClass = key.getClass(), type = keyType;
+        return keyClass == type || keyClass.getSuperclass() == type;
     }
 
     /*

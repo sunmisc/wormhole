@@ -1,7 +1,5 @@
 package sunmisc.utils.concurrent;
 
-import org.jetbrains.annotations.NotNull;
-
 import java.util.*;
 import java.util.concurrent.ConcurrentMap;
 import java.util.function.IntUnaryOperator;
@@ -23,7 +21,7 @@ public abstract class ConcurrentIndexMap<E>
 
 
     @Override
-    public E replace(@NotNull Integer key, @NotNull E value) {
+    public E replace(Integer key, E value) {
         return put(key,value);
     }
 

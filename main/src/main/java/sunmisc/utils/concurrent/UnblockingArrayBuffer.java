@@ -1,12 +1,13 @@
 package sunmisc.utils.concurrent;
 
-import org.jetbrains.annotations.NotNull;
-
 import java.io.*;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.*;
 import java.util.function.IntUnaryOperator;
+
+import static java.util.Objects.checkIndex;
+import static java.util.Objects.requireNonNull;
 
 /**
  * An array that supports full concurrency retrievals
@@ -116,13 +117,13 @@ public class UnblockingArrayBuffer<E>
         Objects.requireNonNull(c);
         int i = (int) c;
         Object[] arr = bridge.array;
-        Objects.checkIndex(i, arr.length);
+        checkIndex(i, arr.length);
         for (Object o;;) {
             if ((o = arrayAt(arr, i)) == null)
                 return null;
             else if (o instanceof ForwardingPointer t) {
                 arr = t.nextCells;
-                Objects.checkIndex(i, arr.length);
+                checkIndex(i, arr.length);
             } else if (o instanceof Cell<?> f)
                 return (E) f.value;
         }
@@ -138,10 +139,11 @@ public class UnblockingArrayBuffer<E>
     @Override
     @SuppressWarnings({"unchecked", "rawtypes"})
     public E put(Integer i, E newValue) {
-        Objects.requireNonNull(i);
-        Objects.requireNonNull(newValue);
+        requireNonNull(i);
+        requireNonNull(newValue);
+
         Object[] arr = bridge.array;
-        Objects.checkIndex(i, arr.length);
+        checkIndex(i, arr.length);
         for (Object o;;) {
             if ((o = arrayAt(arr, i)) == null) {
                 if (weakCasAt(arr, i, null,
@@ -171,10 +173,11 @@ public class UnblockingArrayBuffer<E>
     @Override
     @SuppressWarnings("unchecked")
     public E remove(Object c) {
-        Objects.requireNonNull(c);
+        requireNonNull(c);
+
         int i = (int)c;
         Object[] arr = bridge.array;
-        Objects.checkIndex(i, arr.length);
+        checkIndex(i, arr.length);
         for (Object o;;) {
             if ((o = arrayAt(arr, i)) == null)
                 return null;
@@ -188,9 +191,12 @@ public class UnblockingArrayBuffer<E>
 
     @Override
     @SuppressWarnings("unchecked")
-    public E putIfAbsent(@NotNull Integer i, E val) {
+    public E putIfAbsent(Integer i, E val) {
+        requireNonNull(i);
+        requireNonNull(val);
+
         Object[] arr = bridge.array;
-        Objects.checkIndex(i, arr.length);
+        checkIndex(i, arr.length);
         for (Object o;;) {
             if ((o = arrayAt(arr, i)) == null) {
                 if (weakCasAt(arr, i, null,
@@ -212,11 +218,13 @@ public class UnblockingArrayBuffer<E>
 
     @Override
     @SuppressWarnings({"unchecked", "rawtypes"})
-    public boolean replace(@NotNull Integer i,
-                           @NotNull E oldVal,
-                           @NotNull E newVal) {
+    public boolean replace(Integer i, E oldVal, E newVal) {
+        requireNonNull(i);
+        requireNonNull(oldVal);
+        requireNonNull(newVal);
+
         Object[] arr = bridge.array;
-        Objects.checkIndex(i, arr.length);
+        checkIndex(i, arr.length);
         for (Object o;;) {
             if ((o = arrayAt(arr, i)) == null)
                 return false;
@@ -229,12 +237,13 @@ public class UnblockingArrayBuffer<E>
 
     @Override
     @SuppressWarnings({"unchecked", "rawtypes"})
-    public boolean remove(@NotNull Object idx, Object oldVal) {
+    public boolean remove(Object idx, Object oldVal) {
+        Objects.requireNonNull(idx);
         Objects.requireNonNull(oldVal);
 
         int i = (int) idx;
         Object[] arr = bridge.array;
-        Objects.checkIndex(i, arr.length);
+        checkIndex(i, arr.length);
         for (Object o;;) {
             if ((o = arrayAt(arr, i)) == null)
                 return false;
@@ -302,7 +311,7 @@ public class UnblockingArrayBuffer<E>
 
         Object[] array = p instanceof ForwardingPointer f
                 ? f.nextCells : p.array;
-        Objects.checkIndex(targetIndex, array.length);
+        checkIndex(targetIndex, array.length);
 
         return array;
     }
@@ -439,7 +448,6 @@ public class UnblockingArrayBuffer<E>
             }
         }
     }
-    @NotNull
     @Override
     public Set<Map.Entry<Integer,E>> entrySet() {
         EntrySetView<E> es;
@@ -453,7 +461,7 @@ public class UnblockingArrayBuffer<E>
             this.array = array;
         }
         @Override
-        public @NotNull Iterator<Entry<Integer, E>> iterator() {
+        public Iterator<Entry<Integer, E>> iterator() {
             return new EntrySetItr<>(array);
         }
 
