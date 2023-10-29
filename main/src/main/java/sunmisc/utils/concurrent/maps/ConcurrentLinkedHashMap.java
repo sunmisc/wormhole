@@ -8,20 +8,20 @@ import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.*;
 import java.util.concurrent.ConcurrentMap;
+import java.util.function.BiConsumer;
 
 @SuppressWarnings("unchecked")
-public class ConcurrentLinkedHashMap<K,V> extends AbstractMap<K,V>
-        implements ConcurrentMap<K,V> {
+public class ConcurrentLinkedHashMap<K,V>
+        extends AbstractMap<K,V>
+        implements ConcurrentMap<K,V>, SequencedMap<K,V> {
     private final Head<K,V> head;
     private final Tail<K,V> tail;
     private volatile int size;
 
     private final ConcurrentSegmentBuffers<Bucket<K,V>> table
-            = new ConcurrentSegmentBuffers<>();
+            = ConcurrentSegmentBuffers.of(32);
 
     public ConcurrentLinkedHashMap() {
-        for (int i = 0; i < 4; ++i) // default capacity = 32
-            table.expand();
         Node<K,V> share = new DummyNode<>();
 
         Head<K,V> head = new Head<>();
@@ -59,20 +59,13 @@ public class ConcurrentLinkedHashMap<K,V> extends AbstractMap<K,V>
         return f == null ? null : f.getValue();
     }
 
-    private Node<K,V> firstNode() {
-        return head.head();
-    }
-
-    public K getFirstKey() {
-        return firstNode().getKey();
-    }
     @Override
     public String toString() {
 
         StringJoiner joiner = new StringJoiner(", ",
                 "[", "]");
 
-        for (Node<K,V> h = firstNode(); h != null; h = h.next) {
+        for (Node<K,V> h = head.head(); h != null; h = h.next) {
             V val = h.getValue();
             if (!h.isDead() && val != null)
                 joiner.add(val.toString());
@@ -189,7 +182,7 @@ public class ConcurrentLinkedHashMap<K,V> extends AbstractMap<K,V>
     private void updatePrev(Node<K,V> x) {
         Node<K,V> p, n;
         do {
-            if ((p = x.prev) == null) // todo: head.prev = ?
+            if ((p = x.prev) == null)
                 break;
             n = p.tryFindPrevActiveNode();
         } while (p != n && !x.casPrev(p, n));
@@ -198,18 +191,13 @@ public class ConcurrentLinkedHashMap<K,V> extends AbstractMap<K,V>
     private void updateNext(Node<K,V> x) {
         Node<K,V> p, n;
         do {
-            if ((p = x.next) == null) // todo: tail.next = ?
+            if ((p = x.next) == null)
                 break;
             n = p.tryFindNextActiveNode();
         } while (p != n && !x.casNext(p, n));
 
     }
 
-    @NotNull
-    @Override
-    public Set<Entry<K,V>> entrySet() {
-        return null;
-    }
 
     @Override
     public V putIfAbsent(@NotNull K key, V value) {
@@ -227,6 +215,101 @@ public class ConcurrentLinkedHashMap<K,V> extends AbstractMap<K,V>
         return put(key, value);
     }
 
+    @NotNull
+    @Override
+    public Set<Entry<K,V>> entrySet() {
+        return new EntrySetView();
+    }
+
+    @Override
+    public void forEach(BiConsumer<? super K, ? super V> action) {
+        Objects.requireNonNull(action);
+        for (Node<K,V> x = head.head(); x != null; x = x.prev) {
+            if (x.isDead()) continue;
+            action.accept(x.getKey(), x.getValue());
+        }
+    }
+
+    @Override
+    public SequencedMap<K,V> reversed() {
+        throw new UnsupportedOperationException(); // todo:
+    }
+    public static void main(String[] args) {
+        ConcurrentLinkedHashMap<Integer,Integer> map
+                = new ConcurrentLinkedHashMap<>();
+
+        for (int  i = 0; i < 16; ++i ) {
+            map.put(i,i);
+        }
+        System.out.println(map.pollLastEntry());
+
+        System.out.println(map);
+    }
+
+    private class EntrySetView extends AbstractSet<Map.Entry<K,V>> {
+        @Override
+        public Iterator<Map.Entry<K,V>> iterator() {
+            return new EntrySetIterator();
+        }
+
+        @Override
+        public int size() {
+            return size;
+        }
+    }
+
+    private final class EntrySetIterator
+            implements Iterator<Map.Entry<K,V>> {
+        private Node<K,V> nextNode = head;
+        private Map.Entry<K,V> nextItem;
+        private K lastRet;
+
+        EntrySetIterator() {
+            advance();
+        }
+        @Override
+        public boolean hasNext() {
+            return nextNode != null;
+        }
+
+        @Override
+        public Map.Entry<K,V> next() {
+            Map.Entry<K,V> x = nextItem;
+            if (x == null)
+                throw new NoSuchElementException();
+            advance();
+            lastRet = x.getKey();
+            return x;
+        }
+
+        @Override
+        public void remove() {
+            K key = lastRet;
+            if (key == null)
+                throw new IllegalStateException();
+            ConcurrentLinkedHashMap.this.remove(key);
+            lastRet = null;
+        }
+
+        private void advance() {
+            Node<K,V> x = nextNode.next;
+            for (;;) {
+                for (; x != null && x.isDead(); x = x.next);
+
+                if (x == null) {
+                    nextNode = null;
+                    nextItem = null;
+                    break;
+                }
+                V val = x.getValue();
+                if (val != null) {
+                    nextNode = x;
+                    nextItem = Map.entry(x.getKey(), val);
+                    break;
+                }
+            }
+        }
+    }
     static class HashNode<K,V> extends Node<K,V> {
         final int hash;
         final K key;
@@ -411,22 +494,22 @@ public class ConcurrentLinkedHashMap<K,V> extends AbstractMap<K,V>
 
         private final SkipListBin<K,V> bin = new SkipListBin<>();
         @Override
-        public Node<K, V> addIfAbsent(HashNode<K, V> n) {
+        public Node<K,V> addIfAbsent(HashNode<K, V> n) {
             return bin.putIfAbsent(n);
         }
 
         @Override
-        public Node<K, V> remove(K key, int h) {
+        public Node<K,V> remove(K key, int h) {
             return bin.doRemove(key, h, null);
         }
 
         @Override
-        public Node<K, V> remove(K key, int h, V expected) {
+        public Node<K,V> remove(K key, int h, V expected) {
             return bin.doRemove(key, h, expected);
         }
 
         @Override
-        public Node<K, V> find(K key, int h) {
+        public Node<K,V> find(K key, int h) {
             return bin.get(key, h);
         }
 

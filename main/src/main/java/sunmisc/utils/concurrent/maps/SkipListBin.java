@@ -2,9 +2,9 @@ package sunmisc.utils.concurrent.maps;
 
 import sunmisc.utils.concurrent.maps.ConcurrentLinkedHashMap.HashNode;
 
+import java.lang.invoke.VarHandle;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
-import java.util.Map;
 import java.util.Objects;
 import java.util.Random;
 import java.util.concurrent.ThreadLocalRandom;
@@ -53,7 +53,7 @@ class SkipListBin<K,V> {
         return dir <= 0 ? -1 : 1;
     }
 
-    static class Index<K,V> {
+    private static class Index<K,V> {
         final QNode<K,V> node;
         final Index<K,V> down;
         Index<K,V> right;
@@ -64,7 +64,7 @@ class SkipListBin<K,V> {
             this.right = right;
         }
     }
-    static final class QNode<K,V> {
+    private static class QNode<K,V> {
         HashNode<K,V> key;
         QNode<K, V> next;
 
@@ -87,19 +87,33 @@ class SkipListBin<K,V> {
         }
     }
     HashNode<K,V> get(K key, int h) {
-       // VarHandle.fullFence();
+        VarHandle.fullFence();
 
-        var lvl = findPredecessor(key, h);
+        QNode<K,V> x = findPredecessor(key, h);
 
-        QNode<K,V> x = lvl.getValue();
         return x == null ? null :
                 (x = x.find(key, h)) == null ?
                         null : x.key;
     }
     HashNode<K,V> putIfAbsent(HashNode<K,V> key) {
-        var lvl = findPredecessor(key);
-        int levels = lvl.getKey();
-        QNode<K,V> b = lvl.getValue(), n = b.next;
+        int levels = 0;
+        Index<K,V> q = head;
+        for (Index<K,V> r, d; ;) {
+            while ((r = q.right) != null) {
+                QNode<K,V> p = r.node;
+                if (p == null || p.key == null)
+                    q.right = r.right; // clean index
+                else if (insertionToComparisons(key, p.key) > 0)
+                    q = r;
+                else
+                    break;
+            }
+            if ((d = q.down) != null) {
+                ++levels;
+                q = d;
+            } else break;
+        }
+        QNode<K,V> b = q.node, n = b.next;
         while (n != null) {
             QNode<K,V> f = n.next;
             HashNode<K,V> v = n.key;
@@ -120,9 +134,7 @@ class SkipListBin<K,V> {
     }
     HashNode<K,V> doRemove(K key, int h, V value) {
 
-        var lvl = findPredecessor(key, h);
-
-        QNode<K,V> b = lvl.getValue();
+        QNode<K,V> b = findPredecessor(key, h);
 
         if (b != null) {
             QNode<K,V> n = b.find(key, h);
@@ -174,38 +186,13 @@ class SkipListBin<K,V> {
                 (e = d.down) != null && e.right == null)
             head = d;
     }
-    private Map.Entry<Integer, QNode<K,V>>
-    findPredecessor(HashNode<K,V> key) {
-        int levels = 0;
-
-        for (Index<K,V> q = head, r, d; ;) {
-            while ((r = q.right) != null) {
-                QNode<K,V> p = r.node;
-                if (p == null || p.key == null)
-                    q.right = r.right; // clean index
-                else if (insertionToComparisons(key, p.key) > 0)
-                    q = r;
-                else
-                    break;
-            }
-            if ((d = q.down) != null) {
-                ++levels;
-                q = d;
-            } else
-                // value based
-                return Map.entry(levels, q.node);
-        }
-    }
 
     boolean empty() {
         QNode<K,V> b = head.node;
         return b.next == null;
     }
 
-    private Map.Entry<Integer, QNode<K,V>>
-    findPredecessor(K key, int h) {
-        int levels = 0;
-
+    private QNode<K,V> findPredecessor(K key, int h) {
         for (Index<K,V> q = head, r, d; ;) {
             while ((r = q.right) != null) {
                 QNode<K,V> p = r.node;
@@ -216,12 +203,10 @@ class SkipListBin<K,V> {
                 else
                     break;
             }
-            if ((d = q.down) != null) {
-                ++levels;
+            if ((d = q.down) != null)
                 q = d;
-            } else
-                // value based
-                return Map.entry(levels, q.node);
+            else
+                return q.node;
         }
     }
     private boolean addIndices(Index<K,V> q, int skips, Index<K,V> x) {

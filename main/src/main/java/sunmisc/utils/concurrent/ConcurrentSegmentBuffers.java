@@ -17,7 +17,6 @@ import static java.lang.Integer.numberOfLeadingZeros;
  * <p>The maximum size is 2^30, this is equivalent to the maximum capacity of {@link java.util.concurrent.ConcurrentHashMap}, but you can increase the maximum if desired
  * <p>This class is well suited for implementing data structures such as HashMap, ArrayList...
  * <p>It is also completely thread safe. Operations such as: set, get, nextGrow are performed in O(1)
- * <p>All operations are performed in O(1)
  * <p>This implementation does not replace {@link UnblockingArrayBuffer}, since it physically does not copy anything, this may be unacceptable:<ul>
  * <li>if we need an array of its own length (not a power of two)
  * <li>severe memory limitations
@@ -40,29 +39,19 @@ public class ConcurrentSegmentBuffers<U> {
     private volatile int cursor = 1;
     private volatile int size = 2; // alignment gap
 
-    @Override
-    public String toString() {
-        StringJoiner joiner = new StringJoiner("\n");
-        for (int i = 0, n = segments.length; i < n; ++i) {
-            Segment<U> segment = segmentAt(i);
 
-            if (segment == null) break;
+    private ConcurrentSegmentBuffers() { }
 
-            joiner.add(segment.toString());
-        }
-        return joiner.toString();
-    }
+    public static <U> ConcurrentSegmentBuffers<U> of(int initialCapacity) {
 
-    public void forEach(Consumer<? super U> action) {
-        Objects.requireNonNull(action);
-        for (int x = 0, n = segments.length; x < n; ++x) {
-            Segment<U> segment = segmentAt(x);
+        initialCapacity = Math.max(2, initialCapacity);
+        int u = 31 - numberOfLeadingZeros(initialCapacity - 1);
 
-            if (segment == null) return;
-
-            for (int y = 0, h = segment.length(); y < h; ++y)
-                action.accept(segment.arrayAt(y));
-        }
+        ConcurrentSegmentBuffers<U> buffers
+                = new ConcurrentSegmentBuffers<>();
+        for (int i = 0; i < u; ++i)
+            buffers.expand();
+        return buffers;
     }
 
     public U get(int index) {
@@ -85,19 +74,55 @@ public class ConcurrentSegmentBuffers<U> {
         return segment.cae(i, expected, value);
     }
 
-    public U set(int index, U e) {
+    public void set(int index, U e) {
         Objects.checkIndex(index, length());
         int exponent = segmentForIndex(index);
 
         Segment<U> segment = segmentAt(exponent);
 
         int i = indexForSegment(segment, index);
-        return segment.setAt(i, e);
+        segment.setAt(i, e);
+    }
+
+    public U getAndSet(int index, U e) {
+        Objects.checkIndex(index, length());
+        int exponent = segmentForIndex(index);
+
+        Segment<U> segment = segmentAt(exponent);
+
+        int i = indexForSegment(segment, index);
+        return segment.getAndSet(i, e);
     }
 
     public int length() {
         return (int) SIZE.getAcquire(this);
     }
+
+    public void forEach(Consumer<? super U> action) {
+        Objects.requireNonNull(action);
+        for (int x = 0, n = segments.length; x < n; ++x) {
+            Segment<U> segment = segmentAt(x);
+
+            if (segment == null) return;
+
+            for (int y = 0, h = segment.length(); y < h; ++y)
+                action.accept(segment.arrayAt(y));
+        }
+    }
+
+    @Override
+    public String toString() {
+        StringJoiner joiner = new StringJoiner("\n");
+        for (int i = 0, n = segments.length; i < n; ++i) {
+            Segment<U> segment = segmentAt(i);
+
+            if (segment == null) break;
+
+            joiner.add(segment.toString());
+        }
+        return joiner.toString();
+    }
+
 
     private static <E> int
     indexForSegment(final Segment<E> segment, final int index) {
@@ -151,9 +176,8 @@ public class ConcurrentSegmentBuffers<U> {
     private void setSegmentAt(int i, Segment<U> segment) {
         AA.setRelease(segments, i, segment);
     }
-    private boolean casSegmentAt(int i,
-                                 Segment<U> expected,
-                                 Segment<U> segment) {
+    private boolean
+    casSegmentAt(int i, Segment<U> expected, Segment<U> segment) {
         return AA.compareAndSet(segments, i, expected, segment);
     }
     private record Segment<E>(E[] array) {
@@ -163,7 +187,11 @@ public class ConcurrentSegmentBuffers<U> {
         E arrayAt(int index) {
             return (E) AA.getAcquire(array, index);
         }
-        E setAt(int index, E value) {
+
+        void setAt(int index, E value) {
+            AA.setRelease(array, index, value);
+        }
+        E getAndSet(int index, E value) {
             return (E) AA.getAndSet(array, index, value);
         }
         E cae(int i, E expected, E value) {
