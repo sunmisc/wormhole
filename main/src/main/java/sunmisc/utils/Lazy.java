@@ -5,12 +5,7 @@ import sunmisc.utils.concurrent.ConcurrentLazy;
 import java.util.function.Supplier;
 
 public abstract class Lazy<V> {
-    protected static final Object NIL = new Object() {
-        @Override
-        public String toString() {
-            return "null";
-        }
-    };
+    protected static final Object NIL = new Object();
     protected final Supplier<V> supplier;
 
     protected Lazy(Supplier<V> supplier) {
@@ -31,7 +26,7 @@ public abstract class Lazy<V> {
         CONCURRENT {
             @Override
             <V> Lazy<V> create(Supplier<V> supplier) {
-                return new ConcurrentLazy<>(supplier);
+                return ConcurrentLazy.of(supplier);
             }
         },
         UNSAFE {

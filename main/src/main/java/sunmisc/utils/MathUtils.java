@@ -1,13 +1,11 @@
 package sunmisc.utils;
 
-
 /**
  * @author Sunmisc Unsafe
  */
 public final class MathUtils {
 
     private static final int PRECISION      = 1 << 16;
-
     private static final int[] SINE_TABLE_INT;
 
     static {
@@ -27,16 +25,20 @@ public final class MathUtils {
         return (y & 1) == 0 ? n * (y >> 1) : (n >> 1) * y;
     }
 
+
     public static float _sin(double value) {
         double h = PRECISION / Math.TAU;
         return lookup((int)(value*h));
     }
     public static float _cos(double value) {
         double h = PRECISION / Math.TAU, q = PRECISION >>> 2;
-        return lookup((int)(value *h + q));
+        return lookup((int)(value * h + q));
     }
 
-
+    /*
+     * Author of the original implementation in Rust:
+     * https://gitlab.com/coderbot16/i73/-/tree/master/i73-trig/src
+     */
     private static float lookup(int index) {
         index &= (PRECISION - 1);
 

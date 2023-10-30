@@ -30,32 +30,27 @@ public class ConcurrentLazy<V> extends Lazy<V>
             throw new ExceptionInInitializerError(e);
         }
     }
-    /*
-     * on some platforms (for example, arm),
-     * we have very different semantics of volatile and final,
-     * after calling the constructor, we can read the value field through the race
-     * and see null there (which is not a valid execution)
-     * value = NIL; // not initialized
-     * any other values - initialized
-     * to do this, we wrap the user's null in NIL by doing a set from,
-     * so null (the field's default value) is not read through the race
-     * because I don’t have a normal opportunity to test it on arm,
-     * maybe you shouldn’t guess with barriers and do it this way
-     * the problem itself:
-     * https://github.com/openjdk/jcstress/blob/master/jcstress-samples/src/main/java/org/openjdk/jcstress/samples/jmm/advanced/AdvancedJMM_13_VolatileVsFinal.java
-     */
-
     private volatile V value;
 
-    public ConcurrentLazy(Supplier<V> supplier) {
+    private ConcurrentLazy(Supplier<V> supplier) {
         super(supplier);
+    }
+
+    @SuppressWarnings("unchecked")
+    public static <V> ConcurrentLazy<V> of(Supplier<V> supplier) {
+        Objects.requireNonNull(supplier);
+
+        ConcurrentLazy<V> lazy
+                = new ConcurrentLazy<>(supplier);
+        lazy.value = (V) NIL;
+        return lazy;
     }
 
     @Override
     @SuppressWarnings("unchecked")
     public final V get() {
         V val;
-        if ((val = value) == null) {
+        if ((val = value) == NIL) {
             synchronized (this) {
                 /*
                  * quite realistically, we can read field values with weak semantics,
@@ -69,32 +64,21 @@ public class ConcurrentLazy<V> extends Lazy<V>
                  * the CAS mechanism can be bad practice in case
                  * of high contention and the function from the supplier is quite heavy
                  */
-                if ((val = (V) VALUE.get(this)) == null) {
-                    val = supplier.get();
-                    value = decodeValue(val);
-                    return val;
-                }
+                if ((val = (V) VALUE.get(this)) == NIL)
+                    return value = supplier.get();
             }
         }
-        return encodeValue(val);
+        return val;
     }
     @Override
     public final boolean isDone() {
-        return value != null;
-    }
-    @SuppressWarnings("unchecked")
-    static <T> T encodeValue(T val) {
-        return (val == NIL) ? null : val;
-    }
-    @SuppressWarnings("unchecked")
-    static <T> T decodeValue(T val) {
-        return Objects.requireNonNullElse(val, (T) NIL);
+        return value != NIL;
     }
 
     @Override
     public String toString() {
         final V val = value;
-        return val == null ? "not initialized" : val.toString();
+        return val == NIL ? "not initialized" : Objects.toString(val);
     }
     @Override
     public boolean equals(Object o) {

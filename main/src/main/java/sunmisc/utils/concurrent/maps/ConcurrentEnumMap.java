@@ -14,7 +14,7 @@ import java.util.function.Predicate;
 import static java.util.Objects.requireNonNull;
 
 /**
- * A specialized implementation of the map for use with enumeration type keys.
+ * A specialized {@link Map} implementation of the map for use with enumeration type keys.
  * <p>All keys in the enumeration map must belong to the same enumeration type,
  * which is explicitly or implicitly specified when creating the map.
  * Enumeration maps are internally represented as arrays.
@@ -22,14 +22,14 @@ import static java.util.Objects.requireNonNull;
  * <p>Enumeration maps are maintained in the natural order of their keys
  * (the order in which enumeration constants are declared).
  * <p>This is reflected in the iterators returned by the collection views
- * (keySet (), entrySet() and values ()).
+ * ({@code keySet}, {@code entrySet} and {@code values}).
  * <p>The iterators returned by the collection views are poorly consistent:
- * <p>they will never throw a ConcurrentModificationException
+ * <p>they will never throw a {@link ConcurrentModificationException}
  * and may or may not show the effects of any map changes,
  * which occur during the execution of the iteration.</p>
  * <p>Null keys are not allowed.
  * Zero values are allowed.
- * <p>Attempts to insert a null key will cause a NullPointerException.
+ * <p>Attempts to insert a null key will cause a {@link NullPointerException}.
  * <p>However, attempts to check for the presence of a null key or delete it will work properly.
  * <p>This map differs from EnumMap in that it is thread-safe and scales well
  *
@@ -43,7 +43,7 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
         implements ConcurrentMap<K,V>, Serializable {
     @Serial
     private static final long serialVersionUID = 9193424923934859345L;
-    // An object of the class for the enumeration type of all the keys of this map
+    // An object of the class for the enumeration type of all the keys this map
     private transient Class<? extends K> keyType;
     // element count
     private transient LongAdder counter;
@@ -89,7 +89,7 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
 
     @Override
     public V get(Object key) {
-        return isValidKey(key)
+        return checkKey(key)
                 ? tabAt(table, ((Enum<?>)key).ordinal())
                 : null;
     }
@@ -144,7 +144,7 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
 
     @Override
     public V remove(Object key) {
-        if (isValidKey(key)) {
+        if (checkKey(key)) {
             int i = ((Enum<?>) key).ordinal();
             final V[] tab = table; V p = null;
             if (tabAt(tab, i) != null &&
@@ -299,7 +299,7 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
     public boolean remove(Object key, Object value) {
         requireNonNull(value);
 
-        if (isValidKey(key)) {
+        if (checkKey(key)) {
             final int i = ((Enum<?>) key).ordinal();
             for (V[] tab = table;;) {
                 V v = tabAt(tab, i);
@@ -386,10 +386,7 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
         return removed;
     }
 
-    /**
-     * Helper method for ValuesView.removeIf.
-     */
-    boolean removeValueIf(Predicate<? super V> function) {
+    public boolean removeValueIf(Predicate<? super V> function) {
         requireNonNull(function);
 
         boolean removed = false;
@@ -406,7 +403,7 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
 
     /* --------------------- Views --------------------- */
 
-    static final class KeySetView<K extends Enum<K>,V>
+    private static final class KeySetView<K extends Enum<K>,V>
             extends AbstractSet<K>
             implements Serializable {
         @Serial
@@ -428,7 +425,7 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
         remove(Object o) { return map.remove(o) != null; }
     }
 
-    static final class ValuesView<K extends Enum<K>,V>
+    private static final class ValuesView<K extends Enum<K>,V>
             extends AbstractCollection<V>
             implements Serializable {
         @Serial
@@ -478,7 +475,7 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
             return false;
         }
     }
-    static final class EntrySetView<K extends Enum<K>,V>
+    private static final class EntrySetView<K extends Enum<K>,V>
             extends AbstractSet<Map.Entry<K,V>>
             implements Serializable {
         @Serial
@@ -520,7 +517,7 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
             return map.put(e.getKey(), e.getValue()) == null;
         }
     }
-    static final class KeyIterator<K extends Enum<K>,V>
+    private static final class KeyIterator<K extends Enum<K>,V>
             extends EnumMapIterator<K,V,K> {
         KeyIterator(ConcurrentEnumMap<K,V> map) {
             super(map);
@@ -613,9 +610,9 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
 
     static final class MapEntry<K extends Enum<K>,V>
             implements Map.Entry<K,V> {
-        final K key; // non-null
-        V val;       // non-null
-        final ConcurrentEnumMap<? super K, ? super V> map;
+        private final K key; // non-null
+        private       V val; // non-null
+        private final ConcurrentEnumMap<? super K, ? super V> map;
         MapEntry(K key, V val, ConcurrentEnumMap<? super K, ? super V> map) {
             this.key = key;
             this.val = val;
@@ -625,24 +622,22 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
         @Override public K getKey() { return key; }
         @Override public V getValue() { return val; }
         @Override public int hashCode() { return key.hashCode() ^ val.hashCode(); }
-        @Override public String toString() { return key.toString() + "=" + val.toString(); }
+        @Override public String toString() { return key + "=" + val; }
 
         @Override
         public boolean equals(Object o) {
             return o instanceof Map.Entry<?,?> e
-                    && Objects.equals(e.getKey(), key)
-                    && Objects.equals(e.getValue(), val);
+                    && key.equals(e.getKey())
+                    && val.equals(e.getValue());
         }
 
         @Override
         public V setValue(V value) {
             requireNonNull(value);
-            V v = val;
+            V oldVal = val;
             val = value;
-            //Object o =
             map.put(key, value);
-            //assert o == v;
-            return v;
+            return oldVal;
         }
     }
 
@@ -719,7 +714,7 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
         return joiner.toString();
     }
 
-    private boolean isValidKey(Object key) {
+    private boolean checkKey(Object key) {
         requireNonNull(key);
         // Cheaper than instanceof Enum followed by getDeclaringClass
         Class<?> keyClass = key.getClass(), type = keyType;
@@ -727,7 +722,7 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
     }
 
     /*
-     * Atomic access methods are used for array
+     * Atomic access methods are used for an array
      */
     private static <V> V tabAt(V[] tab, int i) {
         return (V) AA.getAcquire(tab, i);

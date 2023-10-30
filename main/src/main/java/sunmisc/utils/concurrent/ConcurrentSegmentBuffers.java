@@ -43,7 +43,6 @@ public class ConcurrentSegmentBuffers<U> {
     private ConcurrentSegmentBuffers() { }
 
     public static <U> ConcurrentSegmentBuffers<U> of(int initialCapacity) {
-
         initialCapacity = Math.max(2, initialCapacity);
         int u = 31 - numberOfLeadingZeros(initialCapacity - 1);
 
@@ -58,7 +57,7 @@ public class ConcurrentSegmentBuffers<U> {
         Objects.checkIndex(index, length());
 
         int exponent = segmentForIndex(index);
-        Segment<U> segment = segmentAt(exponent);
+        Segment<U> segment = segments[exponent];
 
         int i = indexForSegment(segment, index);
         return segment.arrayAt(i);
@@ -68,7 +67,7 @@ public class ConcurrentSegmentBuffers<U> {
         Objects.checkIndex(index, length());
 
         int exponent = segmentForIndex(index);
-        Segment<U> segment = segmentAt(exponent);
+        Segment<U> segment = segments[exponent];
 
         int i = indexForSegment(segment, index);
         return segment.cae(i, expected, value);
@@ -76,9 +75,9 @@ public class ConcurrentSegmentBuffers<U> {
 
     public void set(int index, U e) {
         Objects.checkIndex(index, length());
-        int exponent = segmentForIndex(index);
 
-        Segment<U> segment = segmentAt(exponent);
+        int exponent = segmentForIndex(index);
+        Segment<U> segment = segments[exponent];
 
         int i = indexForSegment(segment, index);
         segment.setAt(i, e);
@@ -86,9 +85,9 @@ public class ConcurrentSegmentBuffers<U> {
 
     public U getAndSet(int index, U e) {
         Objects.checkIndex(index, length());
-        int exponent = segmentForIndex(index);
 
-        Segment<U> segment = segmentAt(exponent);
+        int exponent = segmentForIndex(index);
+        Segment<U> segment = segments[exponent];
 
         int i = indexForSegment(segment, index);
         return segment.getAndSet(i, e);
@@ -100,11 +99,8 @@ public class ConcurrentSegmentBuffers<U> {
 
     public void forEach(Consumer<? super U> action) {
         Objects.requireNonNull(action);
-        for (int x = 0, n = segments.length; x < n; ++x) {
-            Segment<U> segment = segmentAt(x);
-
+        for (Segment<U> segment : segments) {
             if (segment == null) return;
-
             for (int y = 0, h = segment.length(); y < h; ++y)
                 action.accept(segment.arrayAt(y));
         }
@@ -113,11 +109,8 @@ public class ConcurrentSegmentBuffers<U> {
     @Override
     public String toString() {
         StringJoiner joiner = new StringJoiner("\n");
-        for (int i = 0, n = segments.length; i < n; ++i) {
-            Segment<U> segment = segmentAt(i);
-
+        for (Segment<U> segment : segments) {
             if (segment == null) break;
-
             joiner.add(segment.toString());
         }
         return joiner.toString();
@@ -170,9 +163,6 @@ public class ConcurrentSegmentBuffers<U> {
         return MAXIMUM_CAPACITY;
     }
 
-    private Segment<U> segmentAt(int i) {
-        return (Segment<U>) AA.getAcquire(segments, i);
-    }
     private void setSegmentAt(int i, Segment<U> segment) {
         AA.setRelease(segments, i, segment);
     }

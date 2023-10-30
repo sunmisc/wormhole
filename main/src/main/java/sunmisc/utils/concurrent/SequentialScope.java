@@ -1,37 +1,40 @@
 package sunmisc.utils.concurrent;
 
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.VarHandle;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
-import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Supplier;
+import java.util.function.Function;
 
 import static java.util.concurrent.CompletableFuture.completedFuture;
 
 /**
- * This is a helper class for CompletableFuture that provides
- * the desired order of execution of the action chain in a common scope
+ * This is a helper class for {@link CompletableFuture} that
+ * provides the desired order of execution the action chain in a common scope
  *
  * @author Sunmisc Unsafe
  */
-public class SequentialScope {
-    final AtomicReference<CompletableFuture<?>> stack
-            = new AtomicReference<>(completedFuture(null));
 
-    public <U> CompletableFuture<U>
-    runOrSchedule(Supplier<? extends CompletionStage<U>> supplier) {
-        CompletableFuture<U> d
-                = new CompletableFuture<>();
-        stack.getAndSet(d)
-                .thenCompose(x -> supplier.get())
-                .whenComplete((r,t) -> complete(d,r,t));
+@SuppressWarnings("forRemoval")
+public class SequentialScope<U> {
+    private volatile CompletableFuture<U> stack = completedFuture(null);
+
+    public CompletableFuture<U> runOrSchedule(
+            Function<U, ? extends CompletionStage<U>> function) {
+        var d = new CompletableFuture<U>();
+
+        @SuppressWarnings("unchecked")
+        var oldState = (CompletableFuture<U>) STACK.getAndSet(this, d);
+
+        oldState.thenCompose(function)
+                .whenComplete((r, t) -> complete(d,r,t));
         return d;
     }
 
 
     public void cancel() {
-        stack.set(CompletableFuture.failedFuture(
-                new CancellationException()));
+        stack = CompletableFuture.failedFuture(new CancellationException());
     }
 
     private static <U> void
@@ -42,6 +45,16 @@ public class SequentialScope {
             cf.complete(result);
         else
             cf.completeExceptionally(t);
+    }
 
+    private static final VarHandle STACK;
+    static {
+        try {
+            MethodHandles.Lookup l = MethodHandles.lookup();
+            STACK = l.findVarHandle(SequentialScope.class,
+                    "stack", CompletableFuture.class);
+        } catch (ReflectiveOperationException e) {
+            throw new ExceptionInInitializerError(e);
+        }
     }
 }
