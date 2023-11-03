@@ -783,7 +783,7 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
     public String toString() {
         StringJoiner joiner = new StringJoiner(
                 ", ", "[", "]");
-        forEach((k,v) -> joiner.add(k.toString() + '=' + v.toString()));
+        forEach((k,v) -> joiner.add(k + "=" + v));
         return joiner.toString();
     }
 

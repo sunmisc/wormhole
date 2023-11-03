@@ -4,6 +4,9 @@ import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.*;
 import java.util.concurrent.locks.StampedLock;
+import java.util.function.Consumer;
+import java.util.function.Predicate;
+import java.util.function.UnaryOperator;
 
 /**
  *
@@ -31,7 +34,6 @@ import java.util.concurrent.locks.StampedLock;
  * @param <E> the type of elements in this list
  */
 public class ConcurrentArrayList<E>
-        extends AbstractSequentialList<E>
         implements List<E>, RandomAccess {
 
     private static final int DEFAULT_CAPACITY = 10;
@@ -53,6 +55,12 @@ public class ConcurrentArrayList<E>
     public ConcurrentArrayList(int initialCapacity) {
         initialCapacity = Math.max(1, initialCapacity);
         elements = (E[]) new Object[initialCapacity];
+    }
+
+    // for subList
+    private ConcurrentArrayList(E[] elements) {
+        this.elements = elements;
+        this.size = elements.length;
     }
 
     @Override
@@ -225,6 +233,11 @@ public class ConcurrentArrayList<E>
         return (int) SIZE.getAcquire(this);
     }
 
+    @Override
+    public boolean isEmpty() {
+        return size() == 0;
+    }
+
     private int sizeRelaxed() {
         return (int) SIZE.get(this);
     }
@@ -232,6 +245,11 @@ public class ConcurrentArrayList<E>
     @Override
     public boolean contains(Object o) {
         return indexOf(o) >= 0;
+    }
+
+    @Override
+    public Iterator<E> iterator() {
+        return new ListItr<>(this, 0);
     }
 
     @Override
@@ -253,6 +271,12 @@ public class ConcurrentArrayList<E>
             lock.unlockRead(stamp);
         }
     }
+
+    @Override
+    public ListIterator<E> listIterator() {
+        return new ListItr<>(this, 0);
+    }
+
     int indexOfRange(Object o, int start, int end) {
         Object[] es = elements;
         for (int i = start; i < end; i++) {
@@ -390,12 +414,69 @@ public class ConcurrentArrayList<E>
     }
 
     @Override
+    public boolean removeIf(Predicate<? super E> filter) {
+        Objects.requireNonNull(filter);
+
+        long stamp = lock.writeLock();
+        try {
+            final E[] es = elements;
+            // Optimize for initial run of survivors
+            int i = 0, end = sizeRelaxed();
+            for (; i < end && !filter.test(es[i]); i++);
+            // Tolerate predicates that reentrantly access the collection for
+            // read (but writers still get CME), so traverse once to find
+            // elements to delete, a second pass to physically expunge.
+            if (i < end) {
+                final int beg = i;
+                final long[] deathRow = nBits(end - beg);
+                deathRow[0] = 1L;   // set bit 0
+                for (i = beg + 1; i < end; i++)
+                    if (filter.test(es[i]))
+                        setBit(deathRow, i - beg);;
+                int w = beg;
+                for (i = beg; i < end; i++)
+                    if (isClear(deathRow, i - beg))
+                        es[w++] = es[i];
+                shiftTailOverGap(es, w, end);
+                return true;
+            } else
+                return false;
+        } finally {
+            lock.unlockWrite(stamp);
+        }
+    }
+    // A tiny bit set implementation
+
+    private static long[] nBits(int n) {
+        return new long[((n - 1) >> 6) + 1];
+    }
+    private static void setBit(long[] bits, int i) {
+        bits[i >> 6] |= 1L << i;
+    }
+    private static boolean isClear(long[] bits, int i) {
+        return (bits[i >> 6] & (1L << i)) == 0;
+    }
+
+    @Override
     public boolean retainAll(Collection<?> c) {
         Objects.requireNonNull(c);
 
         long stamp = lock.writeLock();
         try {
             return batchRemove(c, true, 0, sizeRelaxed());
+        } finally {
+            lock.unlockWrite(stamp);
+        }
+    }
+
+    @Override
+    public void replaceAll(UnaryOperator<E> operator) {
+        Objects.requireNonNull(operator);
+        long stamp = lock.writeLock();
+        try {
+            E[] es = elements;
+            for (int i = 0, n = sizeRelaxed(); i < n; ++i)
+                es[i] = operator.apply(es[i]);
         } finally {
             lock.unlockWrite(stamp);
         }
@@ -445,7 +526,48 @@ public class ConcurrentArrayList<E>
     }
     @Override
     public ListIterator<E> listIterator(int index) {
+        Objects.checkIndex(index, size());
         return new ListItr<>(this, index);
+    }
+
+    @Override
+    public List<E> subList(int fromIndex, int toIndex) {
+        Objects.checkFromToIndex(fromIndex, toIndex, size());
+        long stamp = lock.readLock();
+        try {
+            int sz = sizeRelaxed();
+
+            Objects.checkFromToIndex(fromIndex, toIndex, sz);
+
+            // to prevent memory leaks (by holding the current list)
+            // we honestly copy (I was also too lazy to implement another list)
+            E[] es = Arrays.copyOfRange(elements, fromIndex, toIndex);
+
+            return new ConcurrentArrayList<>(es);
+        } finally {
+            lock.unlockRead(stamp);
+        }
+    }
+
+    @Override
+    public void forEach(Consumer<? super E> action) {
+        Objects.requireNonNull(action);
+        long stamp = lock.readLock();
+        try {
+            E[] es = elements;
+            for (int i = 0, n = sizeRelaxed(); i < n; ++i)
+                action.accept(es[i]);
+        } finally {
+            lock.unlockRead(stamp);
+        }
+    }
+
+    @Override
+    public Spliterator<E> spliterator() {
+        return Spliterators.spliterator(this,
+                Spliterator.ORDERED |
+                        Spliterator.NONNULL |
+                        Spliterator.CONCURRENT);
     }
 
     private static class ListItr<E> implements ListIterator<E> {
