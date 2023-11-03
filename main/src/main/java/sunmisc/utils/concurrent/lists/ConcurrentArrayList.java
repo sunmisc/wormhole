@@ -1,5 +1,7 @@
 package sunmisc.utils.concurrent.lists;
 
+import java.io.Serial;
+import java.io.Serializable;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.*;
@@ -34,8 +36,9 @@ import java.util.function.UnaryOperator;
  * @param <E> the type of elements in this list
  */
 public class ConcurrentArrayList<E>
-        implements List<E>, RandomAccess {
-
+        implements List<E>, RandomAccess, Serializable {
+    @Serial
+    private static final long serialVersionUID = 6746284661999574553L;
     private static final int DEFAULT_CAPACITY = 10;
     private final StampedLock lock
             = new StampedLock();
@@ -55,6 +58,11 @@ public class ConcurrentArrayList<E>
     public ConcurrentArrayList(int initialCapacity) {
         initialCapacity = Math.max(1, initialCapacity);
         elements = (E[]) new Object[initialCapacity];
+    }
+
+    @SuppressWarnings("unchecked")
+    public ConcurrentArrayList(Collection<? extends E> c) {
+        this((E[]) c.toArray());
     }
 
     // for subList
@@ -407,7 +415,7 @@ public class ConcurrentArrayList<E>
 
         long stamp = lock.writeLock();
         try {
-            return batchRemove(c, false, 0, sizeRelaxed());
+            return batchRemove(c, false);
         } finally {
             lock.unlockWrite(stamp);
         }
@@ -432,7 +440,7 @@ public class ConcurrentArrayList<E>
                 deathRow[0] = 1L;   // set bit 0
                 for (i = beg + 1; i < end; i++)
                     if (filter.test(es[i]))
-                        setBit(deathRow, i - beg);;
+                        setBit(deathRow, i - beg);
                 int w = beg;
                 for (i = beg; i < end; i++)
                     if (isClear(deathRow, i - beg))
@@ -463,7 +471,7 @@ public class ConcurrentArrayList<E>
 
         long stamp = lock.writeLock();
         try {
-            return batchRemove(c, true, 0, sizeRelaxed());
+            return batchRemove(c, true);
         } finally {
             lock.unlockWrite(stamp);
         }
@@ -482,16 +490,15 @@ public class ConcurrentArrayList<E>
         }
     }
 
-    private boolean batchRemove(Collection<?> c, boolean complement,
-                                int from, int end) {
+    private boolean batchRemove(Collection<?> c, boolean complement) {
         Objects.requireNonNull(c);
 
         assert lock.isWriteLocked();
 
         final E[] es = elements;
-        int r;
+        int r, end = sizeRelaxed();
         // Optimize for initial run of survivors
-        for (r = from;; r++) {
+        for (r = 0;; r++) {
             if (r == end)
                 return false;
             else if (c.contains(es[r]) != complement)
@@ -510,10 +517,8 @@ public class ConcurrentArrayList<E>
         return true;
     }
     private void shiftTailOverGap(Object[] es, int lo, int hi) {
-        int sz = sizeRelaxed(), newSize = sz - (hi - lo);
-        System.arraycopy(es, hi, es, lo, sz - hi);
-
-        for (int i = newSize; i < sz; i++)
+        int newSize = hi - (hi - lo);
+        for (int i = newSize; i < hi; i++)
             es[i] = null;
         size = newSize;
     }
