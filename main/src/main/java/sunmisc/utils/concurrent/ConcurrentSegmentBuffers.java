@@ -31,16 +31,14 @@ import static java.lang.Integer.numberOfLeadingZeros;
  */
 @SuppressWarnings("unchecked")
 public class ConcurrentSegmentBuffers<U> {
-    private static final int MAXIMUM_CAPACITY  = 1 << 30;
+    private static final int MAXIMUM_CAPACITY = 1 << 30;
     private final Segment<U>[] segments = new Segment[30]; {
-
-            segments[0] = new Segment<>((U[]) new Object[2]);
+        segments[0] = newSegment(2);
     }
-    private volatile int cursor = 1;
-    private volatile int size = 2; // alignment gap
 
+    private volatile int ctl = 2;
 
-    private ConcurrentSegmentBuffers() { }
+    public ConcurrentSegmentBuffers() {}
 
     public static <U> ConcurrentSegmentBuffers<U> of(int initialCapacity) {
         initialCapacity = Math.max(2, initialCapacity);
@@ -77,7 +75,7 @@ public class ConcurrentSegmentBuffers<U> {
         Objects.checkIndex(index, length());
 
         int exponent = segmentForIndex(index);
-        Segment<U> segment = segments[exponent];
+        Segment<U> segment = segmentAt(exponent);
 
         int i = indexForSegment(segment, index);
         segment.setAt(i, e);
@@ -94,7 +92,7 @@ public class ConcurrentSegmentBuffers<U> {
     }
 
     public int length() {
-        return (int) SIZE.getAcquire(this);
+        return (int) CTL.getAcquire(this);
     }
 
     public void forEach(Consumer<? super U> action) {
@@ -126,37 +124,42 @@ public class ConcurrentSegmentBuffers<U> {
         return index < 2 ? 0 : 31 - numberOfLeadingZeros(index);
     }
 
-    public int expand() {
-        int x = (int) CURSOR.getAndAdd(this, 1);
 
-        int newLen = 1 << x;
 
-        U[] array = (U[]) new Object[newLen];
+    public void expand() {
+        for (int x; ; ) {
+            int index = segmentForIndex(x = ctl);
+            var h = newSegment(1 << index);
+            if (casSegmentAt(index, null, h)) {
+                int k = (int) CTL.compareAndExchange(this, x, x << 1);
 
-        if (casSegmentAt(x, null, new Segment<>(array))) {
-
-            // sum g.progression
-            // (2^n - 1)
-
-            int u;
-            do {
-                u = (int) SIZE.getOpaque(this);
-            } while (!SIZE.weakCompareAndSetRelease(this, u, u << 1));
+                if (k < x) {
+                    if (!casSegmentAt(index, h, null))
+                        break;
+                } else
+                    break;
+            } else
+                Thread.onSpinWait();
         }
-
-
-        return newLen;
     }
-    int reduce() {
-        int x = (int) CURSOR.getAndAdd(this, -1);
+    public void reduce() {
+        for (int x;;) {
+            if ((x = ctl) <= 2)
+                return;
+            int index = segmentForIndex(x - 1);
+            Segment<U> segment = segments[index];
+            if (segment == null)
+                break;
+            else if (CTL.weakCompareAndSet(this, x, x >> 1)) {
+                // casSegmentAt(r, segment, null);
+                setSegmentAt(index, null);
+                break;
+            }
+        }
+    }
 
-        setSegmentAt(x - 1, null);
-
-        int u;
-        do {
-            u = (int) SIZE.getOpaque(this);
-        } while (!SIZE.weakCompareAndSetRelease(this, u, u >> 1));
-        return u;
+    private Segment<U> newSegment(int len) {
+        return new Segment<>((U[])new Object[len]);
     }
 
     public static int maximumCapacity() {
@@ -166,14 +169,20 @@ public class ConcurrentSegmentBuffers<U> {
     private void setSegmentAt(int i, Segment<U> segment) {
         AA.setRelease(segments, i, segment);
     }
+
+    private Segment<U> segmentAt(int i) {
+        return (Segment<U>) AA.getAcquire(segments, i);
+    }
     private boolean
     casSegmentAt(int i, Segment<U> expected, Segment<U> segment) {
         return AA.compareAndSet(segments, i, expected, segment);
     }
+
     private record Segment<E>(E[] array) {
         int length() {
             return array.length;
         }
+
         E arrayAt(int index) {
             return (E) AA.getAcquire(array, index);
         }
@@ -181,11 +190,13 @@ public class ConcurrentSegmentBuffers<U> {
         void setAt(int index, E value) {
             AA.setRelease(array, index, value);
         }
+
         E getAndSet(int index, E value) {
             return (E) AA.getAndSet(array, index, value);
         }
+
         E cae(int i, E expected, E value) {
-            return (E)AA.compareAndExchange(array, i, expected, value);
+            return (E) AA.compareAndExchange(array, i, expected, value);
         }
 
         @Override
@@ -202,15 +213,13 @@ public class ConcurrentSegmentBuffers<U> {
     // VarHandle mechanics
     private static final VarHandle AA
             = MethodHandles.arrayElementVarHandle(Object[].class);
-    private static final VarHandle CURSOR, SIZE;
+    private static final VarHandle CTL;
 
     static {
         try {
             MethodHandles.Lookup l = MethodHandles.lookup();
-            CURSOR = l.findVarHandle(ConcurrentSegmentBuffers.class,
-                    "cursor", int.class);
-            SIZE = l.findVarHandle(ConcurrentSegmentBuffers.class,
-                    "size", int.class);
+            CTL = l.findVarHandle(ConcurrentSegmentBuffers.class,
+                    "ctl", int.class);
         } catch (ReflectiveOperationException e) {
             throw new ExceptionInInitializerError(e);
         }
