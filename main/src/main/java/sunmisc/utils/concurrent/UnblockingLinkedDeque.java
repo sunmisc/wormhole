@@ -7,12 +7,15 @@ import java.util.StringJoiner;
 import java.util.function.Consumer;
 
 public class UnblockingLinkedDeque<E> {
-    private final Node<E> head, tail;
+    private final FakeHead<E> head;
+    private final FakeTail<E> tail;
+
+    // h <-> share <-> t
 
     public UnblockingLinkedDeque() {
         Node<E> share = new Node<>();
-        Node<E> head  = new Node<>();
-        Node<E> tail  = new Node<>();
+        FakeHead<E> head = new FakeHead<>();
+        FakeTail<E> tail  = new FakeTail<>();
 
         tail.prev = share;
         head.next = share;
@@ -21,15 +24,21 @@ public class UnblockingLinkedDeque<E> {
         this.tail = tail;
     }
 
+    // @Contended
+    private static final class FakeHead<E> extends Node<E> { }
+
+    // @Contended
+    private static final class FakeTail<E> extends Node<E> { }
+
     private Node<E> tail() {
-        for (; ; ) {
-            final Node<E> t = tail.prev;
+        for (FakeTail<E> ft = tail; ; ) {
+            final Node<E> t = ft.prev;
             Node<E> succ = t.next;
             if (succ == null)
                 return t;
             Node<E> k = tryFindNextActiveNode(succ);
 
-            if (t == k || tail.casPrev(t, k))
+            if (t == k || ft.casPrev(t, k))
                 return k;
         }
     }
@@ -117,7 +126,7 @@ public class UnblockingLinkedDeque<E> {
         Node<E> p, n;
         do {
             if ((p = x.prev) == null) // todo: head.prev = ?
-               break;
+                break;
             n = tryFindPrevActiveNode(p);
         } while (p != n && !x.casPrev(p, n));
     }
@@ -145,8 +154,8 @@ public class UnblockingLinkedDeque<E> {
         Objects.requireNonNull(action);
         for (Node<E> x = head(); x != null; x = x.next) {
             E item = x.item;
-           // if (item != null)
-                action.accept(item);
+            // if (item != null)
+            action.accept(item);
         }
     }
     public void forEachDesc(Consumer<? super E> action) {
@@ -166,7 +175,6 @@ public class UnblockingLinkedDeque<E> {
         return joiner.toString();
     }
     private static class Node<E> {
-
         volatile Node<E> prev, next;
         volatile E item;
 
@@ -196,7 +204,7 @@ public class UnblockingLinkedDeque<E> {
         }
 
         void setPrevRelaxed(Node<E> prev) {
-           PREV.set(this, prev);
+            PREV.set(this, prev);
         }
         void setNextRelaxed(Node<E> next) {
             NEXT.set(this, next);

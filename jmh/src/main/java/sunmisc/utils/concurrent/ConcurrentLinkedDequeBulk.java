@@ -8,7 +8,6 @@ import org.openjdk.jmh.runner.options.CommandLineOptionException;
 import org.openjdk.jmh.runner.options.Options;
 import org.openjdk.jmh.runner.options.OptionsBuilder;
 
-import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.TimeUnit;
 
 @State(Scope.Benchmark)
@@ -18,15 +17,15 @@ import java.util.concurrent.TimeUnit;
 @Measurement(iterations = 4, time = 1)
 @Threads(Threads.MAX)
 @Fork(1)
-public class ThreadSafeLinkedList {
+public class ConcurrentLinkedDequeBulk {
 
     private UnblockingLinkedDeque<Integer> concurrentLinkedProto;
 
-    private ConcurrentLinkedDeque<Integer> deque;
+    private UnLinkedQueue<Integer> deque;
     @Setup
     public void prepare() {
         concurrentLinkedProto = new UnblockingLinkedDeque<>();
-        deque = new ConcurrentLinkedDeque<>();
+        deque = new UnLinkedQueue<>();
     }
 
     @Benchmark
@@ -37,11 +36,12 @@ public class ThreadSafeLinkedList {
         concurrentLinkedProto.add(4);
         concurrentLinkedProto.add(5);
 
-        concurrentLinkedProto.remove(3);
-        concurrentLinkedProto.remove(2);
-        concurrentLinkedProto.remove(4);
-        concurrentLinkedProto.remove(1);
-        return concurrentLinkedProto.remove(5);
+        concurrentLinkedProto.poll();
+        concurrentLinkedProto.poll();
+        concurrentLinkedProto.poll();
+        concurrentLinkedProto.poll();
+        concurrentLinkedProto.poll();
+        return 232;
 
     }
     @Benchmark
@@ -52,15 +52,16 @@ public class ThreadSafeLinkedList {
         deque.add(4);
         deque.add(5);
 
-        deque.remove(3);
-        deque.remove(2);
-        deque.remove(4);
-        deque.remove(1);
-        return deque.remove(5);
+        deque.poll();
+        deque.poll();
+        deque.poll();
+        deque.poll();
+        deque.poll();
+        return true;
     }
     public static void main(String[] args) throws RunnerException, CommandLineOptionException {
         Options opt = new OptionsBuilder()
-                .include(ThreadSafeLinkedList.class.getSimpleName())
+                .include(ConcurrentLinkedDequeBulk.class.getSimpleName())
                 .addProfiler(GCProfiler.class)
                 .build();
         Runner runner = new Runner(opt);

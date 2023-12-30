@@ -17,6 +17,8 @@ import static java.util.Objects.requireNonNull;
  * @author Sunmisc Unsafe
  * @param <E> The base class of elements held in this array
  */
+
+@SuppressWarnings("forRemoval")
 public class UnblockingArrayBuffer<E>
         extends ConcurrentIndexMap<E>
         implements Serializable {

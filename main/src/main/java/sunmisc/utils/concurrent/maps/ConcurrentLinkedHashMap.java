@@ -14,14 +14,14 @@ import static java.util.Objects.requireNonNull;
 public class ConcurrentLinkedHashMap<K,V>
         extends AbstractMap<K,V>
         implements ConcurrentMap<K,V>, SequencedMap<K,V> {
+
+    private static final int DEFAULT_CAPACITY = 16;
+    private final ConcurrentSegmentBuffers<Bucket<K,V>> table;
     private final Head<K,V> head;
     private final Tail<K,V> tail;
     private volatile int size;
 
-    private final ConcurrentSegmentBuffers<Bucket<K,V>> table
-            = ConcurrentSegmentBuffers.of(32);
-
-    public ConcurrentLinkedHashMap() {
+    private ConcurrentLinkedHashMap(int initialCapacity) {
         Node<K,V> share = new DummyNode<>();
 
         Head<K,V> head = new Head<>();
@@ -32,6 +32,17 @@ public class ConcurrentLinkedHashMap<K,V>
 
         this.head = head;
         this.tail = tail;
+
+        this.table = ConcurrentSegmentBuffers.of(initialCapacity);
+    }
+
+    public static <K,V>
+    ConcurrentLinkedHashMap<K,V> of(int initialCapacity) {
+        return new ConcurrentLinkedHashMap<>(initialCapacity);
+    }
+    public static <K,V>
+    ConcurrentLinkedHashMap<K,V> newConcurrentLinkedHashMap() {
+        return new ConcurrentLinkedHashMap<>(DEFAULT_CAPACITY);
     }
 
     static int spread(int h) {
@@ -236,7 +247,7 @@ public class ConcurrentLinkedHashMap<K,V>
     }
     public static void main(String[] args) {
         ConcurrentLinkedHashMap<Integer,Integer> map
-                = new ConcurrentLinkedHashMap<>();
+                = ConcurrentLinkedHashMap.newConcurrentLinkedHashMap();
 
         for (int  i = 0; i < 16; ++i ) {
             map.put(i,i);
@@ -420,7 +431,7 @@ public class ConcurrentLinkedHashMap<K,V>
         }
         @Override public String toString() { return "tail"; }
     }
-    static abstract class Node<K,V> implements Map.Entry<K,V> {
+    private static abstract class Node<K,V> implements Map.Entry<K,V> {
         volatile Node<K,V> prev, next;
 
         boolean isDead() {

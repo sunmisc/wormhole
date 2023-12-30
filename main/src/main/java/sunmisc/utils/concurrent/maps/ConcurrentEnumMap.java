@@ -49,14 +49,11 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
     // Array representation of this map. The ith element is the value to which universe[i]
     private transient V[] table;
 
-    // views
-
-    // todo: delete the field,
-    //  create a new object for each call,
-    //  but ValueBased (hello Valhalla)
-
+    @SuppressWarnings("forRemoval")
     private transient KeySetView<K,V> keySet;
+    @SuppressWarnings("forRemoval")
     private transient ValuesView<K,V> values;
+    @SuppressWarnings("forRemoval")
     private transient EntrySetView<K,V> entrySet;
 
     public ConcurrentEnumMap(Class<? extends K> keyType) {
@@ -395,7 +392,7 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
         return removed;
     }
 
-    public boolean removeValueIf(Predicate<? super V> function) {
+    boolean removeValueIf(Predicate<? super V> function) {
         requireNonNull(function);
 
         boolean removed = false;
@@ -432,7 +429,7 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
         @Override
         public void forEach(Consumer<? super K> action) {
             requireNonNull(action);
-            map.forEach((k,_) -> action.accept(k));
+            map.forEach((k,v) -> action.accept(k));
         }
 
         @Override public boolean
@@ -476,7 +473,7 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
         @Override
         public void forEach(Consumer<? super V> action) {
             requireNonNull(action);
-            map.forEach((_,v) -> action.accept(v));
+            map.forEach((k,v) -> action.accept(v));
         }
 
         @Override
@@ -589,7 +586,7 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
         @Override
         public void forEachRemaining(Consumer<? super K> action) {
             requireNonNull(action);
-            map.forEach((k,_) -> action.accept(k));
+            map.forEach((k,v) -> action.accept(k));
         }
     }
 
@@ -611,7 +608,7 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
         @Override
         public void forEachRemaining(Consumer<? super V> action) {
             requireNonNull(action);
-            map.forEach((_,v) -> action.accept(v));
+            map.forEach((k,v) -> action.accept(v));
         }
     }
 

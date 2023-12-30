@@ -125,7 +125,6 @@ public class ConcurrentSegmentBuffers<U> {
     }
 
 
-
     public void expand() {
         for (int x; ; ) {
             int index = segmentForIndex(x = ctl);

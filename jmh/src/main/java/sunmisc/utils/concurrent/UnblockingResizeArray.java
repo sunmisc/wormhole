@@ -6,7 +6,6 @@ import org.openjdk.jmh.runner.Runner;
 import org.openjdk.jmh.runner.RunnerException;
 import org.openjdk.jmh.runner.options.Options;
 import org.openjdk.jmh.runner.options.OptionsBuilder;
-import sunmisc.utils.MathUtils;
 
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -43,7 +42,7 @@ public class UnblockingResizeArray {
         return x;
     }
     static int getNextSize(int a) {
-        return (int) ((MathUtils._cos(a/SC) + 1) * DELTA);
+        return (int) ((Math.cos(a/SC) + 1) * DELTA);
     }
     public static void main(String[] args) throws RunnerException {
         Options opt = new OptionsBuilder()
