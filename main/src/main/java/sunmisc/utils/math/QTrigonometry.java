@@ -37,7 +37,7 @@ public class QTrigonometry implements Trigonometry {
             return lookup((int)(number.floatValue() * h));
         }
 
-        @Override public int intValue() {return (int) compute(); }
+        @Override public int intValue() { return (int) compute(); }
 
         @Override public long longValue() { return intValue(); }
 
@@ -61,7 +61,7 @@ public class QTrigonometry implements Trigonometry {
             return lookup((int)(number.floatValue() * h + q));
         }
 
-        @Override public int intValue() {return (int) compute(); }
+        @Override public int intValue() { return (int) compute(); }
 
         @Override public long longValue() { return intValue(); }
 
