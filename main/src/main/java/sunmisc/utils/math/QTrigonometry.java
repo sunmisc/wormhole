@@ -1,6 +1,6 @@
 package sunmisc.utils.math;
 
-public class FTrigonometry implements Trigonometry {
+public class QTrigonometry implements Trigonometry {
     private static final int PRECISION      = 1 << 16;
     private static final int[] SINE_TABLE_INT;
 
@@ -62,7 +62,6 @@ public class FTrigonometry implements Trigonometry {
         }
 
         @Override public int intValue() {return (int) compute(); }
-
 
         @Override public long longValue() { return intValue(); }
 
