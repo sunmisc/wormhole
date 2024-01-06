@@ -1,9 +1,8 @@
-/*
+
 package misc;
 
 import org.openjdk.jcstress.annotations.*;
 import org.openjdk.jcstress.infra.results.L_Result;
-
 
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
@@ -64,4 +63,3 @@ public class WeakCASx86 {
         }
     }
 }
-*/

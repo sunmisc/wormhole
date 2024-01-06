@@ -18,7 +18,6 @@ import java.util.concurrent.TimeUnit;
 
 public class CArrayList {
 
-
     @Threads(1)
     @OutputTimeUnit(TimeUnit.MILLISECONDS)
     @BenchmarkMode(Mode.Throughput)

@@ -4,7 +4,6 @@ import sunmisc.utils.cursor.Cursor;
 
 import java.util.NoSuchElementException;
 import java.util.Objects;
-import java.util.StringJoiner;
 import java.util.function.Consumer;
 
 public interface ReadableMemory<E> {

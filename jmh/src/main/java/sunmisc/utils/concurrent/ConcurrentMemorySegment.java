@@ -5,6 +5,7 @@ import org.openjdk.jmh.runner.Runner;
 import org.openjdk.jmh.runner.RunnerException;
 import org.openjdk.jmh.runner.options.Options;
 import org.openjdk.jmh.runner.options.OptionsBuilder;
+import sunmisc.utils.concurrent.memory.SegmentMemory;
 
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
@@ -14,26 +15,26 @@ import java.util.concurrent.atomic.AtomicReferenceArray;
 @OutputTimeUnit(TimeUnit.MILLISECONDS)
 @BenchmarkMode(Mode.Throughput)
 @Warmup(iterations = 2, time = 1)
-@Measurement(iterations = 333, time = 1)
+@Measurement(iterations = 10, time = 1)
 @Fork(1)
-@Threads(4)
-public class ConcurrentBuffers {
+@Threads(1)
+public class ConcurrentMemorySegment {
 
     public static void main(String[] args) throws RunnerException {
         Options opt = new OptionsBuilder()
-                .include(ConcurrentBuffers.class.getSimpleName())
+                .include(ConcurrentMemorySegment.class.getSimpleName())
                 //.addProfiler(GCProfiler.class)
                 .build();
         new Runner(opt).run();
     }
-    private ConcurrentSegmentBuffers<Integer> buffers;
+    private SegmentMemory<Integer> memory;
     private AtomicReferenceArray<Integer> array;
 
 
     @Benchmark
-    public int writeToBuffers() {
+    public int writeToMemorySegment() {
         int r = ThreadLocalRandom.current().nextInt(2048);
-        buffers.set(r,r);
+        memory.store(r,r);
         return r;
     }
     @Benchmark
@@ -43,13 +44,13 @@ public class ConcurrentBuffers {
         return r;
     }
     @Benchmark
-    public Integer readToBuffers() {
+    public Integer readFromMemorySegment() {
         int r = ThreadLocalRandom.current().nextInt(2048);
-        return buffers.get(r);
+        return memory.get(r);
     }
 
     @Benchmark
-    public Integer readToArray() {
+    public Integer readFromArray() {
         int r = ThreadLocalRandom.current().nextInt(2048);
         return array.getAcquire(r);
     }
@@ -57,9 +58,9 @@ public class ConcurrentBuffers {
     public void prepare() {
         int n = 2048;
         array = new AtomicReferenceArray<>(n);
-        buffers = ConcurrentSegmentBuffers.of(n);
+        memory = new SegmentMemory<>(n);
         for (int i = 0; i < n; ++i) {
-            buffers.set(i,i);
+            memory.store(i,i);
             array.set(i,i);
         }
     }

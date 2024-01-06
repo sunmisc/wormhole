@@ -1,4 +1,4 @@
-package sunmisc.utils.concurrent;
+package sunmisc.utils.concurrent.deque;
 
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;

@@ -82,9 +82,7 @@ public class ConcurrentAssociateTest {
                     dumpTestThreads();
                     throw new AssertionError("timed out");
                 }
-            }
-            catch (InterruptedException e) {
-            }
+            } catch (InterruptedException ignored) { }
 
             for (int i = 0; i < N; i++) {
                 TestEnum o = TestEnum.rand();
@@ -99,7 +97,7 @@ public class ConcurrentAssociateTest {
         // Bound concurrency to avoid degenerate performance
         int ps = Math.min(Runtime.getRuntime().availableProcessors(), 8);
         Stream<CompletableFuture<Void>> runners = IntStream.range(0, ps)
-                .mapToObj(_ -> sr.get())
+                .mapToObj(dummy -> sr.get())
                 .map(CompletableFuture::runAsync);
 
         CompletableFuture<Void> all = CompletableFuture.allOf(

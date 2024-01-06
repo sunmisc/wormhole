@@ -1,6 +1,6 @@
 package sunmisc.utils.concurrent.maps;
 
-import sunmisc.utils.concurrent.ConcurrentSegmentBuffers;
+import sunmisc.utils.concurrent.memory.SegmentMemory;
 
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
@@ -16,7 +16,7 @@ public class ConcurrentLinkedHashMap<K,V>
         implements ConcurrentMap<K,V>, SequencedMap<K,V> {
 
     private static final int DEFAULT_CAPACITY = 16;
-    private final ConcurrentSegmentBuffers<Bucket<K,V>> table;
+    private final SegmentMemory<Bucket<K,V>> table;
     private final Head<K,V> head;
     private final Tail<K,V> tail;
     private volatile int size;
@@ -33,7 +33,7 @@ public class ConcurrentLinkedHashMap<K,V>
         this.head = head;
         this.tail = tail;
 
-        this.table = ConcurrentSegmentBuffers.of(initialCapacity);
+        this.table = new SegmentMemory<>(initialCapacity);
     }
 
     public static <K,V>
@@ -112,8 +112,9 @@ public class ConcurrentLinkedHashMap<K,V>
         // commit
         V val = newNode.setValue(value);
 
-        if ((int) SIZE.getAndAdd(this, 1) + 1 >= n)
-            tab.expand();
+        int c = (int) SIZE.getAndAdd(this, 1) + 1;
+        if (c >= n)
+            tab.realloc(c << 1);
         return val;
     }
     @Override
@@ -165,7 +166,7 @@ public class ConcurrentLinkedHashMap<K,V>
             expected = e.setValue(null); // mark
 
             if (f.empty())
-                tab.set(n, null);
+                tab.store(n, null);
             unlink(e);
         }
         SIZE.getAndAddRelease(this, -1);

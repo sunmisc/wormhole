@@ -7,7 +7,9 @@ import org.openjdk.jmh.runner.RunnerException;
 import org.openjdk.jmh.runner.options.CommandLineOptionException;
 import org.openjdk.jmh.runner.options.Options;
 import org.openjdk.jmh.runner.options.OptionsBuilder;
+import sunmisc.utils.concurrent.deque.UnblockingLinkedDeque;
 
+import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.TimeUnit;
 
 @State(Scope.Benchmark)
@@ -21,11 +23,11 @@ public class ConcurrentLinkedDequeBulk {
 
     private UnblockingLinkedDeque<Integer> concurrentLinkedProto;
 
-    private UnLinkedQueue<Integer> deque;
+    private ConcurrentLinkedDeque<Integer> deque;
     @Setup
     public void prepare() {
         concurrentLinkedProto = new UnblockingLinkedDeque<>();
-        deque = new UnLinkedQueue<>();
+        deque = new ConcurrentLinkedDeque<>();
     }
 
     @Benchmark

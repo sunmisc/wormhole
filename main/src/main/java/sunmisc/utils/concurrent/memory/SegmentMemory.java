@@ -1,6 +1,7 @@
 package sunmisc.utils.concurrent.memory;
 
 import sunmisc.utils.concurrent.UnblockingArrayBuffer;
+
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.Objects;

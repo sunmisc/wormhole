@@ -5,7 +5,9 @@ import org.openjdk.jmh.runner.Runner;
 import org.openjdk.jmh.runner.RunnerException;
 import org.openjdk.jmh.runner.options.Options;
 import org.openjdk.jmh.runner.options.OptionsBuilder;
+import sunmisc.utils.concurrent.deque.UnblockingLinkedDeque;
 
+import java.util.concurrent.SynchronousQueue;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 
@@ -24,8 +26,8 @@ public class ConcurrentListDeque {
     }
     @State(Scope.Group)
     public static class SynchronousQueueState {
-        final UnLinkedQueue<Integer> queue
-                = new UnLinkedQueue<>();
+        final SynchronousQueue<Integer> queue
+                = new SynchronousQueue<>();
     }
     @Benchmark
     @Group("baseline")

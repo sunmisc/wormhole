@@ -1,4 +1,4 @@
-package sunmisc.utils;
+package sunmisc.utils.misc;
 
 import org.openjdk.jmh.annotations.*;
 import org.openjdk.jmh.runner.Runner;
