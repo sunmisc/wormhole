@@ -5,6 +5,7 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.function.IntUnaryOperator;
 
 @SuppressWarnings("forRemoval")
+@Deprecated
 public abstract class ConcurrentIndexMap<E>
         extends AbstractMap<Integer,E>
         implements ConcurrentMap<Integer,E>/*, todo: ListIterator<E> */ {

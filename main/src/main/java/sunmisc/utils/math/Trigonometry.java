@@ -2,7 +2,7 @@ package sunmisc.utils.math;
 
 public interface Trigonometry {
 
-    QTrigonometry.FSin sin(Number x);
+    Number sin(Number x);
 
-    QTrigonometry.FCos cos(Number x);
+    Number cos(Number x);
 }

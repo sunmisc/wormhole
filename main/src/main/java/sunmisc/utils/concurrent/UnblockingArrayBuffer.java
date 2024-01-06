@@ -15,10 +15,12 @@ import static java.util.Objects.requireNonNull;
  * This array is based entirely on the free-lock mechanism.
  *
  * @author Sunmisc Unsafe
+ * @see sunmisc.utils.concurrent.memory.ModifiableMemory
  * @param <E> The base class of elements held in this array
  */
 
 @SuppressWarnings("forRemoval")
+@Deprecated
 public class UnblockingArrayBuffer<E>
         extends ConcurrentIndexMap<E>
         implements Serializable {

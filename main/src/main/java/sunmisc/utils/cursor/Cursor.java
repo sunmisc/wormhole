@@ -4,13 +4,11 @@ import java.util.Iterator;
 
 public interface Cursor<E> {
 
-    boolean hasNext();
+    boolean exists();
 
     Cursor<E> next();
 
     E element();
-
-    void remove();
 
 
     class CursorAsIterator<E> implements Iterator<E> {
@@ -23,7 +21,7 @@ public interface Cursor<E> {
 
         @Override
         public boolean hasNext() {
-            return cursor.hasNext();
+            return cursor.exists();
         }
 
         @Override
@@ -31,11 +29,6 @@ public interface Cursor<E> {
             Cursor<E> prev = cursor;
             cursor = cursor.next();
             return prev.element();
-        }
-
-        @Override
-        public void remove() {
-            cursor.remove();
         }
     }
 }
