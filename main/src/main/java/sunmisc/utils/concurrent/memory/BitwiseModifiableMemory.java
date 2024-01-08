@@ -3,9 +3,11 @@ package sunmisc.utils.concurrent.memory;
 public interface BitwiseModifiableMemory<E extends Number>
         extends ModifiableMemory<E> {
 
-    E getAndBitwiseOr(int index, E mask);
+    E fetchAndAdd(int index, E value);
 
-    E getAndBitwiseAnd(int index, E mask);
+    E fetchAndBitwiseOr(int index, E mask);
 
-    E getAndBitwiseXor(int index, E mask);
+    E fetchAndBitwiseAnd(int index, E mask);
+
+    E fetchAndBitwiseXor(int index, E mask);
 }

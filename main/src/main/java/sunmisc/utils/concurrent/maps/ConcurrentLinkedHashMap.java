@@ -45,7 +45,7 @@ public class ConcurrentLinkedHashMap<K,V>
         return new ConcurrentLinkedHashMap<>(DEFAULT_CAPACITY);
     }
 
-    static int spread(int h) {
+    private static int spread(int h) {
         return (h ^ (h >>> 16));
     }
 
@@ -60,7 +60,7 @@ public class ConcurrentLinkedHashMap<K,V>
         var tab = table;
         int i = h & (tab.length() - 1);
 
-        Bucket<K,V> n = tab.get(i);
+        Bucket<K,V> n = tab.fetch(i);
 
         if (n == null)
             return null;
@@ -92,7 +92,7 @@ public class ConcurrentLinkedHashMap<K,V>
         HashNode<K,V> newNode = new HashNode<>(h, key);
 
         outer: {
-            Bucket<K,V> x = tab.get(i);
+            Bucket<K,V> x = tab.fetch(i);
             if (x == null) {
                 x = new SkipListBucket<>();
                 x.addIfAbsent(newNode);
@@ -130,7 +130,7 @@ public class ConcurrentLinkedHashMap<K,V>
         final int h = spread(key.hashCode());
         var tab = table;
         int n = h & tab.length();
-        Bucket<K,V> x = tab.get(n);
+        Bucket<K,V> x = tab.fetch(n);
 
         if (x == null)
             return false;
@@ -151,7 +151,7 @@ public class ConcurrentLinkedHashMap<K,V>
 
         int n = h & (tab.length() - 1);
 
-        Bucket<K,V> f = tab.get(n);
+        Bucket<K,V> f = tab.fetch(n);
 
         if (f == null) return null;
 

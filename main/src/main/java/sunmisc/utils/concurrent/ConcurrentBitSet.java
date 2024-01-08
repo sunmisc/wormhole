@@ -2,9 +2,15 @@ package sunmisc.utils.concurrent;
 
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
+import java.util.Objects;
 import java.util.StringJoiner;
 import java.util.function.Consumer;
 
+/**
+ * @see sunmisc.utils.concurrent.sets.ConcurrentBitSet
+ */
+@Deprecated
+@SuppressWarnings("forRemoval")
 public class ConcurrentBitSet {
     private static final int ADDRESS_BITS_PER_CELL
             = Integer.numberOfTrailingZeros(Long.SIZE);
@@ -39,11 +45,11 @@ public class ConcurrentBitSet {
         }
         return false;
     }
-    public void set(int bitIndex) {
+    public boolean set(int bitIndex) {
         final int index = cellIndex(bitIndex);
         final long mask = 1L << bitIndex;
-        putVal(index, mask,
-                x -> x.getAndBitwiseOrRelease(mask));
+        return (Objects.requireNonNull(putVal(index, mask,
+                x -> x.getAndBitwiseOrRelease(mask))).value & mask) == 0;
     }
 
 

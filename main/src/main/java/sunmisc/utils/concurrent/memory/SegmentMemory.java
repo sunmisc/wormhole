@@ -5,6 +5,7 @@ import sunmisc.utils.concurrent.UnblockingArrayBuffer;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.Objects;
+import java.util.RandomAccess;
 import java.util.StringJoiner;
 
 import static java.lang.Integer.numberOfLeadingZeros;
@@ -31,30 +32,19 @@ import static java.lang.Integer.numberOfLeadingZeros;
  * @param <U> The base class of elements held in this array
  */
 @SuppressWarnings("unchecked")
-public class SegmentMemory<U> implements ModifiableMemory<U> {
+public class SegmentMemory<U>
+        implements ModifiableMemory<U>, RandomAccess {
     private static final int MAXIMUM_CAPACITY = 1 << 30;
     private final Segment<U>[] segments = new Segment[30]; {
         segments[0] = newSegment(2);
     }
     private volatile int ctl = 2;
 
+    // todo: can pass function and inverse function (derivative) for internal mechanics
     public SegmentMemory() { }
 
     public SegmentMemory(int initialCapacity) {
         realloc(initialCapacity);
-    }
-
-
-    public static void main(String[] args) {
-
-        SegmentMemory<Integer> memory = new SegmentMemory<>(16);
-        for (int i = 0 ; i < 5; ++i) {
-            memory.store(i,i);
-        }
-        memory.forEach(System.out::println);
-
-        System.out.println(memory.length());
-
     }
 
     private static <E> int
@@ -67,7 +57,7 @@ public class SegmentMemory<U> implements ModifiableMemory<U> {
     }
 
     @Override
-    public U get(int index) {
+    public U fetch(int index) {
         Objects.checkIndex(index, length());
 
         int exponent = segmentForIndex(index);
@@ -100,7 +90,7 @@ public class SegmentMemory<U> implements ModifiableMemory<U> {
     }
 
     @Override
-    public U getAndSet(int index, U e) {
+    public U fetchAndStore(int index, U e) {
         Objects.checkIndex(index, length());
 
         int exponent = segmentForIndex(index);
@@ -160,15 +150,15 @@ public class SegmentMemory<U> implements ModifiableMemory<U> {
     }
 
     private void setSegmentAt(int i, Segment<U> segment) {
-        AA.setRelease(segments, i, segment);
+        SEGMENTS.setRelease(segments, i, segment);
     }
 
     private Segment<U> segmentAt(int i) {
-        return (Segment<U>) AA.getAcquire(segments, i);
+        return (Segment<U>) SEGMENTS.getAcquire(segments, i);
     }
     private boolean
     casSegmentAt(int i, Segment<U> expected, Segment<U> segment) {
-        return AA.compareAndSet(segments, i, expected, segment);
+        return SEGMENTS.compareAndSet(segments, i, expected, segment);
     }
 
     private record Segment<E>(E[] array) {
@@ -200,12 +190,15 @@ public class SegmentMemory<U> implements ModifiableMemory<U> {
                 joiner.add(Objects.toString(arrayAt(i)));
             return joiner.toString();
         }
+
+        // VarHandle mechanics
+        private static final VarHandle AA
+                = MethodHandles.arrayElementVarHandle(Object[].class);
     }
 
-
     // VarHandle mechanics
-    private static final VarHandle AA
-            = MethodHandles.arrayElementVarHandle(Object[].class);
+    private static final VarHandle SEGMENTS
+            = MethodHandles.arrayElementVarHandle(Segment[].class);
     private static final VarHandle CTL;
 
     static {

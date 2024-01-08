@@ -8,12 +8,12 @@ import java.util.function.Consumer;
 
 public interface ReadableMemory<E> {
 
-    E get(int index) throws IndexOutOfBoundsException;
+    E fetch(int index) throws IndexOutOfBoundsException;
 
     int length();
 
     default Cursor<E> origin() {
-        return new CursorImpl<>(0, this, get(0));
+        return new CursorImpl<>(0, this, fetch(0));
     }
 
 
@@ -43,7 +43,7 @@ public interface ReadableMemory<E> {
             int nextIndex = index + 1;
             try {
                 return new CursorImpl<>(nextIndex, memory,
-                        memory.get(nextIndex));
+                        memory.fetch(nextIndex));
             } catch (IndexOutOfBoundsException e) {
                 return new CursorImpl<>(nextIndex, memory, (E) BOUND);
             }

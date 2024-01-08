@@ -1,18 +1,18 @@
 package sunmisc.utils.math;
 
-public class QArithmeticProgression implements ProgressionFunction {
+public class ArithmeticProgression implements ProgressionFunction {
 
     private final ProgressionFunction src;
 
-    private QArithmeticProgression(ProgressionFunction src) {
+    private ArithmeticProgression(ProgressionFunction src) {
         this.src = src;
     }
 
-    public QArithmeticProgression(double a1, double d) {
+    public ArithmeticProgression(double a1, double d) {
         this(i -> new FArithmeticProgression(a1, d, i));
     }
 
-    public QArithmeticProgression(int a1, int d) {
+    public ArithmeticProgression(int a1, int d) {
         this(i -> new IArithmeticProgression(a1, d, i));
     }
 

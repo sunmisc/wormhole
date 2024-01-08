@@ -10,6 +10,8 @@ import java.util.Random;
 import java.util.concurrent.ThreadLocalRandom;
 
 // for ConcurrentLinkedList
+
+@SuppressWarnings("forRemoval")
 class SkipListBin<K,V> {
     private static final int PROBABILITY = (int) (Integer.MIN_VALUE +
             0.25F // prop 1/4
@@ -241,7 +243,7 @@ class SkipListBin<K,V> {
         }
         return false;
     }
-    static int tieBreakOrder(Object a, Object b) {
+    private static int tieBreakOrder(Object a, Object b) {
         int d;
         if (a == null || b == null ||
                 (d = a.getClass().getName().
@@ -250,7 +252,7 @@ class SkipListBin<K,V> {
                     -1 : 1);
         return d;
     }
-    static Class<?> comparableClassFor(Object x) {
+    private static Class<?> comparableClassFor(Object x) {
         if (x instanceof Comparable) {
             Class<?> c;
             if ((c = x.getClass()) == String.class) // bypass checks
@@ -272,7 +274,7 @@ class SkipListBin<K,V> {
      * class), else 0.
      */
     @SuppressWarnings({"rawtypes","unchecked"}) // for cast to Comparable
-    static int compareComparables(Class<?> kc, Object k, Object x) {
+    private static int compareComparables(Class<?> kc, Object k, Object x) {
         return (x == null || x.getClass() != kc ? 0 :
                 ((Comparable) k).compareTo(x));
     }

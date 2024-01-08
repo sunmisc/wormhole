@@ -10,6 +10,10 @@ public interface Cursor<E> {
 
     E element();
 
+    default void remove() {
+        throw new UnsupportedOperationException();
+    }
+
 
     class CursorAsIterator<E> implements Iterator<E> {
 

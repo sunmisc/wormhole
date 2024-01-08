@@ -39,7 +39,7 @@ public class SegmentMemoryTest {
         public void arbiter(L_Result s) {
             StringJoiner joiner = new StringJoiner(
                     ", ", "[", "]");
-            joiner.add(length() + " " + get(15));
+            joiner.add(length() + " " + fetch(15));
             s.r1 = joiner.toString();
         }
     }
