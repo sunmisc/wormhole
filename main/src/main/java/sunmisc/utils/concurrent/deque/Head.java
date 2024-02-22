@@ -36,7 +36,8 @@ final class Head<E> implements Node<E> {
                 return t;
             LNode<E> k = pred, p;
             for (; k.item() == null && (p = k.prev) != null; k = p);
-            if (t == k || NEXT.compareAndSet(this, t, k))
+
+            if (NEXT.compareAndSet(this, t, k))
                 return k;
         }
     }

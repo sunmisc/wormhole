@@ -36,7 +36,7 @@ final class Tail<E> implements Node<E> {
                 return t;
             LNode<E> k = succ, p;
             for (; k.item() == null && (p = k.next) != null; k = p);
-            if (t == k || PREV.compareAndSet(this, t, k))
+            if (PREV.compareAndSet(this, t, k))
                 return k;
         }
     }
