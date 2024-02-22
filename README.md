@@ -23,10 +23,10 @@ DO, select more profitable methods specifically for your case.
 **I urge:**
 don't use ```synchronized```
 
-You will make life easier for yourself and the openjdk project (valhalla)
-synchronized by object entails a number of crutches and supports inside the jvm
-The Valhalla project is especially difficult with synchronized
-It’s hard for the Loom project too
+You will make life easier for yourself and the openjdk project
+synchronized by object entails a number of crutches and supports inside the jvm.
+The Valhalla project is especially difficult with synchronized.
+It’s hard for the Loom project too.
 It is uncontrollable (if we do synchronized (this) - that's it) synchronized on an object gives it control over the lock
 
 The alternative is simple: ``java.util.concurrent.lock``
