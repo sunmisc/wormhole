@@ -224,7 +224,6 @@ public class ConcurrentArrayList<E>
         }
     }
     @Override
-    @SuppressWarnings("unchecked")
     public void clear() {
         long stamp = lock.writeLock();
         try {
@@ -285,7 +284,7 @@ public class ConcurrentArrayList<E>
         return new ListItr<>(this, 0);
     }
 
-    int indexOfRange(Object o, int start, int end) {
+    private int indexOfRange(Object o, int start, int end) {
         Object[] es = elements;
         for (int i = start; i < end; i++) {
             if (Objects.equals(es[i], o))
@@ -293,7 +292,7 @@ public class ConcurrentArrayList<E>
         }
         return -1;
     }
-    int lastIndexOfRange(Object o, int start, int end) {
+    private int lastIndexOfRange(Object o, int start, int end) {
         Object[] es = elements;
         for (int i = end - 1; i >= start; i--) {
             if (Objects.equals(es[i], o))
@@ -672,15 +671,28 @@ public class ConcurrentArrayList<E>
             final int i = index, p = i - 1;
 
             StampedLock lock = list.lock;
-            final long stamp = lock.readLock();
+            long stamp = lock.tryOptimisticRead();
+            E nextCandidate = null, prevCandidate = null;
             try {
-                final E[] es = list.elements;
+                for (;; stamp = lock.readLock()) {
+                    if (stamp == 0L)
+                        continue;
+                    // possibly racy reads
+                    final E[] es = list.elements;
+                    // load fence
+                    int u = list.size; // volatile read
+                    nextCandidate = i >= u ? null : es[i];
+                    prevCandidate = p < 0  ? null : es[p];
 
-                int u = list.sizeRelaxed();
-                next = i >= u ? null : es[i];
-                prev = p < 0  ? null : es[p];
+                    if (!lock.validate(stamp))
+                        continue;
+                    break;
+                }
             } finally {
-                lock.unlockRead(stamp);
+                if (StampedLock.isReadLockStamp(stamp))
+                    lock.unlockRead(stamp);
+                next = nextCandidate;
+                prev = prevCandidate;
             }
         }
     }

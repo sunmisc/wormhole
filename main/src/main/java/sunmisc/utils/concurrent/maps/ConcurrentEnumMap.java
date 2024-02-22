@@ -414,7 +414,7 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
             implements Serializable {
         @Serial
         private static final long serialVersionUID = 3978011019563538907L;
-        final ConcurrentEnumMap<K,V> map;
+        private final ConcurrentEnumMap<K,V> map;
 
         KeySetView(ConcurrentEnumMap<K,V> map) {
             this.map = map;
@@ -454,7 +454,7 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
             implements Serializable {
         @Serial
         private static final long serialVersionUID = 3274140860495273601L;
-        final ConcurrentEnumMap<? super K, V> map;
+        private final ConcurrentEnumMap<? super K, V> map;
 
         ValuesView(ConcurrentEnumMap<? super K, V> map) {
             this.map = map;
@@ -517,7 +517,7 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
             implements Serializable {
         @Serial
         private static final long serialVersionUID = 1663475809857555708L;
-        final ConcurrentEnumMap<K,V> map;
+        private final ConcurrentEnumMap<K,V> map;
 
         EntrySetView(ConcurrentEnumMap<K,V> map) {
             this.map = map;
