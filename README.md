@@ -20,5 +20,17 @@ contradict oneself, confusing even experienced people intellectuals
 Take these or those tools with a cool fakeHead, KNOWING WHAT THEY ARE
 DO, select more profitable methods specifically for your case.
 
+**I urge:**
+don't use ```synchronized```
+
+You will make life easier for yourself and the openjdk project (valhalla)
+synchronized by object entails a number of crutches and supports inside the jvm
+The Valhalla project is especially difficult with synchronized
+It’s hard for the Loom project too
+It is uncontrollable (if we do synchronized (this) - that's it) synchronized on an object gives it control over the lock
+
+The alternative is simple: ``java.util.concurrent.lock``
+It provides proper locking mechanism design
+
 ![image](https://github.com/sunmisc/MyConcurrencyWorld/assets/49918694/43fb0920-1fcb-441e-b72f-f64e42008f64)
 
