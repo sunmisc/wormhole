@@ -32,5 +32,11 @@ It is uncontrollable (if we do synchronized (this) - that's it) synchronized on 
 The alternative is simple: ``java.util.concurrent.lock``
 It provides proper locking mechanism design
 
+don`t use ```ThreadLocal```
+use your own separate storage as Map<Long, V> where Long is the threadId
+
+the ThreadLocal concept is terrible, it's insecure
+and causes performance problems
+
 ![image](https://github.com/sunmisc/MyConcurrencyWorld/assets/49918694/43fb0920-1fcb-441e-b72f-f64e42008f64)
 
