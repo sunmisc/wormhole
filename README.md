@@ -21,22 +21,16 @@ Take these or those tools with a cool fakeHead, KNOWING WHAT THEY ARE
 DO, select more profitable methods specifically for your case.
 
 **I urge:**
-don't use ```synchronized```
-
-You will make life easier for yourself and the openjdk project
+* don't use ```synchronized``` You will make life easier for yourself and the openjdk project
 synchronized by object entails a number of crutches and supports inside the jvm.
 The Valhalla project is especially difficult with synchronized.
 It’s hard for the Loom project too.
-It is uncontrollable (if we do synchronized (this) - that's it) synchronized on an object gives it control over the lock
-
+It is uncontrollable (if we do synchronized (this) - that's it) synchronized on an object gives it control over the lock.
 The alternative is simple: ``java.util.concurrent.lock``
 It provides proper locking mechanism design
 
-don`t use ```ThreadLocal```
-use your own separate storage as Map<Long, V> where Long is the threadId
-
-the ThreadLocal concept is terrible, it's insecure
-and causes performance problems
+* don`t use ```ThreadLocal``` use your own separate storage as Map<Long, V> where Long is the threadId.
+The ThreadLocal concept is terrible, it's insecure and causes performance problems
 
 ![image](https://github.com/sunmisc/MyConcurrencyWorld/assets/49918694/43fb0920-1fcb-441e-b72f-f64e42008f64)
 
