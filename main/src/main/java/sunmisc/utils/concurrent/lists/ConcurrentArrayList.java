@@ -239,10 +239,11 @@ public class ConcurrentArrayList<E>
     }
 
     private void updateSize(int v) {
-        SIZE.setOpaque(this, v); // setPlain?
+        SIZE.setOpaque(this, v);
     }
     private void updateArray(E[] v) {
-        ARRAY.setRelease(this, v);
+        ARRAY.setOpaque(this, v);
+        VarHandle.storeStoreFence();
     }
 
     @SuppressWarnings("unchecked")
