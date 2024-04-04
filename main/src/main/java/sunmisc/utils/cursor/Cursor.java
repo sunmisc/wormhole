@@ -1,7 +1,7 @@
 package sunmisc.utils.cursor;
 
-import sunmisc.utils.concurrent.lazy.Lazy;
-import sunmisc.utils.concurrent.lazy.SimpleLazy;
+import sunmisc.utils.lazy.Lazy;
+import sunmisc.utils.lazy.SimpleLazy;
 
 import java.util.Iterator;
 import java.util.NoSuchElementException;

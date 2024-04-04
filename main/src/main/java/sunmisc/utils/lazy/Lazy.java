@@ -1,4 +1,4 @@
-package sunmisc.utils.concurrent.lazy;
+package sunmisc.utils.lazy;
 
 import java.util.function.Supplier;
 

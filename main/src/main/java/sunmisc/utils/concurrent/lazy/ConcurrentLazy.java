@@ -1,6 +1,9 @@
 package sunmisc.utils.concurrent.lazy;
 
 import org.openjdk.jol.info.GraphLayout;
+import sunmisc.utils.lazy.Lazy;
+import sunmisc.utils.lazy.SimpleLazy;
+
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Supplier;
 
