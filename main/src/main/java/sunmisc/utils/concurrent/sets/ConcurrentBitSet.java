@@ -6,7 +6,7 @@ import sunmisc.utils.cursor.Cursor;
 
 import java.util.AbstractSet;
 import java.util.Iterator;
-import java.util.OptionalInt;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -29,13 +29,13 @@ public class ConcurrentBitSet
         if (memory.length() <= bitIndex)
             memory.realloc(ctl.updateAndGet(
                     p -> Math.max(p, bitIndex + 1)));
-        long mask = 1L << bitIndex;
+        final long mask = 1L << bitIndex;
         return (memory.fetchAndBitwiseOr(index, mask) & mask) == 0;
     }
     @Override
     public boolean remove(Object o) {
-        int bitIndex = (int) o;
-        int index = cellIndex(bitIndex);
+        final int bitIndex = (int) o;
+        final int index = cellIndex(bitIndex);
 
         if (index < ctl.get()) {
             long mask = 1L << bitIndex;
@@ -46,10 +46,11 @@ public class ConcurrentBitSet
 
     @Override
     public boolean contains(Object o) {
-        int bitIndex = (int) o;
-        int index = cellIndex(bitIndex);
-        return index < ctl.get() &&
-                (memory.fetch(index) & (1L << bitIndex)) != 0;
+        final int bitIndex = (int) o;
+        final int index = cellIndex(bitIndex);
+        return index < ctl.get() && memory.fetch(index)
+                .map(x -> (x & (1L << bitIndex)) != 0)
+                .orElse(false);
     }
 
 
@@ -64,7 +65,7 @@ public class ConcurrentBitSet
     @Override
     public boolean isEmpty() {
         for (int i = 0, n = lastCell(); i < n; ++i) {
-            if (memory.fetch(i) != 0)
+            if (memory.fetch(i).orElse(0L) != 0)
                 return false;
         }
         return true;
@@ -72,12 +73,12 @@ public class ConcurrentBitSet
     public int cardinality() {
         int sum = 0;
         for (int i = 0, n = lastCell(); i < n; ++i)
-            sum += Long.bitCount(memory.fetch(i));
+            sum += Long.bitCount(memory.fetch(i).orElse(0L));
         return sum;
     }
 
     @Override
-    public void clear() {
+    public final void clear() {
         int n = ctl.get();
         for (int i = 0; i < n; ++i)
             memory.store(i,0L);
@@ -91,24 +92,30 @@ public class ConcurrentBitSet
 
     @Override
     public Iterator<Integer> iterator() {
+        final int i = nextSetBit(0);
+        return new Cursor.CursorAsIterator<>(i < 0
+                ? new Cursor.Empty<>()
+                : new CursorImpl(this, i)
+        );
+    }
+    public Iterator<Integer> iterator(int index) {
+        Objects.checkIndex(index, lastCell());
+
         return new Cursor.CursorAsIterator<>(
-                new CursorImpl(this, nextSetBit(0)
-                        .orElseThrow(() -> new IllegalStateException(
-                                "bit set is empty")))
+                new CursorImpl(this, index)
         );
     }
 
-    public OptionalInt nextSetBit(int fromIndex) {
+    private int nextSetBit(int fromIndex) {
         int u = cellIndex(fromIndex);
         if (u >= memory.length())
             throw new IndexOutOfBoundsException();
-        for (long word = memory.fetch(u) & (-1L << fromIndex);;) {
+        for (long word = memory.fetch(u).orElse(0L) & (-1L << fromIndex);;) {
             if (word != 0)
-                return OptionalInt.of((
-                        u * BITS_PER_CELL) + Long.numberOfTrailingZeros(word));
+                return (u * BITS_PER_CELL) + Long.numberOfTrailingZeros(word);
             else if (++u >= ctl.get())
-                return OptionalInt.empty();
-            word = memory.fetch(u);
+                return -1;
+            word = memory.fetch(u).orElse(0L);
         }
     }
 
@@ -116,7 +123,7 @@ public class ConcurrentBitSet
     public int hashCode() {
         long h = 1234;
         for (int i = lastCell(); --i >= 0; )
-            h ^= memory.fetch(i) * (i + 1);
+            h ^= memory.fetch(i).orElse(0L) * (i + 1);
         return Long.hashCode(h);
     }
 
@@ -132,23 +139,21 @@ public class ConcurrentBitSet
 
         @Override
         public Cursor<Integer> next() {
-            int p = nextSetBit;
+            final int p = nextSetBit;
             if (p < 0) throw new IllegalStateException();
-            return new CursorImpl(bitSet, bitSet
-                    .nextSetBit(p + 1)
-                    .orElse(-1));
+            return new CursorImpl(bitSet, bitSet.nextSetBit(p + 1));
         }
 
         @Override
         public Integer element() {
-            int p = nextSetBit;
+            final int p = nextSetBit;
             if (p < 0) throw new IllegalStateException();
             return p;
         }
 
         @Override
         public void remove() {
-            int p = nextSetBit;
+            final int p = nextSetBit;
             if (p < 0) throw new IllegalStateException();
             bitSet.remove(p);
         }
