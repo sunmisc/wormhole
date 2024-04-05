@@ -4,18 +4,20 @@ import sunmisc.utils.cursor.Cursor;
 
 import java.util.NoSuchElementException;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.function.Consumer;
 
 public interface ReadableMemory<E> {
 
-    E fetch(int index) throws IndexOutOfBoundsException;
+    Optional<E> fetch(int index) throws IndexOutOfBoundsException;
 
     int length();
 
     default Cursor<E> origin() {
-        return new CursorImpl<>(0, this, fetch(0));
+        return fetch(0)
+                .map(x -> (Cursor<E>)new CursorImpl<>(0, this, x))
+                .orElseGet(Cursor.Empty::new);
     }
-
 
     default void forEach(Consumer<? super E> action) {
         Objects.requireNonNull(action);
@@ -31,29 +33,27 @@ public interface ReadableMemory<E> {
             ReadableMemory<E> memory,
             E element
     ) implements Cursor<E> {
-        private static final Object BOUND = new Object();
 
         @Override
         public boolean exists() {
-            return element != BOUND;
+            return true;
         }
 
         @Override
         public Cursor<E> next() {
-            int nextIndex = index + 1;
+            final int nextIndex = index + 1;
             try {
-                return new CursorImpl<>(nextIndex, memory,
-                        memory.fetch(nextIndex));
+                return memory.fetch(nextIndex)
+                        .map(x -> (Cursor<E>)new CursorImpl<>(nextIndex, memory, x))
+                        .orElseGet(Empty::new);
             } catch (IndexOutOfBoundsException e) {
-                return new CursorImpl<>(nextIndex, memory, (E) BOUND);
+                return new Empty<>();
             }
         }
 
         @Override
         public E element() {
-            if (exists())
-                return element;
-            throw new NoSuchElementException();
+            return element;
         }
     }
 }

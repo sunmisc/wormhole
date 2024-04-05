@@ -4,9 +4,7 @@ import sunmisc.utils.concurrent.UnblockingArrayBuffer;
 
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
-import java.util.Objects;
-import java.util.RandomAccess;
-import java.util.StringJoiner;
+import java.util.*;
 
 import static java.lang.Integer.numberOfLeadingZeros;
 
@@ -57,14 +55,14 @@ public class ReferenceSegmentMemory<U>
     }
 
     @Override
-    public U fetch(int index) {
+    public Optional<U> fetch(int index) {
         Objects.checkIndex(index, length());
 
         int exponent = segmentForIndex(index);
         Segment<U> segment = segments[exponent];
 
         int i = indexForSegment(segment, index);
-        return segment.arrayAt(i);
+        return Optional.ofNullable(segment.arrayAt(i));
     }
 
     @Override
@@ -135,7 +133,8 @@ public class ReferenceSegmentMemory<U>
     @Override
     public String toString() {
         StringJoiner joiner = new StringJoiner("\n");
-        for (Segment<U> segment : segments) {
+        for (int i = 0, n = segments.length; i < n; ++i) {
+            Segment<U> segment = segmentAt(i);
             if (segment == null) break;
             joiner.add(segment.toString());
         }

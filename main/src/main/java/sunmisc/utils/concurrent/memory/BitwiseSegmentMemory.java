@@ -3,6 +3,7 @@ package sunmisc.utils.concurrent.memory;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.RandomAccess;
 import java.util.StringJoiner;
 import java.util.function.BiFunction;
@@ -86,8 +87,10 @@ public class BitwiseSegmentMemory<E extends Number>
     }
 
     @Override
-    public E fetch(int index) {
-        return compute(index, (i,area) -> area.arrayAt(i));
+    public Optional<E> fetch(int index) {
+        return Optional.ofNullable(
+                compute(index, (i,area) -> area.arrayAt(i))
+        );
     }
 
     @Override
@@ -163,6 +166,7 @@ public class BitwiseSegmentMemory<E extends Number>
     casSegmentAt(int i, Area<E> expected, Area<E> area) {
         return AA.compareAndSet(areas, i, expected, area);
     }
+
 
     private interface Area<E extends Number> {
         int length();
