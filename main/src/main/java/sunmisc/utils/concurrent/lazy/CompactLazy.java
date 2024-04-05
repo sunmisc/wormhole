@@ -68,14 +68,15 @@ public final class CompactLazy<E> implements Lazy<E> {
     }
     @Override
     public boolean isDone() {
-        return !outcome.getClass().isAssignableFrom(Sync.class);
+        final Object o = outcome;
+        return o == null || !o.getClass().isAssignableFrom(Sync.class);
     }
 
     @Override
     @SuppressWarnings("unchecked")
     public E get() {
         final Object x = outcome;
-        return (E)(x.getClass().isAssignableFrom(Sync.class)
+        return (E)(x != null && x.getClass().isAssignableFrom(Sync.class)
                 ? ((Sync)x).get() : x);
     }
     private static final class WaitNode {
