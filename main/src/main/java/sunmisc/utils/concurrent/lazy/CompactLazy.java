@@ -39,11 +39,8 @@ public final class CompactLazy<E> implements Lazy<E> {
                             unlock();
                         }
                     }
-                } else {
-                    q.setNextRelaxed(x);
-                    if (WAITERS.weakCompareAndSet(this, x, q))
-                        LockSupport.park();
-                }
+                } else if (WAITERS.weakCompareAndSet(this, q.next = x, q))
+                    LockSupport.park();
             }
         }
         private void unlock() {
@@ -85,20 +82,8 @@ public final class CompactLazy<E> implements Lazy<E> {
 
         WaitNode() { thread = Thread.currentThread(); }
 
-        void setNextRelaxed(WaitNode x) {
-            NEXT.set(this, x);
-        }
 
         // VarHandle mechanics
-        private static final VarHandle NEXT;
-        static {
-            try {
-                MethodHandles.Lookup l = MethodHandles.lookup();
-                NEXT = l.findVarHandle(WaitNode.class, "next", WaitNode.class);
-            } catch (ReflectiveOperationException e) {
-                throw new ExceptionInInitializerError(e);
-            }
-        }
     }
     // VarHandle mechanics
     private static final VarHandle WAITERS;
