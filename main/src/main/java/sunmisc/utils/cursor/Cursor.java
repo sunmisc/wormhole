@@ -3,8 +3,7 @@ package sunmisc.utils.cursor;
 import sunmisc.utils.lazy.Lazy;
 import sunmisc.utils.lazy.SimpleLazy;
 
-import java.util.Iterator;
-import java.util.NoSuchElementException;
+import java.util.*;
 import java.util.function.Supplier;
 
 public interface Cursor<E> {
@@ -16,7 +15,8 @@ public interface Cursor<E> {
 
     Cursor<E> next();
 
-    @SuppressWarnings("forRemoval")
+
+    // bruh
     default void remove() {
         throw new UnsupportedOperationException();
     }
@@ -31,23 +31,20 @@ public interface Cursor<E> {
     }
 
     final class IteratorAsCursor<E> implements Cursor<E> {
-        private static final Object EMPTY = new Object();
         private final Iterator<E> iterator;
-        private final Lazy<Cursor<E>> next;
+        private final Lazy<E> next;
         private final E item;
 
-        @SuppressWarnings("unchecked")
         public IteratorAsCursor(Iterator<E> iterator) {
-            this(iterator, iterator.hasNext() ? iterator.next() : (E)EMPTY);
+            this(iterator, iterator.next());
         }
 
-        public IteratorAsCursor(Iterator<E> iterator, E item) {
-            this(iterator, item, () ->
-                    new IteratorAsCursor<>(iterator, iterator.next()));
+        private IteratorAsCursor(Iterator<E> iterator, E item) {
+            this(iterator, item, iterator::next);
         }
-        public IteratorAsCursor(Iterator<E> iterator,
+        private IteratorAsCursor(Iterator<E> iterator,
                                 E item,
-                                Supplier<Cursor<E>> next) {
+                                Supplier<E> next) {
             this.iterator = iterator;
             this.item = item;
             this.next = new SimpleLazy<>(next);
@@ -55,18 +52,24 @@ public interface Cursor<E> {
 
         @Override
         public boolean exists() {
-            return iterator.hasNext();
+            return true;
         }
 
         @Override
         public Cursor<E> next() {
-            return next.get();
+            return iterator.hasNext()
+                    ? new IteratorAsCursor<>(iterator, next.get())
+                    : new Empty<>();
         }
 
         @Override
         public E element() {
-            if (item == EMPTY) throw new NoSuchElementException();
             return item;
+        }
+
+        @Override
+        public void remove() {
+            iterator.remove();
         }
     }
     final class CursorAsIterator<E> implements Iterator<E> {
@@ -84,7 +87,7 @@ public interface Cursor<E> {
 
         @Override
         public E next() {
-            Cursor<E> prev = cursor;
+            final Cursor<E> prev = cursor;
             cursor = cursor.next();
             return prev.element();
         }
