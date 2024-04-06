@@ -10,9 +10,6 @@ these are just sketches of ideas and thoughts
 * Provide more utilities
 * Bring everything into a common (abstract) form as much as possible.
 
-**Not goals:**
-* Rewriting existing solutions in the standard jdk library
-
 This library is just a sharp instrument, rushing
 fill holes in the standard library
 There's always some kind of obscure shit going on here,
