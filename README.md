@@ -30,5 +30,8 @@ It provides proper locking mechanism design
 * Don`t use ```ThreadLocal``` use your own separate storage, for example: ``ConcurrentMap<Long, V>`` where Long is the threadId
 The ThreadLocal concept is terrible, it's insecure and causes performance problems
 
+
+I'm not at all happy with the primitives in java and BigInteger design (along with the performance too), maybe things will go better with projects like Vector API, Valhalla, Liliput and I'll keep working on the math elements
+
 ![image](https://github.com/sunmisc/MyConcurrencyWorld/assets/49918694/43fb0920-1fcb-441e-b72f-f64e42008f64)
 
