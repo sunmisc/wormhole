@@ -11,6 +11,7 @@ these are just sketches of ideas and thoughts
 
 **Not goals:**
 * Rewriting existing solutions in the standard jdk library
+* Bring everything into a common (abstract) form as much as possible.
 
 This library is just a sharp instrument, rushing
 fill holes in the standard library
