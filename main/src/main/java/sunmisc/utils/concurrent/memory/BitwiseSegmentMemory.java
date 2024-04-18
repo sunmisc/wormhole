@@ -3,8 +3,6 @@ package sunmisc.utils.concurrent.memory;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.Objects;
-import java.util.Optional;
-import java.util.RandomAccess;
 import java.util.StringJoiner;
 import java.util.function.BiFunction;
 import java.util.function.Function;
@@ -12,8 +10,8 @@ import java.util.function.Function;
 import static java.lang.Integer.numberOfLeadingZeros;
 
 @SuppressWarnings("unchecked")
-public class BitwiseSegmentMemory<E extends Number>
-        implements BitwiseModifiableMemory<E>, RandomAccess {
+public final class BitwiseSegmentMemory<E extends Number>
+        implements BitwiseModifiableMemory<E> {
 
     private static final int MAXIMUM_CAPACITY = 1 << 30;
     private static final VarHandle AA
@@ -30,7 +28,7 @@ public class BitwiseSegmentMemory<E extends Number>
         }
     }
 
-    private final Area<E>[] areas;
+    private final BitwiseModifiableMemory<E>[] areas;
     private final Function<Integer, Area<E>> mapping;
     private volatile int ctl = 2;
 
@@ -46,13 +44,13 @@ public class BitwiseSegmentMemory<E extends Number>
             map = len -> (Area<E>) new AreaLongs(new long[len]);
         else
             throw new IllegalArgumentException("Component type is not bitwise");
-        Area<E>[] areas = new Area[30];
+        BitwiseModifiableMemory<E>[] areas = new BitwiseModifiableMemory[30];
         areas[0] = map.apply(2);
         this.areas = areas;
         this.mapping = map;
     }
 
-    private int indexForArea(final Area<E> area, final int index) {
+    private int indexForArea(final BitwiseModifiableMemory<E> area, final int index) {
         return index < 2 ? index : index - area.length();
     }
     private static int areaForIndex(final int index) {
@@ -69,7 +67,7 @@ public class BitwiseSegmentMemory<E extends Number>
         while ((c = ctl) != n) {
             if (c > n) {
                 int index = areaForIndex(c - 1);
-                Area<E> area = areas[index];
+                BitwiseModifiableMemory<E> area = areas[index];
                 if (area != null &&
                         CTL.weakCompareAndSet(this, c, c >> 1))
                     // casSegmentAt(r, segment, null);
@@ -87,48 +85,46 @@ public class BitwiseSegmentMemory<E extends Number>
     }
 
     @Override
-    public Optional<E> fetch(int index) {
-        return Optional.ofNullable(
-                compute(index, (i,area) -> area.arrayAt(i))
-        );
+    public E fetch(int index) {
+        return compute(index, (i,area) -> area.fetch(i));
     }
 
     @Override
     public void store(int index, E value) {
         compute(index, (i,area) -> {
-            area.setAt(i, value);
+            area.store(i, value);
             return value;
         });
     }
 
     @Override
     public E compareAndExchange(int index, E expected, E value) {
-        return compute(index, (i,area) -> area.cae(i, expected, value));
+        return compute(index, (i, area) -> area.compareAndExchange(i, expected, value));
     }
 
     @Override
     public E fetchAndStore(int index, E value) {
-        return compute(index, (i,area) -> area.getAndSet(i, value));
+        return compute(index, (i, area) -> area.fetchAndStore(i, value));
     }
 
     @Override
     public E fetchAndAdd(int index, E value) {
-        return compute(index, (i,area) -> area.getAndAdd(i, value));
+        return compute(index, (i,area) -> area.fetchAndAdd(i, value));
     }
 
     @Override
     public E fetchAndBitwiseOr(int index, E mask) {
-        return compute(index, (i,area) -> area.getAndBitwiseOr(i, mask));
+        return compute(index, (i,area) -> area.fetchAndBitwiseOr(i, mask));
     }
 
     @Override
     public E fetchAndBitwiseAnd(int index, E mask) {
-        return compute(index, (i,area) -> area.getAndBitwiseAnd(i, mask));
+        return compute(index, (i,area) -> area.fetchAndBitwiseAnd(i, mask));
     }
 
     @Override
     public E fetchAndBitwiseXor(int index, E mask) {
-        return compute(index, (i,area) -> area.getAndBitwiseXor(i, mask));
+        return compute(index, (i,area) -> area.fetchAndBitwiseXor(i, mask));
     }
 
     @Override
@@ -136,13 +132,12 @@ public class BitwiseSegmentMemory<E extends Number>
         return (int) CTL.getAcquire(this);
     }
 
-
     private E compute(int index,
-            BiFunction<Integer, Area<E>, E> consumer) {
+            BiFunction<Integer, BitwiseModifiableMemory<E>, E> consumer) {
         Objects.checkIndex(index, length());
 
         int exponent = areaForIndex(index);
-        Area<E> area = areas[exponent];
+        BitwiseModifiableMemory<E> area = areas[exponent];
 
         int i = indexForArea(area, index);
         return consumer.apply(i, area);
@@ -150,7 +145,7 @@ public class BitwiseSegmentMemory<E extends Number>
     @Override
     public String toString() {
         StringJoiner joiner = new StringJoiner("\n");
-        for (Area<E> area : areas) {
+        for (BitwiseModifiableMemory<E> area : areas) {
             if (area == null) break;
             joiner.add(area.toString());
         }
@@ -168,21 +163,12 @@ public class BitwiseSegmentMemory<E extends Number>
     }
 
 
-    private interface Area<E extends Number> {
-        int length();
-        E arrayAt(int index);
-
-        void setAt(int index, E value);
-
-        E getAndSet(int index, E value);
-
-        E cae(int i, E expected, E value);
-
-        E getAndAdd(int i, E value);
-
-        E getAndBitwiseOr(int index, E mask);
-        E getAndBitwiseAnd(int index, E mask);
-        E getAndBitwiseXor(int index, E mask);
+    private interface Area<E extends Number>
+            extends BitwiseModifiableMemory<E> {
+        @Override
+        default void realloc(int size) throws OutOfMemoryError {
+            throw new UnsupportedOperationException();
+        }
     }
 
     private record AreaLongs(long[] array) implements Area<Long> {
@@ -192,28 +178,28 @@ public class BitwiseSegmentMemory<E extends Number>
         @Override public int length()
         { return array.length; }
 
-        @Override public Long arrayAt(int index)
+        @Override public Long fetch(int index)
         { return (long) LONGS.getAcquire(array, index); }
 
-        @Override public void setAt(int index, Long value)
+        @Override public void store(int index, Long value)
         { LONGS.setRelease(array, index, value); }
 
-        @Override public Long getAndSet(int index, Long value)
+        @Override public Long fetchAndStore(int index, Long value)
         { return (long) LONGS.getAndSet(array, index, value); }
 
-        @Override public Long cae(int i, Long expected, Long value)
+        @Override public Long compareAndExchange(int i, Long expected, Long value)
         { return (long) LONGS.compareAndExchange(array, i, expected, value); }
 
-        @Override public Long getAndAdd(int i, Long value)
+        @Override public Long fetchAndAdd(int i, Long value)
         { return (long) LONGS.getAndAdd(array, i, value); }
 
-        @Override public Long getAndBitwiseOr(int index, Long mask)
+        @Override public Long fetchAndBitwiseOr(int index, Long mask)
         { return (long) LONGS.getAndBitwiseOr(array, index, mask); }
 
-        @Override public Long getAndBitwiseAnd(int index, Long mask)
+        @Override public Long fetchAndBitwiseAnd(int index, Long mask)
         { return (long) LONGS.getAndBitwiseAnd(array, index, mask); }
 
-        @Override public Long getAndBitwiseXor(int index, Long mask)
+        @Override public Long fetchAndBitwiseXor(int index, Long mask)
         { return (long) LONGS.getAndBitwiseXor(array, index, mask); }
     }
     private record AreaInts(int[] array) implements Area<Integer> {
@@ -223,28 +209,28 @@ public class BitwiseSegmentMemory<E extends Number>
         @Override public int length()
         { return array.length; }
 
-        @Override public Integer arrayAt(int index)
+        @Override public Integer fetch(int index)
         { return (int) INTEGERS.getAcquire(array, index); }
 
-        @Override public void setAt(int index, Integer value)
+        @Override public void store(int index, Integer value)
         { INTEGERS.setRelease(array, index, value); }
 
-        @Override public Integer getAndSet(int index, Integer value)
+        @Override public Integer fetchAndStore(int index, Integer value)
         { return (int) INTEGERS.getAndSet(array, index, value); }
 
-        @Override public Integer cae(int i, Integer expected, Integer value)
+        @Override public Integer compareAndExchange(int i, Integer expected, Integer value)
         { return (int) INTEGERS.compareAndExchange(array, i, expected, value); }
 
-        @Override public Integer getAndAdd(int i, Integer value)
+        @Override public Integer fetchAndAdd(int i, Integer value)
         { return (int) INTEGERS.getAndAdd(array, i, value); }
 
-        @Override public Integer getAndBitwiseOr(int index, Integer mask)
+        @Override public Integer fetchAndBitwiseOr(int index, Integer mask)
         { return (int) INTEGERS.getAndBitwiseOr(array, index, mask); }
 
-        @Override public Integer getAndBitwiseAnd(int index, Integer mask)
+        @Override public Integer fetchAndBitwiseAnd(int index, Integer mask)
         { return (int) INTEGERS.getAndBitwiseAnd(array, index, mask); }
 
-        @Override public Integer getAndBitwiseXor(int index, Integer mask)
+        @Override public Integer fetchAndBitwiseXor(int index, Integer mask)
         { return (int) INTEGERS.getAndBitwiseXor(array, index, mask); }
     }
     private record AreaShorts(short[] array) implements Area<Short> {
@@ -254,28 +240,28 @@ public class BitwiseSegmentMemory<E extends Number>
         @Override public int length()
         { return array.length; }
 
-        @Override public Short arrayAt(int index)
+        @Override public Short fetch(int index)
         { return (short) SHORTS.getAcquire(array, index); }
 
-        @Override public void setAt(int index, Short value)
+        @Override public void store(int index, Short value)
         { SHORTS.setRelease(array, index, value); }
 
-        @Override public Short getAndSet(int index, Short value)
+        @Override public Short fetchAndStore(int index, Short value)
         { return (short) SHORTS.getAndSet(array, index, value); }
 
-        @Override public Short cae(int i, Short expected, Short value)
+        @Override public Short compareAndExchange(int i, Short expected, Short value)
         { return (short) SHORTS.compareAndExchange(array, i, expected, value); }
 
-        @Override public Short getAndAdd(int i, Short value)
+        @Override public Short fetchAndAdd(int i, Short value)
         { return (short) SHORTS.getAndAdd(array, i, value); }
 
-        @Override public Short getAndBitwiseOr(int index, Short mask)
+        @Override public Short fetchAndBitwiseOr(int index, Short mask)
         { return (short) SHORTS.getAndBitwiseOr(array, index, mask); }
 
-        @Override public Short getAndBitwiseAnd(int index, Short mask)
+        @Override public Short fetchAndBitwiseAnd(int index, Short mask)
         { return (short) SHORTS.getAndBitwiseAnd(array, index, mask); }
 
-        @Override public Short getAndBitwiseXor(int index, Short mask)
+        @Override public Short fetchAndBitwiseXor(int index, Short mask)
         { return (short) SHORTS.getAndBitwiseXor(array, index, mask); }
     }
     private record AreaBytes(byte[] array) implements Area<Byte> {
@@ -285,28 +271,28 @@ public class BitwiseSegmentMemory<E extends Number>
         @Override public int length()
         { return array.length; }
 
-        @Override public Byte arrayAt(int index)
+        @Override public Byte fetch(int index)
         { return (byte) BYTES.getAcquire(array, index); }
 
-        @Override public void setAt(int index, Byte value)
+        @Override public void store(int index, Byte value)
         { BYTES.setRelease(array, index, value); }
 
-        @Override public Byte getAndSet(int index, Byte value)
+        @Override public Byte fetchAndStore(int index, Byte value)
         { return (byte) BYTES.getAndSet(array, index, value); }
 
-        @Override public Byte cae(int i, Byte expected, Byte value)
+        @Override public Byte compareAndExchange(int i, Byte expected, Byte value)
         { return (byte) BYTES.compareAndExchange(array, i, expected, value); }
 
-        @Override public Byte getAndAdd(int i, Byte value)
+        @Override public Byte fetchAndAdd(int i, Byte value)
         { return (byte) BYTES.getAndAdd(array, i, value); }
 
-        @Override public Byte getAndBitwiseOr(int index, Byte mask)
+        @Override public Byte fetchAndBitwiseOr(int index, Byte mask)
         { return (byte) BYTES.getAndBitwiseOr(array, index, mask); }
 
-        @Override public Byte getAndBitwiseAnd(int index, Byte mask)
+        @Override public Byte fetchAndBitwiseAnd(int index, Byte mask)
         { return (byte) BYTES.getAndBitwiseAnd(array, index, mask); }
 
-        @Override public Byte getAndBitwiseXor(int index, Byte mask)
+        @Override public Byte fetchAndBitwiseXor(int index, Byte mask)
         { return (byte) BYTES.getAndBitwiseXor(array, index, mask); }
     }
 }

@@ -1,10 +1,12 @@
-package sunmisc.utils.math;
+package sunmisc.utils.world.math;
 
-public class ArithmeticProgression implements ProgressionFunction {
+import java.util.function.IntFunction;
 
-    private final ProgressionFunction src;
+public final class ArithmeticProgression implements IntFunction<Progression> {
 
-    private ArithmeticProgression(ProgressionFunction src) {
+    private final IntFunction<Progression> src;
+
+    private ArithmeticProgression(IntFunction<Progression> src) {
         this.src = src;
     }
 
@@ -17,8 +19,8 @@ public class ArithmeticProgression implements ProgressionFunction {
     }
 
     @Override
-    public Progression of(int i) {
-        return src.of(i);
+    public Progression apply(int i) {
+        return src.apply(i);
     }
 
     private record IArithmeticProgression(

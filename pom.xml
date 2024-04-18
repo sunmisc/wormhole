@@ -12,31 +12,8 @@
   <packaging>pom</packaging>
     
   <modules>
-        
     <module>jcstress</module>
-        
     <module>jmh</module>
-        
     <module>main</module>
-      
   </modules>
-
-  <build>
-
-    <plugins>
-
-      <plugin>
-        <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-compiler-plugin</artifactId>
-        <version>3.12.1</version>
-        <configuration>
-          <source>21</source>
-          <target>21</target>
-        </configuration>
-      </plugin>
-
-    </plugins>
-
-  </build>
-  
 </project>

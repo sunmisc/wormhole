@@ -7,7 +7,7 @@ import java.lang.invoke.VarHandle;
 import java.util.concurrent.locks.LockSupport;
 import java.util.function.Supplier;
 
-public final class CompactLazy<E> implements Lazy<E> {
+final class CompactLazy<E> implements Lazy<E> {
 
     private volatile Object outcome;
 
@@ -32,7 +32,8 @@ public final class CompactLazy<E> implements Lazy<E> {
                 if (isDone()) {
                     return CompactLazy.this.get();
                 } else if ((x = waiters) == null) {
-                    if (WAITERS.weakCompareAndSet(this, null, q) && !isDone()) {
+                    if (WAITERS.weakCompareAndSet(this, null, q)
+                            && !isDone()) {
                         try {
                             outcome = supplier.get();
                         } finally {
@@ -81,10 +82,8 @@ public final class CompactLazy<E> implements Lazy<E> {
         volatile Thread thread;
 
         WaitNode() { thread = Thread.currentThread(); }
-
-
-        // VarHandle mechanics
     }
+
     // VarHandle mechanics
     private static final VarHandle WAITERS;
     static {

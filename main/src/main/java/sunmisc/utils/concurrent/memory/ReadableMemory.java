@@ -1,22 +1,21 @@
 package sunmisc.utils.concurrent.memory;
 
-import sunmisc.utils.cursor.Cursor;
+import sunmisc.utils.Cursor;
 
-import java.util.NoSuchElementException;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.function.Consumer;
 
 public interface ReadableMemory<E> {
 
-    Optional<E> fetch(int index) throws IndexOutOfBoundsException;
+    E fetch(int index) throws IndexOutOfBoundsException;
 
     int length();
 
     default Cursor<E> origin() {
-        return fetch(0)
-                .map(x -> (Cursor<E>)new CursorImpl<>(0, this, x))
-                .orElseGet(Cursor.Empty::new);
+        final E first = fetch(0);
+        return first != null
+                ? new CursorImpl<>(0, this, first)
+                : new Cursor.Empty<>();
     }
 
     default void forEach(Consumer<? super E> action) {
@@ -43,9 +42,10 @@ public interface ReadableMemory<E> {
         public Cursor<E> next() {
             final int nextIndex = index + 1;
             try {
-                return memory.fetch(nextIndex)
-                        .map(x -> (Cursor<E>)new CursorImpl<>(nextIndex, memory, x))
-                        .orElseGet(Empty::new);
+                final E val = memory.fetch(0);
+                return val != null
+                        ? new CursorImpl<>(nextIndex, memory, val)
+                        : new Cursor.Empty<>();
             } catch (IndexOutOfBoundsException e) {
                 return new Empty<>();
             }

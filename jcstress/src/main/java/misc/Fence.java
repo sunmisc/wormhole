@@ -13,32 +13,27 @@ import static org.openjdk.jcstress.annotations.Expect.FORBIDDEN;
 
 public class Fence {
 
-
     @JCStressTest
     @State
-    @Outcome(id = {"0, 0", "1, 1"}, expect = ACCEPTABLE, desc = "Boring")
-    @Outcome(id = "0, 1",           expect = ACCEPTABLE, desc = "Plausible")
-    @Outcome(id = "1, 0",           expect = FORBIDDEN,  desc = "Now forbidden")
-    public static class Fences extends TestFest {
+    @Outcome(id = {"0, 0"}, expect = FORBIDDEN, desc = "Now forbidden")
+    @Outcome(expect = ACCEPTABLE)
+    public static class Fences extends Container {
 
 
         @Actor
-        void thread1() {
-            Object[] o = new Object[1];
-            o[0] = "1232";
-            arr = o;
-            size = 1;
+        void thread1(II_Result r) {
+            y = 1;
+            r.r1 = x;
         }
 
         @Actor
         void thread2(II_Result r) {
-            r.r1 = size;
-            r.r2 = arr.length;
+            x = 1;
+            r.r2 = y;
         }
     }
-    private static class TestFest {
-        Object[] arr = new Object[0];
-        volatile int size;
+    private static class Container {
+        volatile int x,y;
     }
     public static void main(String[] args) throws Exception {
         Main.main(args);

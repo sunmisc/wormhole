@@ -7,6 +7,7 @@ import org.openjdk.jmh.runner.options.Options;
 import org.openjdk.jmh.runner.options.OptionsBuilder;
 import sunmisc.utils.concurrent.sets.ConcurrentBitSet;
 
+import java.util.BitSet;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 
@@ -26,16 +27,24 @@ public class BitSets {
         new Runner(opt).run();
     }
 
-    private ConcurrentBitSet bitSet;
+    private ConcurrentBitSet concurrentBitSet;
+    private BitSet bitSet;
 
     @Setup
     public void init() {
-        bitSet = new ConcurrentBitSet();
+        concurrentBitSet = new ConcurrentBitSet();
+        bitSet = new BitSet();
     }
     @Benchmark
-    public int set() {
+    public int concurrentWrite() {
         int i = ThreadLocalRandom.current().nextInt(0, 1024);
-        bitSet.add(i);
+        concurrentBitSet.add(i);
+        return i;
+    }
+    @Benchmark
+    public int plainWrite() {
+        int i = ThreadLocalRandom.current().nextInt(0, 1024);
+        bitSet.set(i);
         return i;
     }
 }

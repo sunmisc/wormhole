@@ -2,7 +2,7 @@ package sunmisc.utils.concurrent.sets;
 
 import sunmisc.utils.concurrent.memory.BitwiseModifiableMemory;
 import sunmisc.utils.concurrent.memory.BitwiseSegmentMemory;
-import sunmisc.utils.cursor.Cursor;
+import sunmisc.utils.Cursor;
 
 import java.util.AbstractSet;
 import java.util.Iterator;
@@ -13,11 +13,11 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class ConcurrentBitSet
         extends AbstractSet<Integer>
         implements Set<Integer> {
+
     private static final int ADDRESS_BITS_PER_CELL
             = Integer.numberOfTrailingZeros(Long.SIZE);
     private static final int BITS_PER_CELL =
             1 << ADDRESS_BITS_PER_CELL;
-
     private final BitwiseModifiableMemory<Long> memory
             = new BitwiseSegmentMemory<>(long.class);
     private final AtomicInteger ctl = new AtomicInteger();
@@ -48,9 +48,8 @@ public class ConcurrentBitSet
     public boolean contains(Object o) {
         final int bitIndex = (int) o;
         final int index = cellIndex(bitIndex);
-        return index < ctl.get() && memory.fetch(index)
-                .map(x -> (x & (1L << bitIndex)) != 0)
-                .orElse(false);
+        return index < ctl.get() &&
+                (memory.fetch(index) & (1L << bitIndex)) != 0;
     }
 
 
@@ -65,7 +64,7 @@ public class ConcurrentBitSet
     @Override
     public boolean isEmpty() {
         for (int i = 0, n = lastCell(); i < n; ++i) {
-            if (memory.fetch(i).orElse(0L) != 0)
+            if (memory.fetch(i) != 0)
                 return false;
         }
         return true;
@@ -73,7 +72,7 @@ public class ConcurrentBitSet
     public int cardinality() {
         int sum = 0;
         for (int i = 0, n = lastCell(); i < n; ++i)
-            sum += Long.bitCount(memory.fetch(i).orElse(0L));
+            sum += Long.bitCount(memory.fetch(i));
         return sum;
     }
 
@@ -110,12 +109,12 @@ public class ConcurrentBitSet
         int u = cellIndex(fromIndex);
         if (u >= memory.length())
             throw new IndexOutOfBoundsException();
-        for (long word = memory.fetch(u).orElse(0L) & (-1L << fromIndex);;) {
+        for (long word = memory.fetch(u) & (-1L << fromIndex);;) {
             if (word != 0)
                 return (u * BITS_PER_CELL) + Long.numberOfTrailingZeros(word);
             else if (++u >= ctl.get())
                 return -1;
-            word = memory.fetch(u).orElse(0L);
+            word = memory.fetch(u);
         }
     }
 
@@ -123,7 +122,7 @@ public class ConcurrentBitSet
     public int hashCode() {
         long h = 1234;
         for (int i = lastCell(); --i >= 0; )
-            h ^= memory.fetch(i).orElse(0L) * (i + 1);
+            h ^= memory.fetch(i) * (i + 1);
         return Long.hashCode(h);
     }
 

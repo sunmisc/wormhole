@@ -2,7 +2,7 @@ package sunmisc.utils.lazy;
 
 import java.util.function.Supplier;
 
-public class SimpleLazy<E> implements Lazy<E> {
+public final class SimpleLazy<E> implements Lazy<E> {
     private Supplier<E> supplier;
     private E result;
 

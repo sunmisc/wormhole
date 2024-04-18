@@ -1,9 +1,8 @@
 package sunmisc.utils.concurrent.lazy;
 
-import org.openjdk.jol.info.GraphLayout;
 import sunmisc.utils.lazy.Lazy;
-import sunmisc.utils.lazy.SimpleLazy;
 
+import java.util.Objects;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Supplier;
 
@@ -34,8 +33,12 @@ public final class ConcurrentLazy<E> implements Lazy<E> {
                     final E val = supplier.get();
                     // outcome = val;
                     outcome = new Lazy<>() {
-                        @Override public E get() { return val; }
-                        @Override public boolean isDone() { return true; }
+                        @Override
+                        public E get() { return val; }
+                        @Override
+                        public boolean isDone() { return true; }
+                        @Override
+                        public String toString() { return Objects.toString(val); }
                     };
                     return val;
                 } finally {
@@ -45,7 +48,12 @@ public final class ConcurrentLazy<E> implements Lazy<E> {
 
             @Override
             public boolean isDone() {
-                return outcome != this;
+                final Lazy<E> lazy = outcome;
+                return lazy != this && lazy.isDone();
+            }
+            @Override
+            public String toString() {
+                return "uninitialized";
             }
         }
         this.outcome = new Sync();
@@ -57,22 +65,13 @@ public final class ConcurrentLazy<E> implements Lazy<E> {
         return outcome.get();
     }
 
-
     @Override
     public boolean isDone() {
         return outcome.isDone();
     }
-    public static void main(String[] args) {
-        ConcurrentLazy<Integer> lazy = new ConcurrentLazy<>(() -> 12);
-        System.out.println(GraphLayout.parseInstance(lazy).totalSize());
-
-        lazy.get();
-        System.out.println(GraphLayout.parseInstance(lazy).totalSize());
-
-        SimpleLazy<Integer> once = new SimpleLazy<>(() -> 12);
-        System.out.println(GraphLayout.parseInstance(once).totalSize());
-        once.get();
-        System.out.println(GraphLayout.parseInstance(once).totalSize());
+    @Override
+    public String toString() {
+        return outcome.toString();
     }
 
 }

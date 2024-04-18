@@ -1,13 +1,13 @@
-package sunmisc.utils.cursor;
+package sunmisc.utils;
 
 import sunmisc.utils.lazy.Lazy;
 import sunmisc.utils.lazy.SimpleLazy;
 
-import java.util.*;
+import java.util.Iterator;
+import java.util.NoSuchElementException;
 import java.util.function.Supplier;
 
 public interface Cursor<E> {
-
 
     boolean exists();
 
