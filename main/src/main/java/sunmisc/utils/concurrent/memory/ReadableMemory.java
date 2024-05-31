@@ -12,10 +12,13 @@ public interface ReadableMemory<E> {
     int length();
 
     default Cursor<E> origin() {
-        final E first = fetch(0);
-        return first != null
-                ? new CursorImpl<>(0, this, first)
-                : new Cursor.Empty<>();
+        try {
+            return length() > 0
+                    ? new CursorImpl<>(0, this, fetch(0))
+                    : Cursor.empty();
+        } catch (IndexOutOfBoundsException e) {
+            return Cursor.empty();
+        }
     }
 
     default void forEach(Consumer<? super E> action) {
@@ -23,8 +26,9 @@ public interface ReadableMemory<E> {
 
         for (Cursor<E> cursor = origin();
              cursor.exists();
-             cursor = cursor.next())
+             cursor = cursor.next()) {
             action.accept(cursor.element());
+        }
     }
 
     record CursorImpl<E>(
@@ -40,14 +44,13 @@ public interface ReadableMemory<E> {
 
         @Override
         public Cursor<E> next() {
-            final int nextIndex = index + 1;
             try {
-                final E val = memory.fetch(0);
-                return val != null
-                        ? new CursorImpl<>(nextIndex, memory, val)
-                        : new Cursor.Empty<>();
+                final int nextIndex = index + 1;
+                return nextIndex < memory.length()
+                        ? new CursorImpl<>(nextIndex, memory, memory.fetch(nextIndex))
+                        : Cursor.empty();
             } catch (IndexOutOfBoundsException e) {
-                return new Empty<>();
+                return Cursor.empty();
             }
         }
 

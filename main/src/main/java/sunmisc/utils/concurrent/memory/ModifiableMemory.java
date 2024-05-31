@@ -30,7 +30,7 @@ public interface ModifiableMemory<E> extends ReadableMemory<E> {
 
     // base operations
 
-    void realloc(int size) throws OutOfMemoryError;
+    ModifiableMemory<E> realloc(int size) throws OutOfMemoryError;
 
     default void transform(
             int index, UnaryOperator<E> operator

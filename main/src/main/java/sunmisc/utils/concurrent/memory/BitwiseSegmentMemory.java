@@ -15,7 +15,7 @@ public final class BitwiseSegmentMemory<E extends Number>
 
     private static final int MAXIMUM_CAPACITY = 1 << 30;
     private static final VarHandle AA
-            = MethodHandles.arrayElementVarHandle(Area[].class);
+            = MethodHandles.arrayElementVarHandle(BitwiseModifiableMemory[].class);
     private static final VarHandle CTL;
 
     static {
@@ -58,7 +58,7 @@ public final class BitwiseSegmentMemory<E extends Number>
     }
 
     @Override
-    public void realloc(int size) {
+    public ModifiableMemory<E> realloc(int size) {
         size = Math.max(2, size);
         int n = -1 >>> numberOfLeadingZeros(size - 1);
         if (n < 0 || n >= MAXIMUM_CAPACITY)
@@ -82,6 +82,7 @@ public final class BitwiseSegmentMemory<E extends Number>
                 }
             }
         }
+        return this;
     }
 
     @Override
@@ -166,7 +167,7 @@ public final class BitwiseSegmentMemory<E extends Number>
     private interface Area<E extends Number>
             extends BitwiseModifiableMemory<E> {
         @Override
-        default void realloc(int size) throws OutOfMemoryError {
+        default ModifiableMemory<E> realloc(int size) throws OutOfMemoryError {
             throw new UnsupportedOperationException();
         }
     }

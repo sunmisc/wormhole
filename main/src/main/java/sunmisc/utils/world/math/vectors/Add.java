@@ -12,6 +12,11 @@ public final class Add implements Unit {
     }
 
     @Override
+    public Number get(int index) {
+        return a.get(index).doubleValue() + b.get(index).doubleValue();
+    }
+
+    @Override
     public Number[] values() {
         int x = a.length(), y = b.length();
         if (x != y)

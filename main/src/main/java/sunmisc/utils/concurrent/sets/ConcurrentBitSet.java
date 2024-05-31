@@ -93,7 +93,7 @@ public class ConcurrentBitSet
     public Iterator<Integer> iterator() {
         final int i = nextSetBit(0);
         return new Cursor.CursorAsIterator<>(i < 0
-                ? new Cursor.Empty<>()
+                ? Cursor.empty()
                 : new CursorImpl(this, i)
         );
     }

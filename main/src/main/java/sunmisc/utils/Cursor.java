@@ -9,6 +9,15 @@ import java.util.function.Supplier;
 
 public interface Cursor<E> {
 
+
+    Cursor<?> EMPTY = new Cursor<>() {
+        @Override public boolean exists() { return false; }
+
+        @Override public Cursor<Object> next() { throw new UnsupportedOperationException(); }
+
+        @Override public Object element() { throw new NoSuchElementException(); }
+    };
+
     boolean exists();
 
     E element();
@@ -21,13 +30,10 @@ public interface Cursor<E> {
         throw new UnsupportedOperationException();
     }
 
-    final class Empty<E> implements Cursor<E> {
 
-        @Override public boolean exists() { return false; }
-
-        @Override public Cursor<E> next() { throw new UnsupportedOperationException(); }
-
-        @Override public E element() { throw new NoSuchElementException(); }
+    @SuppressWarnings("unchecked")
+    static <E> Cursor<E> empty() {
+        return (Cursor<E>) EMPTY;
     }
 
     final class IteratorAsCursor<E> implements Cursor<E> {
@@ -59,7 +65,7 @@ public interface Cursor<E> {
         public Cursor<E> next() {
             return iterator.hasNext()
                     ? new IteratorAsCursor<>(iterator, next.get())
-                    : new Empty<>();
+                    : empty();
         }
 
         @Override

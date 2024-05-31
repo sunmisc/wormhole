@@ -5,7 +5,6 @@ import org.openjdk.jmh.runner.Runner;
 import org.openjdk.jmh.runner.RunnerException;
 import org.openjdk.jmh.runner.options.Options;
 import org.openjdk.jmh.runner.options.OptionsBuilder;
-import sunmisc.utils.concurrent.memory.ArrayMemory;
 import sunmisc.utils.concurrent.memory.ImmutableSegmentsMemory;
 import sunmisc.utils.concurrent.memory.ModifiableMemory;
 import sunmisc.utils.concurrent.memory.ReferenceSegmentMemory;
@@ -20,46 +19,46 @@ import java.util.concurrent.TimeUnit;
 @Measurement(iterations = 6, time = 1)
 @Threads(1)
 @Fork(1)
-public class MemorySegmentVsArray {
-
-    private static final int SIZE = 1 << 13;
-
-
+public class MemorySegmentVsCopy {
+    private static final int SIZE = 1 << 16;
     public static void main(String[] args) throws RunnerException {
         Options opt = new OptionsBuilder()
-                .include(MemorySegmentVsArray.class.getSimpleName())
+                .include(MemorySegmentVsCopy.class.getSimpleName())
                 .build();
         new Runner(opt).run();
     }
-
-    public enum ContainerType { MALLOC, ARRAY, EXP }
-    private @Param ContainerType containerType;
     private ModifiableMemory<Integer> memory;
+    private ImmutableSegmentsMemory<Integer> experimental;
 
     @Benchmark
-    public Integer read() {
-        final int r = ThreadLocalRandom.current().nextInt(SIZE -1);
-        return memory.fetch(r);
+    public Integer realloc() {
+        final int r = ThreadLocalRandom.current().nextInt(1, SIZE);
+        memory = memory.realloc(r);
+        return r;
     }
 
     @Benchmark
-    public int write() {
-        final int r = ThreadLocalRandom.current().nextInt(SIZE -1);
-        memory.store(r,r);
+    public int copy() {
+        final int r = ThreadLocalRandom.current().nextInt(1, SIZE);
+        experimental = experimental.realloc(r);
         return r;
     }
 
     @Setup
     public void prepare() {
-        memory = switch (containerType) {
-            case MALLOC -> {
-                ModifiableMemory<Integer> mem
+        ModifiableMemory<Integer> mem
                         = new ReferenceSegmentMemory<>();
-                mem.realloc(SIZE);
-                yield mem;
-            }
-            case ARRAY -> new ArrayMemory<>(SIZE);
-            case EXP -> new ImmutableSegmentsMemory<>(SIZE);
-        };
+        ImmutableSegmentsMemory<Integer> exp
+                = new ImmutableSegmentsMemory<>(SIZE);
+
+        mem.realloc(SIZE);
+        memory = mem;
+        experimental = exp;
+
+        for (int i = 0; i < SIZE - 1; ++i) {
+            mem.store(i,i);
+            exp.store(i,i);
+        }
+
     }
 }

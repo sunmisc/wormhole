@@ -2,16 +2,19 @@ package sunmisc.utils.concurrent.memory;
 
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
+import java.util.Arrays;
 import java.util.Objects;
 import java.util.StringJoiner;
 
 @SuppressWarnings("unchecked")
 public final class ArrayMemory<E> implements ModifiableMemory<E> {
-
     private final E[] array;
 
     public ArrayMemory(int size) {
-        this.array = (E[]) new Object[size];
+        this((E[]) new Object[size]);
+    }
+    private ArrayMemory(E[] array) {
+        this.array = array;
     }
 
     @Override
@@ -51,8 +54,10 @@ public final class ArrayMemory<E> implements ModifiableMemory<E> {
     }
 
     @Override
-    public void realloc(int size) throws OutOfMemoryError {
-        throw new UnsupportedOperationException();
+    public ModifiableMemory<E> realloc(int size) throws OutOfMemoryError {
+        return new ArrayMemory<>(
+                Arrays.copyOf(array, size)
+        );
     }
 
     @Override
