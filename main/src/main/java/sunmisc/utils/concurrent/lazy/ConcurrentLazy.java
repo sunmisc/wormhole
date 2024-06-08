@@ -1,5 +1,6 @@
 package sunmisc.utils.concurrent.lazy;
 
+import sunmisc.utils.Scalar;
 import sunmisc.utils.lazy.Lazy;
 
 import java.util.Objects;
@@ -18,25 +19,25 @@ import java.util.function.Supplier;
  * There is also an idea to write my own lightweight version of locking
  * on waiting for the first writer, but this idea may not be so promising
  */
-public final class ConcurrentLazy<E> implements Lazy<E> {
+public final class ConcurrentLazy<V, E extends Throwable> implements Lazy<V,E> {
     // private volatile Object outcome;
-    private volatile Lazy<E> outcome;
+    private volatile Lazy<V,E> outcome;
 
-    public ConcurrentLazy(final Supplier<E> supplier) {
-        final class Sync extends ReentrantLock implements Lazy<E> {
+    public ConcurrentLazy(final Scalar<V, E> scalar) {
+        final class Sync extends ReentrantLock implements Lazy<V,E> {
             @Override
-            public E get() {
+            public V value() throws E {
                 lock();
                 try {
-                    if (isDone())
-                        return ConcurrentLazy.this.get();
-                    final E val = supplier.get();
+                    if (completed())
+                        return ConcurrentLazy.this.value();
+                    final V val = scalar.value();
                     // outcome = val;
                     outcome = new Lazy<>() {
                         @Override
-                        public E get() { return val; }
+                        public V value() { return val; }
                         @Override
-                        public boolean isDone() { return true; }
+                        public boolean completed() { return true; }
                         @Override
                         public String toString() { return Objects.toString(val); }
                     };
@@ -47,9 +48,9 @@ public final class ConcurrentLazy<E> implements Lazy<E> {
             }
 
             @Override
-            public boolean isDone() {
-                final Lazy<E> lazy = outcome;
-                return lazy != this && lazy.isDone();
+            public boolean completed() {
+                final Lazy<V,E> lazy = outcome;
+                return lazy != this && lazy.completed();
             }
             @Override
             public String toString() {
@@ -61,13 +62,13 @@ public final class ConcurrentLazy<E> implements Lazy<E> {
 
 
     @Override
-    public E get() {
-        return outcome.get();
+    public V value() throws E {
+        return outcome.value();
     }
 
     @Override
-    public boolean isDone() {
-        return outcome.isDone();
+    public boolean completed() {
+        return outcome.completed();
     }
     @Override
     public String toString() {

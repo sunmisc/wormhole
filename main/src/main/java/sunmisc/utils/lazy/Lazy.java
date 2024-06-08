@@ -1,8 +1,9 @@
 package sunmisc.utils.lazy;
 
-import java.util.function.Supplier;
+import sunmisc.utils.Scalar;
 
-public interface Lazy<E> extends Supplier<E> {
+public interface Lazy<V, E extends Throwable> extends Scalar<V,E> {
 
-    boolean isDone();
+    boolean completed();
+
 }

@@ -38,7 +38,7 @@ public interface Cursor<E> {
 
     final class IteratorAsCursor<E> implements Cursor<E> {
         private final Iterator<E> iterator;
-        private final Lazy<E> next;
+        private final Lazy<E,RuntimeException> next;
         private final E item;
 
         public IteratorAsCursor(Iterator<E> iterator) {
@@ -50,7 +50,7 @@ public interface Cursor<E> {
         }
         private IteratorAsCursor(Iterator<E> iterator,
                                 E item,
-                                Supplier<E> next) {
+                                Scalar<E,RuntimeException> next) {
             this.iterator = iterator;
             this.item = item;
             this.next = new SimpleLazy<>(next);
@@ -64,7 +64,7 @@ public interface Cursor<E> {
         @Override
         public Cursor<E> next() {
             return iterator.hasNext()
-                    ? new IteratorAsCursor<>(iterator, next.get())
+                    ? new IteratorAsCursor<>(iterator, next.value())
                     : empty();
         }
 

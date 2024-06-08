@@ -1,5 +1,6 @@
 package sunmisc.utils.concurrent.lazy;
 
+import sunmisc.utils.Scalar;
 import sunmisc.utils.lazy.Lazy;
 
 import java.lang.invoke.MethodHandles;
@@ -7,35 +8,35 @@ import java.lang.invoke.VarHandle;
 import java.util.concurrent.locks.LockSupport;
 import java.util.function.Supplier;
 
-final class CompactLazy<E> implements Lazy<E> {
+final class CompactLazy<V, E extends Throwable> implements Lazy<V,E> {
 
     private volatile Object outcome;
 
 
-    public CompactLazy(final Supplier<E> supplier) {
-        this.outcome = new Sync(supplier);
+    public CompactLazy(final Scalar<V,E> scalar) {
+        this.outcome = new Sync(scalar);
     }
 
 
-    private final class Sync implements Supplier<E> {
+    private final class Sync implements Scalar<V,E> {
 
-        private final Supplier<E> supplier;
+        private final Scalar<V,E> scalar;
         private volatile WaitNode waiters;
 
-        private Sync(Supplier<E> supplier) {
-            this.supplier = supplier;
+        private Sync(Scalar<V,E> scalar) {
+            this.scalar = scalar;
         }
 
         @Override
-        public E get() {
+        public V value() throws E {
             for (WaitNode q = new WaitNode(), x;;) {
-                if (isDone()) {
-                    return CompactLazy.this.get();
+                if (completed()) {
+                    return CompactLazy.this.value();
                 } else if ((x = waiters) == null) {
                     if (WAITERS.weakCompareAndSet(this, null, q)
-                            && !isDone()) {
+                            && !completed()) {
                         try {
-                            outcome = supplier.get();
+                            outcome = scalar.value();
                         } finally {
                             unlock();
                         }
@@ -65,17 +66,17 @@ final class CompactLazy<E> implements Lazy<E> {
         }
     }
     @Override
-    public boolean isDone() {
+    public boolean completed() {
         final Object o = outcome;
         return o == null || !o.getClass().isAssignableFrom(Sync.class);
     }
 
     @Override
     @SuppressWarnings("unchecked")
-    public E get() {
+    public V value() throws E {
         final Object x = outcome;
-        return (E)(x != null && x.getClass().isAssignableFrom(Sync.class)
-                ? ((Sync)x).get() : x);
+        return (V)(x != null && x.getClass().isAssignableFrom(Sync.class)
+                ? ((Sync)x).value() : x);
     }
     private static final class WaitNode {
         volatile WaitNode next;
