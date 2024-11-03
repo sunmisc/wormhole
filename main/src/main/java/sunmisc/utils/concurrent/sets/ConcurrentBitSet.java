@@ -1,8 +1,8 @@
 package sunmisc.utils.concurrent.sets;
 
+import sunmisc.utils.Cursor;
 import sunmisc.utils.concurrent.memory.BitwiseModifiableMemory;
 import sunmisc.utils.concurrent.memory.BitwiseSegmentMemory;
-import sunmisc.utils.Cursor;
 
 import java.util.AbstractSet;
 import java.util.Iterator;

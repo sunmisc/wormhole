@@ -5,8 +5,7 @@ import java.lang.invoke.VarHandle;
 import java.util.Arrays;
 import java.util.PriorityQueue;
 import java.util.Queue;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -37,39 +36,9 @@ public final class CraftScheduler implements Runnable {
         workQueue.releaseAll();
         delayedQueue.releaseAll();
     }
-    public static int currentTick() {
-        return tick;
-    }
 
-    public <V> CraftTask<V> schedule(Runnable runnable, long period) {
-        long id = ids.getAndIncrement();
-        return submit(new Runnable() {
-            @Override
-            public void run() {
-                runnable.run();
-                submit(this, period);
-            }
-        }, 0);
-    }
-    public <V> CraftTask<V> submit(CraftTask<V> root, long delay) {
-        final long id = root.id();
-        final CraftTask<V> task = new CraftTask<>(root,
-                null, tick + delay, id
-        );
-        tasks.put(id, task);
-        (delay > 0 ? delayedQueue : workQueue).push(task);
-        return task;
-    }
-    public <V> CraftTask<V> submit(Runnable action, long delay) {
-        final CraftTask<V> task = new CraftTask<>(action,
-                null,
-                tick + delay,
-                0
-        );
-        (delay > 0 ? delayedQueue : workQueue).push(task);
-        return task;
-    }
-    interface WorkQueue {
+
+    public interface WorkQueue {
 
         boolean tryPush(CraftTask<?> task);
 
@@ -170,9 +139,9 @@ public final class CraftScheduler implements Runnable {
             for (boolean grow = false;;) {
                 WorkQueue[] m = queues;
                 if (m == null) {
-                    LinkedQueue[] rs = new LinkedQueue[2];
+                    WorkQueue[] rs = new WorkQueue[2];
                     rs[id & 1] = new LinkedQueue(task);
-                    LinkedQueue[] w = (LinkedQueue[])
+                    WorkQueue[] w = (WorkQueue[])
                             QS.compareAndExchange(this, null, rs);
                     if (w == null)
                         break;
@@ -224,7 +193,7 @@ public final class CraftScheduler implements Runnable {
         }
 
         private static final VarHandle AA
-                = MethodHandles.arrayElementVarHandle(LinkedQueue[].class);
+                = MethodHandles.arrayElementVarHandle(WorkQueue[].class);
         private static final VarHandle BUSY, QS;
         static {
             try {
@@ -260,8 +229,8 @@ public final class CraftScheduler implements Runnable {
                 return true;
             } else if (lock.tryLock()) {
                 try {
-                    external.add(task);
                     size++;
+                    external.add(task);
                 } finally {
                     lock.unlock();
                 }
@@ -278,8 +247,8 @@ public final class CraftScheduler implements Runnable {
             } else {
                 lock.lock();
                 try {
-                    external.add(task);
                     size++;
+                    external.add(task);
                 } finally {
                     lock.unlock();
                 }
@@ -312,6 +281,92 @@ public final class CraftScheduler implements Runnable {
                     lock.unlock();
                 }
             }
+        }
+    }
+    public static int currentTick() {
+        return tick;
+    }
+
+    public <V> RunnableScheduledFuture<V> schedule(Runnable runnable, long period) {
+        final long id = ids.getAndIncrement();
+        Runnable command = new Runnable() {
+            @Override
+            public void run() {
+                runnable.run();
+                submit(this, id, period);
+            }
+        };
+        CraftTask<V> root = submit(command, id, period);
+        return new ForwardTask<>(id, root);
+    }
+    public <V> CraftTask<V> submit(Runnable action, long id, long delay) {
+        final CraftTask<V> task = new CraftTask<>(action,
+                null,
+                tick + delay,
+                id
+        );
+        tasks.put(id, task);
+        (delay > 0 ? delayedQueue : workQueue).push(task);
+        return task;
+    }
+    private class ForwardTask<V> implements RunnableScheduledFuture<V> {
+
+        private final long id;
+        private volatile CraftTask<V> last;
+
+        private ForwardTask(long id, CraftTask<V> root) {
+            this.id = id;
+            this.last = root;
+        }
+
+        private CraftTask<V> task() {
+            CraftTask<?> t = tasks.get(id);
+            return t == null ? last : (last = (CraftTask<V>) t);
+        }
+
+        @Override
+        public boolean isPeriodic() {
+            return task().isPeriodic();
+        }
+
+        @Override
+        public long getDelay(TimeUnit unit) {
+            return task().getDelay(unit);
+        }
+
+        @Override
+        public int compareTo(Delayed o) {
+            return task().compareTo(o);
+        }
+
+        @Override
+        public void run() {
+            task().run();
+        }
+
+        @Override
+        public boolean cancel(boolean mayInterruptIfRunning) {
+            return task().isPeriodic();
+        }
+
+        @Override
+        public boolean isCancelled() {
+            return task().isCancelled();
+        }
+
+        @Override
+        public boolean isDone() {
+            return task().isDone();
+        }
+
+        @Override
+        public V get() throws InterruptedException, ExecutionException {
+            return task().get();
+        }
+
+        @Override
+        public V get(long timeout, TimeUnit unit) throws InterruptedException, ExecutionException, TimeoutException {
+            return task().get(timeout, unit);
         }
     }
 }

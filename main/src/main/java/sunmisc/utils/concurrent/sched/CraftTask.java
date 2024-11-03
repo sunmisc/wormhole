@@ -9,7 +9,7 @@ public final class CraftTask<V>
         extends FutureTask<V>
         implements RunnableScheduledFuture<V> {
 
-    private volatile long delay;
+    private final long delay;
     private final long id;
     private final Callable<V> action;
 
@@ -38,10 +38,9 @@ public final class CraftTask<V>
         }
         return value;
     }
-
     @Override
     public long getDelay(TimeUnit unit) {
-        return unit.convert(
+        return isCancelled() ? Integer.MIN_VALUE : unit.convert(
                 (delay - CraftScheduler.currentTick()) * 50,
                 MILLISECONDS);
     }
@@ -52,11 +51,5 @@ public final class CraftTask<V>
 
     public long id() {
         return id;
-    }
-
-    @Override
-    public boolean cancel(boolean mayInterruptIfRunning) {
-        delay = 0;
-        return super.cancel(mayInterruptIfRunning);
     }
 }

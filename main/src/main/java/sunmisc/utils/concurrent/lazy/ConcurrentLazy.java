@@ -5,7 +5,6 @@ import sunmisc.utils.lazy.Lazy;
 
 import java.util.Objects;
 import java.util.concurrent.locks.ReentrantLock;
-import java.util.function.Supplier;
 
 /*
  * This not very nice solution is due to footprint, at the moment jvm bloats

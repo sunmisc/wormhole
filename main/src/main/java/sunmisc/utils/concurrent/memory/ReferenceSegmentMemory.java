@@ -81,7 +81,7 @@ public final class ReferenceSegmentMemory<E> implements ModifiableMemory<E> {
         return ctl - 1;
     }
     @Override
-    public void realloc(int size) {
+    public ModifiableMemory<E> realloc(int size) {
         final int n = (-1 >>> Integer.numberOfLeadingZeros(size)) + 1;
         if (n < 0 || n >= MAXIMUM_CAPACITY)
             throw new OutOfMemoryError("Required array size too large");
@@ -104,6 +104,7 @@ public final class ReferenceSegmentMemory<E> implements ModifiableMemory<E> {
                 }
             }
         }
+        return this;
     }
 
     @Override

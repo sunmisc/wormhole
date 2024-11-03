@@ -6,7 +6,6 @@ import sunmisc.utils.lazy.Lazy;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.concurrent.locks.LockSupport;
-import java.util.function.Supplier;
 
 final class CompactLazy<V, E extends Throwable> implements Lazy<V,E> {
 

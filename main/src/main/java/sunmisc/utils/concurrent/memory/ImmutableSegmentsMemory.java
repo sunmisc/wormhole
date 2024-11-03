@@ -1,7 +1,5 @@
 package sunmisc.utils.concurrent.memory;
 
-import sunmisc.utils.memory.ModifiableMemory;
-
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.Arrays;

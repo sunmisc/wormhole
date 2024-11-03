@@ -5,7 +5,6 @@ import sunmisc.utils.lazy.SimpleLazy;
 
 import java.util.Iterator;
 import java.util.NoSuchElementException;
-import java.util.function.Supplier;
 
 public interface Cursor<E> {
 
