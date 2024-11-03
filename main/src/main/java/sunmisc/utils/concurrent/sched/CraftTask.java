@@ -11,17 +11,21 @@ public final class CraftTask<V>
 
     private volatile long delay;
     private final long id;
+    private final Callable<V> action;
 
     public CraftTask(Callable<V> callable, long delay, long id) {
         super(callable);
         this.delay = delay;
+        this.action = callable;
         this.id = id;
     }
 
     public CraftTask(Runnable runnable, V result, long delay, long id) {
-        super(runnable, result);
-        this.delay = delay;
-        this.id = id;
+        this(Executors.callable(runnable, result), delay, id);
+    }
+
+    public CraftTask(CraftTask<V> root, long delay, long id) {
+        this(root.action, delay, id);
     }
 
     @Override
@@ -44,6 +48,10 @@ public final class CraftTask<V>
     @Override
     public boolean isPeriodic() {
         return false; // todo:L
+    }
+
+    public long id() {
+        return id;
     }
 
     @Override
