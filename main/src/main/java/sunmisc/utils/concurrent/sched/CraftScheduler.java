@@ -7,11 +7,10 @@ import java.util.PriorityQueue;
 import java.util.Queue;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.concurrent.locks.ReentrantLock;
 
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
 
-public final class CraftScheduler implements Runnable {
+public final class CraftScheduler implements Runnable, AutoCloseable {
     private static volatile int tick;
 
     private final WorkQueue workQueue = new StripedQueue();
@@ -27,14 +26,26 @@ public final class CraftScheduler implements Runnable {
     }
 
     public CraftScheduler(Thread owner) {
-        this.delayedQueue = new DelayedWorkQueue(owner);
+        this.delayedQueue = new DelayedWorkQueue();
     }
 
     @Override
     public void run() {
         tick++;
-        workQueue.releaseAll();
+        for (CraftTask<?> task; (task = workQueue.poll()) != null;) {
+            if (task.isPeriodic()) {
+                delayedQueue.push(task);
+            } else {
+                task.run();
+            }
+        }
         delayedQueue.releaseAll();
+    }
+
+
+    @Override
+    public void close() throws Exception {
+
     }
 
 
@@ -209,85 +220,26 @@ public final class CraftScheduler implements Runnable {
     }
 
     private static final class DelayedWorkQueue implements WorkQueue {
-        private final Queue<CraftTask<?>>
-                internal = new PriorityQueue<>(16),
-                external = new PriorityQueue<>(8);
-
-        private final Thread owner;
-        private final ReentrantLock lock = new ReentrantLock();
-        private volatile int size;
-
-        DelayedWorkQueue(Thread owner) {
-            this.owner = owner;
-        }
+        private final Queue<CraftTask<?>> internal = new PriorityQueue<>();
 
         @Override
         public boolean tryPush(CraftTask<?> task) {
-            Thread wt = Thread.currentThread();
-            if (wt == owner) {
-                internal.add(task);
-                return true;
-            } else if (lock.tryLock()) {
-                try {
-                    size++;
-                    external.add(task);
-                } finally {
-                    lock.unlock();
-                }
-                return true;
-            }
-            return false;
-        }
-
-        @Override
-        public void push(CraftTask<?> task) {
-            Thread wt = Thread.currentThread();
-            if (wt == owner) {
-                internal.add(task);
-            } else {
-                lock.lock();
-                try {
-                    size++;
-                    external.add(task);
-                } finally {
-                    lock.unlock();
-                }
-            }
+            return internal.add(task);
         }
 
         @Override
         public CraftTask<?> poll() {
-            if (size == 0) {
-                if (Thread.currentThread() == owner) {
-                    CraftTask<?> first = internal.peek();
-                    return (first == null || first.getDelay(NANOSECONDS) > 0)
-                            ? null
-                            : internal.poll();
-                } else {
-                    return null;
-                }
-            } else {
-                lock.lock();
-                try {
-                    CraftTask<?> first = external.peek();
-                    if (first == null || first.getDelay(NANOSECONDS) > 0)
-                        return null;
-                    else {
-                        first = external.poll();
-                        size--;
-                        return first;
-                    }
-                } finally {
-                    lock.unlock();
-                }
-            }
+            CraftTask<?> first = internal.peek();
+            return (first == null || first.getDelay(NANOSECONDS) > 0)
+                    ? null
+                    : internal.poll();
         }
     }
     public static int currentTick() {
         return tick;
     }
 
-    public <V> RunnableScheduledFuture<V> schedule(Runnable runnable, long period) {
+    public <V> RunnableScheduledFuture<V> schedule(Runnable runnable, long delay, long period) {
         final long id = ids.getAndIncrement();
         Runnable command = new Runnable() {
             @Override
@@ -296,7 +248,7 @@ public final class CraftScheduler implements Runnable {
                 submit(this, id, period);
             }
         };
-        CraftTask<V> root = submit(command, id, period);
+        CraftTask<V> root = submit(command, id, delay);
         return new ForwardTask<>(id, root);
     }
     public <V> CraftTask<V> submit(Runnable action, long id, long delay) {
@@ -306,7 +258,7 @@ public final class CraftScheduler implements Runnable {
                 id
         );
         tasks.put(id, task);
-        (delay > 0 ? delayedQueue : workQueue).push(task);
+        workQueue.push(task);
         return task;
     }
     private class ForwardTask<V> implements RunnableScheduledFuture<V> {
