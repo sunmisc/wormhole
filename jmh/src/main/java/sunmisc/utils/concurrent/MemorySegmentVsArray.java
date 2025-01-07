@@ -25,8 +25,8 @@ public class MemorySegmentVsArray {
     private static final int SIZE = 1 << 13;
 
 
-    public static void main(String[] args) throws RunnerException {
-        Options opt = new OptionsBuilder()
+    public static void main(final String[] args) throws RunnerException {
+        final Options opt = new OptionsBuilder()
                 .include(MemorySegmentVsArray.class.getSimpleName())
                 .build();
         new Runner(opt).run();
@@ -39,21 +39,21 @@ public class MemorySegmentVsArray {
     @Benchmark
     public Integer read() {
         final int r = ThreadLocalRandom.current().nextInt(SIZE -1);
-        return memory.fetch(r);
+        return this.memory.fetch(r);
     }
 
     @Benchmark
     public int write() {
         final int r = ThreadLocalRandom.current().nextInt(SIZE -1);
-        memory.store(r,r);
+        this.memory.store(r,r);
         return r;
     }
 
     @Setup
     public void prepare() {
-        memory = switch (containerType) {
+        this.memory = switch (this.containerType) {
             case MALLOC -> {
-                ModifiableMemory<Integer> mem
+                final ModifiableMemory<Integer> mem
                         = new ReferenceSegmentMemory<>();
                 mem.realloc(SIZE);
                 yield mem;

@@ -42,7 +42,7 @@ public final class ReferenceSegmentMemory<E> implements ModifiableMemory<E> {
 
     @Override
     public E fetch(int index) {
-        Objects.checkIndex(index += 1, ctl);
+        Objects.checkIndex(index += 1, this.ctl);
         final int exponent = segmentForIndex(index);
         final ModifiableMemory<E> segment = segmentAt(exponent);
         final int i = index - segment.length();
@@ -50,8 +50,8 @@ public final class ReferenceSegmentMemory<E> implements ModifiableMemory<E> {
     }
 
     @Override
-    public void store(int index, E e) {
-        Objects.checkIndex(index += 1, ctl);
+    public void store(int index, final E e) {
+        Objects.checkIndex(index += 1, this.ctl);
         final int exponent = segmentForIndex(index);
         final ModifiableMemory<E> segment = segmentAt(exponent);
         final int i = index - segment.length();
@@ -59,8 +59,8 @@ public final class ReferenceSegmentMemory<E> implements ModifiableMemory<E> {
     }
 
     @Override
-    public E compareAndExchange(int index, E expected, E value) {
-        Objects.checkIndex(index += 1, ctl);
+    public E compareAndExchange(int index, final E expected, final E value) {
+        Objects.checkIndex(index += 1, this.ctl);
         final int exponent = segmentForIndex(index);
         final ModifiableMemory<E> segment = segmentAt(exponent);
         final int i = index - segment.length();
@@ -68,8 +68,8 @@ public final class ReferenceSegmentMemory<E> implements ModifiableMemory<E> {
     }
 
     @Override
-    public E fetchAndStore(int index, E e) {
-        Objects.checkIndex(index += 1, ctl);
+    public E fetchAndStore(int index, final E e) {
+        Objects.checkIndex(index += 1, this.ctl);
         final int exponent = segmentForIndex(index);
         final ModifiableMemory<E> segment = segmentAt(exponent);
         final int i = index - segment.length();
@@ -78,29 +78,33 @@ public final class ReferenceSegmentMemory<E> implements ModifiableMemory<E> {
 
     @Override
     public int length() {
-        return ctl - 1;
+        return this.ctl - 1;
     }
     @Override
-    public ModifiableMemory<E> realloc(int size) {
+    public ModifiableMemory<E> realloc(final int size) {
         final int n = (-1 >>> Integer.numberOfLeadingZeros(size)) + 1;
-        if (n < 0 || n >= MAXIMUM_CAPACITY)
+        if (n < 0 || n >= MAXIMUM_CAPACITY) {
             throw new OutOfMemoryError("Required array size too large");
-        for (int c; (c = ctl) != n; ) {
+        }
+        for (int c; (c = this.ctl) != n; ) {
             if (c > n) {
                 final int index = segmentForIndex(c - 1);
                 final ModifiableMemory<E> segment = segmentAt(index);
                 if (segment != null &&
                         CTL.weakCompareAndSet(this, c, c >> 1))
                     // casSegmentAt(r, segment, null);
+                {
                     freeAt(index);
+                }
             } else {
                 final int index = segmentForIndex(c);
                 final ArrayMemory<E> h = new ArrayMemory<>(
                         1 << index);
                 if (casSegmentAt(index, null, h)) {
-                    int k = (int) CTL.compareAndExchange(this, c, c << 1);
-                    if (k < c)
+                    final int k = (int) CTL.compareAndExchange(this, c, c << 1);
+                    if (k < c) {
                         casSegmentAt(index, h, null);
+                    }
                 }
             }
         }
@@ -109,28 +113,30 @@ public final class ReferenceSegmentMemory<E> implements ModifiableMemory<E> {
 
     @Override
     public String toString() {
-        StringJoiner joiner = new StringJoiner("\n");
-        for (int i = 0, n = segments.length; i < n; ++i) {
+        final StringJoiner joiner = new StringJoiner("\n");
+        for (int i = 0, n = this.segments.length; i < n; ++i) {
             final ModifiableMemory<E> segment = segmentAt(i);
-            if (segment == null) break;
+            if (segment == null) {
+                break;
+            }
             joiner.add(segment.toString());
         }
         return joiner.toString();
     }
 
 
-    private void freeAt(int i) {
-        SEGMENTS.setRelease(segments, i, null);
+    private void freeAt(final int i) {
+        SEGMENTS.setRelease(this.segments, i, null);
     }
 
-    private ModifiableMemory<E> segmentAt(int i) {
-        return (ModifiableMemory<E>) SEGMENTS.getAcquire(segments, i);
+    private ModifiableMemory<E> segmentAt(final int i) {
+        return (ModifiableMemory<E>) SEGMENTS.getAcquire(this.segments, i);
     }
     private boolean
-    casSegmentAt(int i,
-                 ModifiableMemory<E> expected,
-                 ModifiableMemory<E> segment) {
-        return SEGMENTS.compareAndSet(segments, i, expected, segment);
+    casSegmentAt(final int i,
+                 final ModifiableMemory<E> expected,
+                 final ModifiableMemory<E> segment) {
+        return SEGMENTS.compareAndSet(this.segments, i, expected, segment);
     }
 
     // VarHandle mechanics
@@ -140,10 +146,10 @@ public final class ReferenceSegmentMemory<E> implements ModifiableMemory<E> {
 
     static {
         try {
-            MethodHandles.Lookup l = MethodHandles.lookup();
+            final MethodHandles.Lookup l = MethodHandles.lookup();
             CTL = l.findVarHandle(ReferenceSegmentMemory.class,
                     "ctl", int.class);
-        } catch (ReflectiveOperationException e) {
+        } catch (final ReflectiveOperationException e) {
             throw new ExceptionInInitializerError(e);
         }
     }

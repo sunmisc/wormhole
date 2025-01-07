@@ -10,59 +10,59 @@ import java.util.StringJoiner;
 public final class ArrayMemory<E> implements ModifiableMemory<E> {
     private final E[] array;
 
-    public ArrayMemory(int size) {
+    public ArrayMemory(final int size) {
         this((E[]) new Object[size]);
     }
-    private ArrayMemory(E[] array) {
+    private ArrayMemory(final E[] array) {
         this.array = array;
     }
 
     @Override
     public int length() {
-        return array.length;
+        return this.array.length;
     }
 
     @Override
-    public E fetch(int index) {
-        return (E) AA.getAcquire(array, index);
+    public E fetch(final int index) {
+        return (E) AA.getAcquire(this.array, index);
     }
 
     @Override
-    public void store(int index, E value) {
-        AA.setRelease(array, index, value);
+    public void store(final int index, final E value) {
+        AA.setRelease(this.array, index, value);
     }
 
     @Override
-    public E fetchAndStore(int index, E value) {
-        return (E) AA.getAndSet(array, index, value);
+    public E fetchAndStore(final int index, final E value) {
+        return (E) AA.getAndSet(this.array, index, value);
     }
 
     @Override
-    public E compareAndExchange(int index,
-                                E expectedValue,
-                                E newValue
+    public E compareAndExchange(final int index,
+                                final E expectedValue,
+                                final E newValue
     ) throws IndexOutOfBoundsException {
-        return (E) AA.compareAndExchange(array, index, expectedValue, newValue);
+        return (E) AA.compareAndExchange(this.array, index, expectedValue, newValue);
     }
 
     @Override
-    public boolean compareAndStore(int index,
-                                   E expectedValue,
-                                   E newValue
+    public boolean compareAndStore(final int index,
+                                   final E expectedValue,
+                                   final E newValue
     ) throws IndexOutOfBoundsException {
-        return AA.compareAndSet(array, index, expectedValue, newValue);
+        return AA.compareAndSet(this.array, index, expectedValue, newValue);
     }
 
     @Override
-    public ModifiableMemory<E> realloc(int size) throws OutOfMemoryError {
+    public ModifiableMemory<E> realloc(final int size) throws OutOfMemoryError {
         return new ArrayMemory<>(
-                Arrays.copyOf(array, size)
+                Arrays.copyOf(this.array, size)
         );
     }
 
     @Override
     public String toString() {
-        StringJoiner joiner = new StringJoiner(
+        final StringJoiner joiner = new StringJoiner(
                 ", ", "[", "]");
         forEach(x -> joiner.add(Objects.toString(x)));
         return joiner.toString();

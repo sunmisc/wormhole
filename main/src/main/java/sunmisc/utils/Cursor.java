@@ -40,16 +40,16 @@ public interface Cursor<E> {
         private final Lazy<E,RuntimeException> next;
         private final E item;
 
-        public IteratorAsCursor(Iterator<E> iterator) {
+        public IteratorAsCursor(final Iterator<E> iterator) {
             this(iterator, iterator.next());
         }
 
-        private IteratorAsCursor(Iterator<E> iterator, E item) {
+        private IteratorAsCursor(final Iterator<E> iterator, final E item) {
             this(iterator, item, iterator::next);
         }
-        private IteratorAsCursor(Iterator<E> iterator,
-                                E item,
-                                Scalar<E,RuntimeException> next) {
+        private IteratorAsCursor(final Iterator<E> iterator,
+                                 final E item,
+                                 final Scalar<E,RuntimeException> next) {
             this.iterator = iterator;
             this.item = item;
             this.next = new SimpleLazy<>(next);
@@ -62,44 +62,44 @@ public interface Cursor<E> {
 
         @Override
         public Cursor<E> next() {
-            return iterator.hasNext()
-                    ? new IteratorAsCursor<>(iterator, next.value())
+            return this.iterator.hasNext()
+                    ? new IteratorAsCursor<>(this.iterator, this.next.value())
                     : empty();
         }
 
         @Override
         public E element() {
-            return item;
+            return this.item;
         }
 
         @Override
         public void remove() {
-            iterator.remove();
+            this.iterator.remove();
         }
     }
     final class CursorAsIterator<E> implements Iterator<E> {
 
         private Cursor<E> cursor;
 
-        public CursorAsIterator(Cursor<E> origin) {
+        public CursorAsIterator(final Cursor<E> origin) {
             this.cursor = origin;
         }
 
         @Override
         public boolean hasNext() {
-            return cursor.exists();
+            return this.cursor.exists();
         }
 
         @Override
         public E next() {
-            final Cursor<E> prev = cursor;
-            cursor = cursor.next();
+            final Cursor<E> prev = this.cursor;
+            this.cursor = this.cursor.next();
             return prev.element();
         }
 
         @Override
         public void remove() {
-            cursor.remove();
+            this.cursor.remove();
         }
     }
 }

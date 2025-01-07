@@ -4,6 +4,7 @@ import sunmisc.utils.Scalar;
 import sunmisc.utils.lazy.Lazy;
 
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.ReentrantLock;
 
 /*
@@ -18,28 +19,35 @@ import java.util.concurrent.locks.ReentrantLock;
  * There is also an idea to write my own lightweight version of locking
  * on waiting for the first writer, but this idea may not be so promising
  */
-public final class ConcurrentLazy<V, E extends Throwable> implements Lazy<V,E> {
-    // private volatile Object outcome;
-    private volatile Lazy<V,E> outcome;
+public final class ConcurrentLazy<V> implements Lazy<V> {
+    private final AtomicReference<Lazy<V>> outcome;
 
-    public ConcurrentLazy(final Scalar<V, E> scalar) {
-        final class Sync extends ReentrantLock implements Lazy<V,E> {
+    public ConcurrentLazy(final Scalar<V> scalar) {
+        final class Sync extends ReentrantLock implements Lazy<V> {
             @Override
-            public V value() throws E {
+            public V value() throws Exception {
                 lock();
                 try {
-                    if (completed())
+                    if (completed()) {
                         return ConcurrentLazy.this.value();
+                    }
                     final V val = scalar.value();
-                    // outcome = val;
-                    outcome = new Lazy<>() {
+                    ConcurrentLazy.this.outcome.set(new Lazy<>() {
                         @Override
-                        public V value() { return val; }
+                        public V value() {
+                            return val;
+                        }
+
                         @Override
-                        public boolean completed() { return true; }
+                        public boolean completed() {
+                            return true;
+                        }
+
                         @Override
-                        public String toString() { return Objects.toString(val); }
-                    };
+                        public String toString() {
+                            return Objects.toString(val);
+                        }
+                    });
                     return val;
                 } finally {
                     unlock();
@@ -48,30 +56,29 @@ public final class ConcurrentLazy<V, E extends Throwable> implements Lazy<V,E> {
 
             @Override
             public boolean completed() {
-                final Lazy<V,E> lazy = outcome;
-                return lazy != this && lazy.completed();
+                return ConcurrentLazy.this.outcome.get() == this;
             }
             @Override
             public String toString() {
                 return "uninitialized";
             }
         }
-        this.outcome = new Sync();
+        this.outcome = new AtomicReference<>(new Sync());
     }
 
 
     @Override
-    public V value() throws E {
-        return outcome.value();
+    public V value() throws Exception {
+        return this.outcome.get().value();
     }
 
     @Override
     public boolean completed() {
-        return outcome.completed();
-    }
-    @Override
-    public String toString() {
-        return outcome.toString();
+        return this.outcome.get().completed();
     }
 
+    @Override
+    public String toString() {
+        return this.outcome.get().toString();
+    }
 }

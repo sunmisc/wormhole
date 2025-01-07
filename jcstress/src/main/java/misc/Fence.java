@@ -21,21 +21,21 @@ public class Fence {
 
 
         @Actor
-        void thread1(II_Result r) {
-            y = 1;
-            r.r1 = x;
+        void thread1(final II_Result r) {
+            this.y = 1;
+            r.r1 = this.x;
         }
 
         @Actor
-        void thread2(II_Result r) {
-            x = 1;
-            r.r2 = y;
+        void thread2(final II_Result r) {
+            this.x = 1;
+            r.r2 = this.y;
         }
     }
     private static class Container {
         volatile int x,y;
     }
-    public static void main(String[] args) throws Exception {
+    public static void main(final String[] args) throws Exception {
         Main.main(args);
     }
 }

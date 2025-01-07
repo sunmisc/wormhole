@@ -87,16 +87,18 @@ public class UnblockingArrayBuffer<E>
     transient EntrySetView<E> entrySet;
 
 
-    public UnblockingArrayBuffer(int size) {
+    public UnblockingArrayBuffer(final int size) {
         this.bridge = new ContainerBridge(new Object[size]);
     }
-    public UnblockingArrayBuffer(E[] array) {
+    public UnblockingArrayBuffer(final E[] array) {
         // parallelize copy using Stream API?
-        int n = array.length, i = 0;
-        Object[] nodes = new Object[n];
+        final int n = array.length;
+        int i = 0;
+        final Object[] nodes = new Object[n];
         for (Object o; i < n; i++) {
-            if ((o = array[i]) != null)
+            if ((o = array[i]) != null) {
                 nodes[i] = new Cell<>(o);
+            }
         }
         this.bridge = new ContainerBridge(nodes);
     }
@@ -106,7 +108,7 @@ public class UnblockingArrayBuffer<E>
      */
     @Override
     public int size() {
-        return bridge.array.length;
+        return this.bridge.array.length;
     }
 
     /**
@@ -117,19 +119,20 @@ public class UnblockingArrayBuffer<E>
      */
     @Override
     @SuppressWarnings("unchecked")
-    public E get(Object c) {
+    public E get(final Object c) {
         Objects.requireNonNull(c);
-        int i = (int) c;
-        Object[] arr = bridge.array;
+        final int i = (int) c;
+        Object[] arr = this.bridge.array;
         checkIndex(i, arr.length);
         for (Object o;;) {
-            if ((o = arrayAt(arr, i)) == null)
+            if ((o = arrayAt(arr, i)) == null) {
                 return null;
-            else if (o instanceof ForwardingPointer t) {
+            } else if (o instanceof final ForwardingPointer t) {
                 arr = t.nextCells;
                 checkIndex(i, arr.length);
-            } else if (o instanceof Cell<?> f)
+            } else if (o instanceof final Cell<?> f) {
                 return (E) f.value;
+            }
         }
     }
 
@@ -142,28 +145,31 @@ public class UnblockingArrayBuffer<E>
      */
     @Override
     @SuppressWarnings({"unchecked", "rawtypes"})
-    public E put(Integer i, E newValue) {
+    public E put(final Integer i, final E newValue) {
         requireNonNull(i);
         requireNonNull(newValue);
 
-        Object[] arr = bridge.array;
+        Object[] arr = this.bridge.array;
         checkIndex(i, arr.length);
         for (Object o;;) {
             if ((o = arrayAt(arr, i)) == null) {
                 if (weakCasAt(arr, i, null,
-                        new Cell<>(newValue)))
+                        new Cell<>(newValue))) {
                     return null;
+                }
             }
-            else if (o instanceof ForwardingPointer f)
+            else if (o instanceof final ForwardingPointer f) {
                 arr = helpTransfer(f, i);
-            else if (o instanceof Cell n) {
-                Object val = n.value;
+            } else if (o instanceof final Cell n) {
+                final Object val = n.value;
                 // Replacing a dead cell
                 if (val == null) {
-                    if (weakCasAt(arr, i, n, new Cell<>(newValue)))
+                    if (weakCasAt(arr, i, n, new Cell<>(newValue))) {
                         return null;
-                } else if (n.cas(val, newValue))
+                    }
+                } else if (n.cas(val, newValue)) {
                     return (E) val;
+                }
             }
         }
     }
@@ -176,103 +182,110 @@ public class UnblockingArrayBuffer<E>
      */
     @Override
     @SuppressWarnings("unchecked")
-    public E remove(Object c) {
+    public E remove(final Object c) {
         requireNonNull(c);
 
-        int i = (int)c;
-        Object[] arr = bridge.array;
+        final int i = (int)c;
+        Object[] arr = this.bridge.array;
         checkIndex(i, arr.length);
         for (Object o;;) {
-            if ((o = arrayAt(arr, i)) == null)
+            if ((o = arrayAt(arr, i)) == null) {
                 return null;
-            else if (o instanceof ForwardingPointer f)
+            } else if (o instanceof final ForwardingPointer f) {
                 arr = helpTransfer(f, i);
-            else if (o instanceof Cell<?> n &&
-                    weakCasAt(arr, i, o, null))
+            } else if (o instanceof final Cell<?> n &&
+                    weakCasAt(arr, i, o, null)) {
                 return (E) n.value;
+            }
         }
     }
 
     @Override
     @SuppressWarnings("unchecked")
-    public E putIfAbsent(Integer i, E val) {
+    public E putIfAbsent(final Integer i, final E val) {
         requireNonNull(i);
         requireNonNull(val);
 
-        Object[] arr = bridge.array;
+        Object[] arr = this.bridge.array;
         checkIndex(i, arr.length);
         for (Object o;;) {
             if ((o = arrayAt(arr, i)) == null) {
                 if (weakCasAt(arr, i, null,
-                        new Cell<>(val)))
+                        new Cell<>(val))) {
                     return null;
+                }
             }
-            else if (o instanceof ForwardingPointer f)
+            else if (o instanceof final ForwardingPointer f) {
                 arr = helpTransfer(f, i);
-            else if (o instanceof Cell<?> n) {
-                Object v = n.value;
+            } else if (o instanceof final Cell<?> n) {
+                final Object v = n.value;
                 if (v == null) {
-                    if (weakCasAt(arr, i, n, new Cell<>(val)))
+                    if (weakCasAt(arr, i, n, new Cell<>(val))) {
                         return null;
-                } else
+                    }
+                } else {
                     return (E) v;
+                }
             }
         }
     }
 
     @Override
     @SuppressWarnings({"unchecked", "rawtypes"})
-    public boolean replace(Integer i, E oldVal, E newVal) {
+    public boolean replace(final Integer i, final E oldVal, final E newVal) {
         requireNonNull(i);
         requireNonNull(oldVal);
         requireNonNull(newVal);
 
-        Object[] arr = bridge.array;
+        Object[] arr = this.bridge.array;
         checkIndex(i, arr.length);
         for (Object o;;) {
-            if ((o = arrayAt(arr, i)) == null)
+            if ((o = arrayAt(arr, i)) == null) {
                 return false;
-            else if (o instanceof ForwardingPointer f)
+            } else if (o instanceof final ForwardingPointer f) {
                 arr = helpTransfer(f, i);
-            else if (o instanceof Cell n)
+            } else if (o instanceof final Cell n) {
                 return n.cas(oldVal, newVal);
+            }
         }
     }
 
     @Override
     @SuppressWarnings({"unchecked", "rawtypes"})
-    public boolean remove(Object idx, Object oldVal) {
+    public boolean remove(final Object idx, final Object oldVal) {
         Objects.requireNonNull(idx);
         Objects.requireNonNull(oldVal);
 
-        int i = (int) idx;
-        Object[] arr = bridge.array;
+        final int i = (int) idx;
+        Object[] arr = this.bridge.array;
         checkIndex(i, arr.length);
         for (Object o;;) {
-            if ((o = arrayAt(arr, i)) == null)
+            if ((o = arrayAt(arr, i)) == null) {
                 return false;
-            else if (o instanceof ForwardingPointer f)
+            } else if (o instanceof final ForwardingPointer f) {
                 arr = helpTransfer(f, i);
-            else if (o instanceof Cell n) {
-                Object val = n.value;
+            } else if (o instanceof final Cell n) {
+                final Object val = n.value;
                 /*
                  * marks a dead cell; Dead cell - null value
                  * after that, we only have to change the cell,
                  * this will allow us to safely remove dead cells,
                  * without fear that we will remove the added value
                  */
-                if (val == null || !n.cas(oldVal, null))
+                if (val == null || !n.cas(oldVal, null)) {
                     return false;
+                }
 
                 for (o = arrayAt(arr, i);;) {
                     switch (o) {
                         case null -> { return false; }
-                        case ForwardingPointer f -> arr = helpTransfer(f, i);
-                        case Cell<?> p -> {
-                            if (n != p)
+                        case final ForwardingPointer f -> arr = helpTransfer(f, i);
+                        case final Cell<?> p -> {
+                            if (n != p) {
                                 return false;
-                            else if ((o = caeAt(arr, i, p, null)) == p)
+                            } else if ((o = caeAt(arr, i, p, null)) == p) {
                                 return true;
+                            }
                         }
                         default -> {}
                     }
@@ -285,35 +298,37 @@ public class UnblockingArrayBuffer<E>
      * @param operator new array length
      */
     @Override
-    public void resize(IntUnaryOperator operator) {
+    public void resize(final IntUnaryOperator operator) {
         for (boolean resizing = false;;) {
-            ContainerBridge p = bridge;
+            final ContainerBridge p = this.bridge;
             if (resizing) {
                 // after a successful commit, you can be sure that
                 // we will commit either the same array or the next one
-                if (p instanceof ForwardingPointer f &&
+                if (p instanceof final ForwardingPointer f &&
                         // recheck
-                        tryTransfer(f) instanceof ForwardingPointer r &&
+                        tryTransfer(f) instanceof final ForwardingPointer r &&
                         !BRIDGE.weakCompareAndSet(
                                 this, r,
-                                new ContainerBridge(r.nextCells)))
+                                new ContainerBridge(r.nextCells))) {
                     continue;
+                }
                 return;
             }
-            int n = p.array.length,
-                    nextSize = operator.applyAsInt(n);
+            final int n = p.array.length;
+            final int nextSize = operator.applyAsInt(n);
             if (n == nextSize || BRIDGE.weakCompareAndSet(
                     this, p,
-                    new ForwardingPointer(p, new Object[nextSize])))
+                    new ForwardingPointer(p, new Object[nextSize]))) {
                 resizing = true;
+            }
         }
     }
 
     private Object[]
-    helpTransfer(ForwardingPointer a, int targetIndex) {
-        ContainerBridge p = tryTransfer(a);
+    helpTransfer(final ForwardingPointer a, final int targetIndex) {
+        final ContainerBridge p = tryTransfer(a);
 
-        Object[] array = p instanceof ForwardingPointer f
+        final Object[] array = p instanceof final ForwardingPointer f
                 ? f.nextCells : p.array;
         checkIndex(targetIndex, array.length);
 
@@ -333,42 +348,47 @@ public class UnblockingArrayBuffer<E>
      */
     private ContainerBridge tryTransfer(ForwardingPointer a) {
         outer : for (int i, last;;) {
-            int b = a.bound;
+            final int b = a.bound;
             if ((i = a.getStrideIndex()) < b) {
-                if (!a.weakCasStride(i, last = i + a.stride))
+                if (!a.weakCasStride(i, last = i + a.stride)) {
                     continue;
+                }
             } else {
                 i = 0; last = b;
             }
             for (boolean advance = false;;) {
-                int committed = 0, fence = Math.min(b, last);
+                int committed = 0;
+                final int fence = Math.min(b, last);
                 for (; i < fence; i++) {
-                    int p = a.pendingCount();
-                    if (p >= b)
+                    final int p = a.pendingCount();
+                    if (p >= b) {
                         return a;
-                    else if (p + committed >= b)
+                    } else if (p + committed >= b) {
                         break;
+                    }
                     // transferSlot
                     for (Object[] sh = a.array;;) {
                         Object o;
-                        if ((o = arrayAt(sh, i)) == a)
+                        if ((o = arrayAt(sh, i)) == a) {
                             break;
-                        else if (o == null) {
+                        } else if (o == null) {
                             if ((o = caeAt(sh, i, null, a)) == null) {
                                 committed++; break;
                             }
-                            else if (o == a)
+                            else if (o == a) {
                                 break;
+                            }
                         }
-                        else if (o instanceof ForwardingPointer f) {
+                        else if (o instanceof final ForwardingPointer f) {
                             sh = f.nextCells;
-                            ContainerBridge n = bridge;
+                            final ContainerBridge n = this.bridge;
                             if (n != a) {
-                                if (n instanceof ForwardingPointer r) {
+                                if (n instanceof final ForwardingPointer r) {
                                     // trying to switch to a newer array
                                     a = r; continue outer;
-                                } else
+                                } else {
                                     return n; // our mission is over
+                                }
                             }
                         } else {
                             Object v;
@@ -377,12 +397,14 @@ public class UnblockingArrayBuffer<E>
                                 if (v == o) {
                                     committed++; break;
                                 }
-                                else if (v == a)
+                                else if (v == a) {
                                     break;
-                                else
+                                } else {
                                     a.nextCells[i] = null; // opaque
-                            } else if (v == a)
+                                }
+                            } else if (v == a) {
                                 break;
+                            }
                         }
                     }
                 }
@@ -391,11 +413,11 @@ public class UnblockingArrayBuffer<E>
                     return a;
                 }
                 else if (committed > 0 &&
-                        a.addAndGetPendingCount(committed) >= b)
+                        a.addAndGetPendingCount(committed) >= b) {
                     return a;
-                else if (fence < b)
+                } else if (fence < b) {
                     continue outer;
-                else {
+                } else {
                     // recheck before commit and help
                     advance = true; i = 0;
                 }
@@ -411,11 +433,11 @@ public class UnblockingArrayBuffer<E>
         int strideIndex; // current transfer chunk
         int pendingCount; // total number of transferred chunks
 
-        ForwardingPointer(ContainerBridge prevBridge, Object[] nextArray) {
+        ForwardingPointer(final ContainerBridge prevBridge, final Object[] nextArray) {
             super(prevBridge.array);
             this.nextCells = nextArray;
             // calculate the last index
-            int n = Math.min(prevBridge.array.length, nextArray.length);
+            final int n = Math.min(prevBridge.array.length, nextArray.length);
             this.bound = n;
             // threshold
             this.stride = Math.max(MIN_TRANSFER_STRIDE, (n >>> 3) / NCPU);
@@ -424,17 +446,17 @@ public class UnblockingArrayBuffer<E>
         int pendingCount() {
             return (int) PENDINGCOUNT.getOpaque(this);
         }
-        void pendingCount(int c) {
+        void pendingCount(final int c) {
             PENDINGCOUNT.setOpaque(this, c);
         }
 
-        int addAndGetPendingCount(int v) {
+        int addAndGetPendingCount(final int v) {
             return (int) PENDINGCOUNT.getAndAddRelease(this, v) + v;
         }
         int getStrideIndex() {
             return (int) STRIDEINDEX.getOpaque(this);
         }
-        boolean weakCasStride(int c, int v) {
+        boolean weakCasStride(final int c, final int v) {
             return STRIDEINDEX.weakCompareAndSet(this, c, v);
         }
 
@@ -444,62 +466,64 @@ public class UnblockingArrayBuffer<E>
 
         static {
             try {
-                MethodHandles.Lookup l = MethodHandles.lookup();
+                final MethodHandles.Lookup l = MethodHandles.lookup();
                 STRIDEINDEX = l.findVarHandle(ForwardingPointer.class, "strideIndex", int.class);
                 PENDINGCOUNT = l.findVarHandle(ForwardingPointer.class, "pendingCount", int.class);
-            } catch (ReflectiveOperationException e) {
+            } catch (final ReflectiveOperationException e) {
                 throw new ExceptionInInitializerError(e);
             }
         }
     }
     @Override
     public Set<Map.Entry<Integer,E>> entrySet() {
-        EntrySetView<E> es;
-        if ((es = entrySet) != null) return es;
-        return entrySet = new EntrySetView<>(this);
+        final EntrySetView<E> es;
+        if ((es = this.entrySet) != null) {
+            return es;
+        }
+        return this.entrySet = new EntrySetView<>(this);
     }
 
     static final class EntrySetView<E> extends AbstractSet<Map.Entry<Integer,E>> {
         final UnblockingArrayBuffer<E> array;
-        EntrySetView(UnblockingArrayBuffer<E> array) {
+        EntrySetView(final UnblockingArrayBuffer<E> array) {
             this.array = array;
         }
         @Override
         public Iterator<Entry<Integer, E>> iterator() {
-            return new EntrySetItr<>(array);
+            return new EntrySetItr<>(this.array);
         }
 
-        @Override public int size() { return array.size(); }
+        @Override public int size() { return this.array.size(); }
     }
     static final class EntrySetItr<E> implements Iterator<Map.Entry<Integer,E>> {
         final UnblockingArrayBuffer<E> buffer;
         int cursor = -1;
         E next;
 
-        EntrySetItr(UnblockingArrayBuffer<E> buffer) {
+        EntrySetItr(final UnblockingArrayBuffer<E> buffer) {
             this.buffer = buffer;
         }
         @Override
         @SuppressWarnings("unchecked")
         public boolean hasNext() {
-            Object[] arr = buffer.bridge.array;
-            int i = ++cursor;
+            Object[] arr = this.buffer.bridge.array;
+            final int i = ++this.cursor;
             if (i == arr.length) {
-                cursor = -1; // next = null;?
+                this.cursor = -1; // next = null;?
                 return false;
             }
             for (Object o; ; ) {
                 if ((o = arrayAt(arr, i)) == null) {
-                    next = null;
+                    this.next = null;
                     return true;
-                } else if (o instanceof ForwardingPointer t) {
+                } else if (o instanceof final ForwardingPointer t) {
                     arr = t.nextCells;
                     if (i == arr.length) {
-                        cursor = -1; // next = null;?
+                        this.cursor = -1; // next = null;?
                         return false;
                     }
-                } else if (o instanceof Cell<?> f) {
-                    next = (E) f.value;
+                } else if (o instanceof final Cell<?> f) {
+                    this.next = (E) f.value;
                     return true;
                 }
             }
@@ -507,41 +531,44 @@ public class UnblockingArrayBuffer<E>
 
         @Override
         public Map.Entry<Integer,E> next() {
-            int k = cursor;
-            if (k >= 0)
-                return new IndexEntry<>(k, next);
+            final int k = this.cursor;
+            if (k >= 0) {
+                return new IndexEntry<>(k, this.next);
+            }
             throw new NoSuchElementException();
         }
         @Override
         public void remove() {
-            final int c = cursor;
-            if (c < 0)
+            final int c = this.cursor;
+            if (c < 0) {
                 throw new IllegalStateException();
-            buffer.remove(c);
-            next = null;
+            }
+            this.buffer.remove(c);
+            this.next = null;
         }
     }
 
     @Serial
-    private void writeObject(ObjectOutputStream s)
+    private void writeObject(final ObjectOutputStream s)
             throws IOException {
         forEach((k,v) -> {
             try {
                 s.writeObject(k); s.writeObject(v);
-            } catch (IOException e) {
+            } catch (final IOException e) {
                 throw new RuntimeException(e);
             }
         });
         s.writeObject(null);
     }
     @Serial
-    private void readObject(ObjectInputStream s)
+    private void readObject(final ObjectInputStream s)
             throws IOException, ClassNotFoundException {
-        List<Object> list = new ArrayList<>();
+        final List<Object> list = new ArrayList<>();
         for (Object k,v;;) {
             k = s.readObject();
-            if (k == null)
+            if (k == null) {
                 break;
+            }
             v = s.readObject();
             list.add((int) k,v);
         }
@@ -551,16 +578,16 @@ public class UnblockingArrayBuffer<E>
      * Atomic access methods are used for array elements as well
      * as elements of in-progress next array while resizing
      */
-    static Object arrayAt(Object[] arr, int i) {
+    static Object arrayAt(final Object[] arr, final int i) {
         return AA.getAcquire(arr, i);
     }
-    static void setAt(Object[] arr, int i, Object v) {
+    static void setAt(final Object[] arr, final int i, final Object v) {
         AA.setRelease(arr, i, v);
     }
-    static boolean weakCasAt(Object[] arr, int i, Object cmp, Object val) {
+    static boolean weakCasAt(final Object[] arr, final int i, final Object cmp, final Object val) {
         return AA.weakCompareAndSet(arr, i, cmp, val);
     }
-    static Object caeAt(Object[] arr, int i, Object cmp, Object val) {
+    static Object caeAt(final Object[] arr, final int i, final Object cmp, final Object val) {
         return AA.compareAndExchange(arr, i, cmp, val);
     }
 
@@ -568,7 +595,7 @@ public class UnblockingArrayBuffer<E>
 
         final Object[] array;
 
-        ContainerBridge(Object[] array) {
+        ContainerBridge(final Object[] array) {
             this.array = array;
         }
     }
@@ -576,24 +603,24 @@ public class UnblockingArrayBuffer<E>
 
     static final class Cell<E> {
         volatile E value;
-        Cell(E val) { this.value = val; }
+        Cell(final E val) { this.value = val; }
 
-        boolean cas(E cmp, E val) {
+        boolean cas(final E cmp, final E val) {
             return VAL.compareAndSet(this, cmp, val);
         }
 
         @Override
         public String toString() {
-            return Objects.toString(value);
+            return Objects.toString(this.value);
         }
 
         // VarHandle mechanics
         private static final VarHandle VAL;
         static {
             try {
-                MethodHandles.Lookup l = MethodHandles.lookup();
+                final MethodHandles.Lookup l = MethodHandles.lookup();
                 VAL = l.findVarHandle(Cell.class, "value", Object.class);
-            } catch (ReflectiveOperationException e) {
+            } catch (final ReflectiveOperationException e) {
                 throw new ExceptionInInitializerError(e);
             }
         }
@@ -606,10 +633,10 @@ public class UnblockingArrayBuffer<E>
     private static final VarHandle BRIDGE;
     static {
         try {
-            MethodHandles.Lookup l = MethodHandles.lookup();
+            final MethodHandles.Lookup l = MethodHandles.lookup();
             BRIDGE = l.findVarHandle(UnblockingArrayBuffer.class,
                     "bridge", ContainerBridge.class);
-        } catch (ReflectiveOperationException e) {
+        } catch (final ReflectiveOperationException e) {
             throw new ExceptionInInitializerError(e);
         }
     }

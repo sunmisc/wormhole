@@ -13,9 +13,9 @@ public interface ModifiableMemory<E> extends ReadableMemory<E> {
     ) throws IndexOutOfBoundsException;
 
     default boolean
-    compareAndStore(int index,
-                    E expectedValue,
-                    E newValue
+    compareAndStore(final int index,
+                    final E expectedValue,
+                    final E newValue
     ) throws IndexOutOfBoundsException {
         return compareAndExchange(index,
                 expectedValue,
@@ -24,7 +24,7 @@ public interface ModifiableMemory<E> extends ReadableMemory<E> {
     }
 
     default void
-    store(int index, E value) throws IndexOutOfBoundsException {
+    store(final int index, final E value) throws IndexOutOfBoundsException {
         fetchAndStore(index, value);
     }
 
@@ -33,12 +33,14 @@ public interface ModifiableMemory<E> extends ReadableMemory<E> {
     ModifiableMemory<E> realloc(int size) throws OutOfMemoryError;
 
     default void transform(
-            int index, UnaryOperator<E> operator
+            final int index, final UnaryOperator<E> operator
     ) throws IndexOutOfBoundsException {
         for (E current;
              !compareAndStore(index,
                      current = fetch(index),
                      operator.apply(current)
-             ););
+             );) {
+            ;
+        }
     }
 }

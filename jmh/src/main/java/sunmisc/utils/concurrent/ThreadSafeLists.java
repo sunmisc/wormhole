@@ -29,7 +29,7 @@ public class ThreadSafeLists {
 
     public enum ListType { SYNC, OPTIMISTIC }
 
-    public static void main(String[] args) throws RunnerException{
+    public static void main(final String[] args) throws RunnerException{
         new Runner(new OptionsBuilder()
                 .include(ThreadSafeLists.class.getSimpleName())
                 .build()
@@ -38,47 +38,48 @@ public class ThreadSafeLists {
 
     @Setup
     public void init() {
-        list = switch (type) {
+        this.list = switch (this.type) {
             case SYNC -> Collections.synchronizedList(new ArrayList<>());
             case OPTIMISTIC -> new ConcurrentArrayList<>();
         };
 
         for (int i = 0; i < SIZE; ++i) {
-            list.add(i);
+            this.list.add(i);
         }
-        mismatch = ThreadLocalRandom.current()
+        this.mismatch = ThreadLocalRandom.current()
                 .ints(SIZE, 0, SIZE)
                 .boxed()
                 .toList();
     }
     @Benchmark
     public Integer read() {
-        int r = ThreadLocalRandom.current().nextInt(SIZE);
-        return list.get(r);
+        final int r = ThreadLocalRandom.current().nextInt(SIZE);
+        return this.list.get(r);
     }
     @Benchmark
     public Integer getFirst() {
-        return list.getFirst();
+        return this.list.getFirst();
     }
     @Benchmark
     public boolean containsAs() {
-        return list.containsAll(mismatch);
+        return this.list.containsAll(this.mismatch);
     }
 
     @Benchmark
     public int iterator() {
         int sum = 0;
-        Iterator<Integer> itr = list.listIterator();
-        while (itr.hasNext())
+        final Iterator<Integer> itr = this.list.listIterator();
+        while (itr.hasNext()) {
             sum += itr.next();
+        }
         return sum;
     }
 
     @Benchmark
     public int addAndRemove() {
-        Integer r = (int) System.currentTimeMillis();
-        list.add(r);
-        list.remove(r);
+        final Integer r = (int) System.currentTimeMillis();
+        this.list.add(r);
+        this.list.remove(r);
         return r;
     }
 }

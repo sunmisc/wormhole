@@ -20,8 +20,8 @@ import java.util.concurrent.TimeUnit;
 @Threads(1)
 public class BitSets {
 
-    public static void main(String[] args) throws RunnerException {
-        Options opt = new OptionsBuilder()
+    public static void main(final String[] args) throws RunnerException {
+        final Options opt = new OptionsBuilder()
                 .include(BitSets.class.getSimpleName())
                 .build();
         new Runner(opt).run();
@@ -32,19 +32,19 @@ public class BitSets {
 
     @Setup
     public void init() {
-        concurrentBitSet = new ConcurrentBitSet();
-        bitSet = new BitSet();
+        this.concurrentBitSet = new ConcurrentBitSet();
+        this.bitSet = new BitSet();
     }
     @Benchmark
     public int concurrentWrite() {
-        int i = ThreadLocalRandom.current().nextInt(0, 1024);
-        concurrentBitSet.add(i);
+        final int i = ThreadLocalRandom.current().nextInt(0, 1024);
+        this.concurrentBitSet.add(i);
         return i;
     }
     @Benchmark
     public int plainWrite() {
-        int i = ThreadLocalRandom.current().nextInt(0, 1024);
-        bitSet.set(i);
+        final int i = ThreadLocalRandom.current().nextInt(0, 1024);
+        this.bitSet.set(i);
         return i;
     }
 }

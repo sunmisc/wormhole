@@ -35,35 +35,35 @@ public class SkipListVsList {
 
     @Benchmark
     @Group("linkedlist")
-    public int add(LinkedListState state) {
-        int i = ThreadLocalRandom.current().nextInt(100);
+    public int add(final LinkedListState state) {
+        final int i = ThreadLocalRandom.current().nextInt(100);
         state.list.add(i);
         return i;
     }
 
     @Benchmark
     @Group("linkedlist")
-    public Integer poll(LinkedListState state) {
+    public Integer poll(final LinkedListState state) {
         return state.list.poll();
     }
 
     @Benchmark
     @Group("skiplist")
-    public int add(SkipListState state) {
-        int i = ThreadLocalRandom.current().nextInt(100);
+    public int add(final SkipListState state) {
+        final int i = ThreadLocalRandom.current().nextInt(100);
         state.skipListSet.add(i);
         return i;
     }
 
     @Benchmark
     @Group("skiplist")
-    public Integer poll(SkipListState state) {
+    public Integer poll(final SkipListState state) {
         return state.skipListSet.pollFirst();
     }
 
 
-    public static void main(String[] args) throws RunnerException {
-        Options opt = new OptionsBuilder()
+    public static void main(final String[] args) throws RunnerException {
+        final Options opt = new OptionsBuilder()
                 .include(SkipListVsList.class.getSimpleName())
                 // .addProfiler(GCProfiler.class)
                 .build();

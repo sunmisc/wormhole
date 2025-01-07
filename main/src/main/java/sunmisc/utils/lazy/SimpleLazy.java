@@ -7,22 +7,22 @@ public final class SimpleLazy<V, E extends Throwable>
     private Scalar<V,E> scalar;
     private V result;
 
-    public SimpleLazy(Scalar<V,E> scalar) {
+    public SimpleLazy(final Scalar<V,E> scalar) {
         this.scalar = scalar;
     }
 
     @Override
     public V value() throws E {
-        V res = result;
+        V res = this.result;
         if (res == null) {
-            result = res = scalar.value();
-            scalar = null;
+            this.result = res = this.scalar.value();
+            this.scalar = null;
         }
         return res;
     }
 
     @Override
     public boolean completed() {
-        return scalar == null;
+        return this.scalar == null;
     }
 }

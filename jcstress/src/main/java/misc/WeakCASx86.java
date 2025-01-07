@@ -17,8 +17,8 @@ public class WeakCASx86 {
 
 
     public boolean weakCasFail() {
-        synchronized (lock) {
-            Location p = loc;
+        synchronized (this.lock) {
+            final Location p = this.loc;
             return LOC.weakCompareAndSet(this, p,
                     new Location(p.x + 1, p.y + 1, p.z + 1));
         }
@@ -26,29 +26,29 @@ public class WeakCASx86 {
 
     public boolean strongCasFail() {
         synchronized (this) {
-            Location p = loc;
+            final Location p = this.loc;
             return LOC.compareAndSet(this, p,
                     new Location(p.x + 1, p.y + 1, p.z + 1));
         }
     }
 
     @Actor
-    public void actor1(L_Result r) {
+    public void actor1(final L_Result r) {
         r.r1 = weakCasFail() ? 1 : 0;
     }
 
     @Actor
-    public void actor2(L_Result r) {
+    public void actor2(final L_Result r) {
         r.r1 = weakCasFail() ? 1 : 0;
     }
 
     private static final VarHandle LOC;
     static {
         try {
-            MethodHandles.Lookup l = MethodHandles.lookup();
+            final MethodHandles.Lookup l = MethodHandles.lookup();
             LOC = l.findVarHandle(WeakCASx86.class,
                     "loc", Location.class);
-        } catch (ReflectiveOperationException e) {
+        } catch (final ReflectiveOperationException e) {
             throw new ExceptionInInitializerError(e);
         }
     }
@@ -56,7 +56,7 @@ public class WeakCASx86 {
     public static class Location {
         int x, y, z;
 
-        Location(int x, int y, int z) {
+        Location(final int x, final int y, final int z) {
             this.x = x;
             this.y = y;
             this.z = z;

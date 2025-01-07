@@ -7,7 +7,9 @@ import org.openjdk.jmh.runner.options.Options;
 import org.openjdk.jmh.runner.options.OptionsBuilder;
 import sunmisc.utils.concurrent.maps.ConcurrentEnumMap;
 
-import java.util.*;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
@@ -29,8 +31,8 @@ public class ThreadSafeMaps {
 
     public enum MapType { HASH, ENUM }
 
-    public static void main(String[] args) throws RunnerException {
-        Options opt = new OptionsBuilder()
+    public static void main(final String[] args) throws RunnerException {
+        final Options opt = new OptionsBuilder()
                 .include(ThreadSafeMaps.class.getSimpleName())
                 .build();
         new Runner(opt).run();
@@ -38,24 +40,25 @@ public class ThreadSafeMaps {
 
     @Setup
     public void prepare() {
-        Map<Letter, String> m = switch (mapType) {
+        final Map<Letter, String> m = switch (this.mapType) {
             case HASH -> new ConcurrentHashMap<>();
             case ENUM -> new ConcurrentEnumMap<>(Letter.class);
         };
-        Map<Letter, String> mm = new HashMap<>();
+        final Map<Letter, String> mm = new HashMap<>();
         for (final Letter x : Letter.values()) {
             m.put(x, x.name());
-            if (ThreadLocalRandom.current().nextBoolean())
+            if (ThreadLocalRandom.current().nextBoolean()) {
                 mm.put(x, x.name());
+            }
         }
-        map = m;
-        mismatch = Map.copyOf(mm);
+        this.map = m;
+        this.mismatch = Map.copyOf(mm);
     }
 
     @Benchmark
     public Map.Entry<Letter, String> iterator() {
-        Iterator<Map.Entry<Letter, String>> iterator
-                = map.entrySet().iterator();
+        final Iterator<Map.Entry<Letter, String>> iterator
+                = this.map.entrySet().iterator();
         Map.Entry<Letter, String> last = null;
         while (iterator.hasNext()) {
             last = iterator.next();
@@ -64,55 +67,55 @@ public class ThreadSafeMaps {
     }
 
     public @Benchmark String putIfAbsent() {
-        return map.putIfAbsent(key, "Test-Fest");
+        return this.map.putIfAbsent(this.key, "Test-Fest");
     }
 
     public @Benchmark String put() {
-        return map.put(key, "Test-Fest");
+        return this.map.put(this.key, "Test-Fest");
     }
 
     public @Benchmark String remove() {
-        return map.remove(key);
+        return this.map.remove(this.key);
     }
 
     public @Benchmark boolean removeVal() {
-        return map.remove(key, "T");
+        return this.map.remove(this.key, "T");
     }
 
     public @Benchmark boolean replace() {
-        return map.replace(key, "Q", "L");
+        return this.map.replace(this.key, "Q", "L");
     }
 
     public @Benchmark String merge() {
-        return map.merge(key, "Test-Fest", (k,v) -> "T");
+        return this.map.merge(this.key, "Test-Fest", (k, v) -> "T");
     }
 
     public @Benchmark String compute() {
-        return map.compute(key, (k,v) -> "F");
+        return this.map.compute(this.key, (k, v) -> "F");
     }
 
     public @Benchmark String computeIfAbsent() {
-        return map.computeIfAbsent(key, (k) -> "Q");
+        return this.map.computeIfAbsent(this.key, (k) -> "Q");
     }
 
     public @Benchmark String computeIfPresent() {
-        return map.computeIfPresent(key, (k,v) -> "H");
+        return this.map.computeIfPresent(this.key, (k, v) -> "H");
     }
 
     public @Benchmark String get() {
-        return map.get(key);
+        return this.map.get(this.key);
     }
 
     public @Benchmark int clear() {
-        map.clear(); return 0;
+        this.map.clear(); return 0;
     }
 
     public @Benchmark int mapHashCode() {
-        return map.hashCode();}
+        return this.map.hashCode();}
 
 
     public @Benchmark boolean mapEquals() {
-        return map.equals(mismatch);
+        return this.map.equals(this.mismatch);
     }
 
     public enum Letter {

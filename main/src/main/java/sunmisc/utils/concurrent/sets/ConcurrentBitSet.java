@@ -23,38 +23,39 @@ public class ConcurrentBitSet
     private final AtomicInteger ctl = new AtomicInteger();
 
     @Override
-    public boolean add(Integer bitIndex) {
+    public boolean add(final Integer bitIndex) {
         final int index = cellIndex(bitIndex);
 
-        if (memory.length() <= bitIndex)
-            memory.realloc(ctl.updateAndGet(
+        if (this.memory.length() <= bitIndex) {
+            this.memory.realloc(this.ctl.updateAndGet(
                     p -> Math.max(p, bitIndex + 1)));
+        }
         final long mask = 1L << bitIndex;
-        return (memory.fetchAndBitwiseOr(index, mask) & mask) == 0;
+        return (this.memory.fetchAndBitwiseOr(index, mask) & mask) == 0;
     }
     @Override
-    public boolean remove(Object o) {
+    public boolean remove(final Object o) {
         final int bitIndex = (int) o;
         final int index = cellIndex(bitIndex);
 
-        if (index < ctl.get()) {
-            long mask = 1L << bitIndex;
-            return (memory.fetchAndBitwiseAnd(index, ~mask) & mask) != 0;
+        if (index < this.ctl.get()) {
+            final long mask = 1L << bitIndex;
+            return (this.memory.fetchAndBitwiseAnd(index, ~mask) & mask) != 0;
         }
         return false;
     }
 
     @Override
-    public boolean contains(Object o) {
+    public boolean contains(final Object o) {
         final int bitIndex = (int) o;
         final int index = cellIndex(bitIndex);
-        return index < ctl.get() &&
-                (memory.fetch(index) & (1L << bitIndex)) != 0;
+        return index < this.ctl.get() &&
+                (this.memory.fetch(index) & (1L << bitIndex)) != 0;
     }
 
 
     private int lastCell() {
-        return ctl.getAcquire();
+        return this.ctl.getAcquire();
     }
     @Override
     public int size() {
@@ -64,28 +65,31 @@ public class ConcurrentBitSet
     @Override
     public boolean isEmpty() {
         for (int i = 0, n = lastCell(); i < n; ++i) {
-            if (memory.fetch(i) != 0)
+            if (this.memory.fetch(i) != 0) {
                 return false;
+            }
         }
         return true;
     }
     public int cardinality() {
         int sum = 0;
-        for (int i = 0, n = lastCell(); i < n; ++i)
-            sum += Long.bitCount(memory.fetch(i));
+        for (int i = 0, n = lastCell(); i < n; ++i) {
+            sum += Long.bitCount(this.memory.fetch(i));
+        }
         return sum;
     }
 
     @Override
     public final void clear() {
-        int n = ctl.get();
-        for (int i = 0; i < n; ++i)
-            memory.store(i,0L);
-        ctl.compareAndSet(n, 0);
+        final int n = this.ctl.get();
+        for (int i = 0; i < n; ++i) {
+            this.memory.store(i,0L);
+        }
+        this.ctl.compareAndSet(n, 0);
     }
 
 
-    private static int cellIndex(int bitIndex) {
+    private static int cellIndex(final int bitIndex) {
         return bitIndex >> ADDRESS_BITS_PER_CELL;
     }
 
@@ -97,7 +101,7 @@ public class ConcurrentBitSet
                 : new CursorImpl(this, i)
         );
     }
-    public Iterator<Integer> iterator(int index) {
+    public Iterator<Integer> iterator(final int index) {
         Objects.checkIndex(index, lastCell());
 
         return new Cursor.CursorAsIterator<>(
@@ -105,24 +109,27 @@ public class ConcurrentBitSet
         );
     }
 
-    private int nextSetBit(int fromIndex) {
+    private int nextSetBit(final int fromIndex) {
         int u = cellIndex(fromIndex);
-        if (u >= memory.length())
+        if (u >= this.memory.length()) {
             throw new IndexOutOfBoundsException();
-        for (long word = memory.fetch(u) & (-1L << fromIndex);;) {
-            if (word != 0)
+        }
+        for (long word = this.memory.fetch(u) & (-1L << fromIndex);;) {
+            if (word != 0) {
                 return (u * BITS_PER_CELL) + Long.numberOfTrailingZeros(word);
-            else if (++u >= ctl.get())
+            } else if (++u >= this.ctl.get()) {
                 return -1;
-            word = memory.fetch(u);
+            }
+            word = this.memory.fetch(u);
         }
     }
 
     @Override
     public int hashCode() {
         long h = 1234;
-        for (int i = lastCell(); --i >= 0; )
-            h ^= memory.fetch(i) * (i + 1);
+        for (int i = lastCell(); --i >= 0; ) {
+            h ^= this.memory.fetch(i) * (i + 1);
+        }
         return Long.hashCode(h);
     }
 
@@ -133,28 +140,34 @@ public class ConcurrentBitSet
 
         @Override
         public boolean exists() {
-            return nextSetBit >= 0;
+            return this.nextSetBit >= 0;
         }
 
         @Override
         public Cursor<Integer> next() {
-            final int p = nextSetBit;
-            if (p < 0) throw new IllegalStateException();
-            return new CursorImpl(bitSet, bitSet.nextSetBit(p + 1));
+            final int p = this.nextSetBit;
+            if (p < 0) {
+                throw new IllegalStateException();
+            }
+            return new CursorImpl(this.bitSet, this.bitSet.nextSetBit(p + 1));
         }
 
         @Override
         public Integer element() {
-            final int p = nextSetBit;
-            if (p < 0) throw new IllegalStateException();
+            final int p = this.nextSetBit;
+            if (p < 0) {
+                throw new IllegalStateException();
+            }
             return p;
         }
 
         @Override
         public void remove() {
-            final int p = nextSetBit;
-            if (p < 0) throw new IllegalStateException();
-            bitSet.remove(p);
+            final int p = this.nextSetBit;
+            if (p < 0) {
+                throw new IllegalStateException();
+            }
+            this.bitSet.remove(p);
         }
     }
 }

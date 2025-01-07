@@ -26,26 +26,28 @@ public class ConcurrentBitSet {
         this(2);
     }
 
-    public ConcurrentBitSet(int init_nbits) {
+    public ConcurrentBitSet(final int init_nbits) {
         this.cells = new Object[init_nbits];
     }
 
-    public boolean get(int bitIndex) {
-        if (bitIndex < 0)
+    public boolean get(final int bitIndex) {
+        if (bitIndex < 0) {
             throw new IndexOutOfBoundsException(
                     "bitIndex < 0: " + bitIndex);
+        }
         final int index = cellIndex(bitIndex);
-        for (Object[] cs = cells; index < cs.length; ) {
-            Object o = cs[index];
-            if (o instanceof Object[] ncs)
+        for (Object[] cs = this.cells; index < cs.length; ) {
+            final Object o = cs[index];
+            if (o instanceof final Object[] ncs) {
                 cs = ncs;
-            else
-                return o instanceof Cell r &&
+            } else {
+                return o instanceof final Cell r &&
                         (r.value & (1L << bitIndex)) != 0;
+            }
         }
         return false;
     }
-    public boolean set(int bitIndex) {
+    public boolean set(final int bitIndex) {
         final int index = cellIndex(bitIndex);
         final long mask = 1L << bitIndex;
         return (Objects.requireNonNull(putVal(index, mask,
@@ -53,7 +55,7 @@ public class ConcurrentBitSet {
     }
 
 
-    public void clear(int bitIndex) {
+    public void clear(final int bitIndex) {
         final int index = cellIndex(bitIndex);
         final long mask = ~(1L << bitIndex);
 
@@ -61,52 +63,57 @@ public class ConcurrentBitSet {
                 x -> x.getAndBitwiseAndRelease(mask));
     }
 
-    public void flip(int bitIndex) {
+    public void flip(final int bitIndex) {
         final int index = cellIndex(bitIndex);
         final long mask = (1L << bitIndex);
 
         putVal(index, mask,
                 x -> x.getAndBitwiseXorRelease(mask));
     }
-    public int nextSetBit(int fromIndex) {
+    public int nextSetBit(final int fromIndex) {
         final int start = cellIndex(fromIndex);
-        Object[] cs = cells;
+        Object[] cs = this.cells;
         for (int i = start; i < cs.length; ++i) {
             for (Object o = cs[i]; ; ) {
-                if (o instanceof Object[] ncs) {
-                    cs = cells;
+                if (o instanceof final Object[] ncs) {
+                    cs = this.cells;
                     o = ncs[i];
                 } else {
-                    long val = o instanceof Cell r ? r.value : 0;
-                    if (i == start)
+                    long val = o instanceof final Cell r ? r.value : 0;
+                    if (i == start) {
                         val &= (CELL_MASK << fromIndex);
-                    if (val != 0)
+                    }
+                    if (val != 0) {
                         return i * BITS_PER_CELL +
                                 Long.numberOfTrailingZeros(val);
-                    else
+                    } else {
                         break;
+                    }
                 }
             }
         }
         return -1;
     }
-    public int nextClearBit(int fromIndex) {
-        int start = cellIndex(fromIndex), i;
-        Object[] cs = cells;
+    public int nextClearBit(final int fromIndex) {
+        final int start = cellIndex(fromIndex);
+        int i;
+        Object[] cs = this.cells;
         for (i = start; i < cs.length; ++i) {
             for (Object o = cs[i]; ; ) {
-                if (o instanceof Object[] ncs) {
-                    cs = cells; o = ncs[i];
+                if (o instanceof final Object[] ncs) {
+                    cs = this.cells; o = ncs[i];
                 } else {
-                    long val = o instanceof Cell r ? ~r.value
+                    long val = o instanceof final Cell r ? ~r.value
                             : CELL_MASK;
-                    if (i == start)
+                    if (i == start) {
                         val &= (CELL_MASK << fromIndex);
-                    if (val != 0)
+                    }
+                    if (val != 0) {
                         return i * BITS_PER_CELL +
                                 Long.numberOfTrailingZeros(val);
-                    else
+                    } else {
                         break;
+                    }
                 }
             }
         }
@@ -114,13 +121,13 @@ public class ConcurrentBitSet {
     }
     public int cardinality() {
         int sum = 0;
-        Object[] cs = cells;
+        Object[] cs = this.cells;
         for (int i = 0; i < cs.length; ++i) {
             for (Object o = cs[i]; ; ) {
-                if (o instanceof Object[] ncs) {
-                    cs = cells;
+                if (o instanceof final Object[] ncs) {
+                    cs = this.cells;
                     o = ncs[i];
-                } else if (o instanceof Cell r) {
+                } else if (o instanceof final Cell r) {
                     sum += Long.bitCount(r.value);
                     break;
                 }
@@ -128,64 +135,69 @@ public class ConcurrentBitSet {
         }
         return sum;
     }
-    private Cell putVal(int h, Long value,
-                        Consumer<Cell> consumer) {
+    private Cell putVal(final int h, final Long value,
+                        final Consumer<Cell> consumer) {
         final int minCap = h + 1;
         boolean expand = false;
-        for (Object[] cs = cells; ; ) {
-            int n = cs.length;
+        for (Object[] cs = this.cells; ; ) {
+            final int n = cs.length;
             if (expand) {
                 if (n < minCap) {
                     try {
-                        int newLen = Math.max(minCap, n << 1);
-                        Object[] newArray = new Object[newLen];
+                        final int newLen = Math.max(minCap, n << 1);
+                        final Object[] newArray = new Object[newLen];
 
                         for (int i = 0; i < n; ++i) {
                             Object o = cs[i];
                             if (o == null || o instanceof Object[]) {
-                                Object p = AA.compareAndExchange(cs,
+                                final Object p = AA.compareAndExchange(cs,
                                         i, o, newArray);
 
-                                if (p == null)
+                                if (p == null) {
                                     continue;
-                                else
+                                } else {
                                     o = p;
+                                }
                             }
-                            if (o != cs)
+                            if (o != cs) {
                                 newArray[i] = o;
+                            }
                         }
                         Cell x = null;
                         if (value != null) {
                             x = new Cell(value);
                             newArray[h] = x;
                         }
-                        cells = newArray;
+                        this.cells = newArray;
                         return x;
                     } finally {
                         BUSY.setOpaque(this, false);
                     }
                 }
             } else if (n < minCap) {
-                if (BUSY.weakCompareAndSet(this, false, true))
+                if (BUSY.weakCompareAndSet(this, false, true)) {
                     expand = true;
-                cs = cells;
+                }
+                cs = this.cells;
             } else {
                 Object x = cs[h];
 
-                if (x instanceof Object[] ncs &&
+                if (x instanceof final Object[] ncs &&
                         cs != ncs) {
                     cs = ncs;
                     continue;
                 } else if (x == null) {
                     if (value != null) {
-                        Cell newCell = new Cell(value);
+                        final Cell newCell = new Cell(value);
                         if ((x = AA.compareAndExchange(
-                                cs, h, null, newCell)) == null)
+                                cs, h, null, newCell)) == null) {
                             return newCell;
-                    } else
+                        }
+                    } else {
                         return null;
+                    }
                 }
-                if (x instanceof Cell r) {
+                if (x instanceof final Cell r) {
                     consumer.accept(r);
                     return r;
                 }
@@ -194,13 +206,14 @@ public class ConcurrentBitSet {
     }
     @Override
     public String toString() {
-        StringJoiner joiner = new StringJoiner(
+        final StringJoiner joiner = new StringJoiner(
                 ", ",
                 "[", "]");
         for (int i = 0;;) {
-            int t = nextSetBit(i);
-            if (t < 0)
+            final int t = nextSetBit(i);
+            if (t < 0) {
                 break;
+            }
             joiner.add(Integer.toString(t));
             i = t + 1;
         }
@@ -209,14 +222,15 @@ public class ConcurrentBitSet {
     }
 
     private int recalculateWordsInUse() {
-        Object[] cs = cells;
+        final Object[] cs = this.cells;
         for (int i = cs.length-1; i >= 0; --i) {
             for (Object o = cs[i]; ; ) {
-                if (o instanceof Object[] ncs) {
+                if (o instanceof final Object[] ncs) {
                     o = ncs[i];
-                } else if (o instanceof Cell r) {
-                    if (r.value == 0)
+                } else if (o instanceof final Cell r) {
+                    if (r.value == 0) {
                         break;
+                    }
                     return i + 1;
                 }
             }
@@ -225,7 +239,7 @@ public class ConcurrentBitSet {
     }
 
 
-    static int cellIndex(int bitIndex) {
+    static int cellIndex(final int bitIndex) {
         return bitIndex >> ADDRESS_BITS_PER_CELL;
     }
 
@@ -233,28 +247,28 @@ public class ConcurrentBitSet {
 
         volatile long value;
 
-        Cell(long value) {
+        Cell(final long value) {
             this.value = value;
         }
 
-        void getAndBitwiseAndRelease(long c) {
+        void getAndBitwiseAndRelease(final long c) {
             VAL.getAndBitwiseAndRelease(this, c);
         }
 
-        void getAndBitwiseOrRelease(long c) {
+        void getAndBitwiseOrRelease(final long c) {
             VAL.getAndBitwiseOrRelease(this, c);
         }
-        void getAndBitwiseXorRelease(long c) {
+        void getAndBitwiseXorRelease(final long c) {
             VAL.getAndBitwiseXorRelease(this, c);
         }
         // VarHandle mechanics
         private static final VarHandle VAL;
         static {
             try {
-                MethodHandles.Lookup l = MethodHandles.lookup();
+                final MethodHandles.Lookup l = MethodHandles.lookup();
                 VAL = l.findVarHandle(Cell.class,
                         "value", long.class);
-            } catch (ReflectiveOperationException e) {
+            } catch (final ReflectiveOperationException e) {
                 throw new ExceptionInInitializerError(e);
             }
         }
@@ -265,10 +279,10 @@ public class ConcurrentBitSet {
     private static final VarHandle BUSY;
     static {
         try {
-            MethodHandles.Lookup l = MethodHandles.lookup();
+            final MethodHandles.Lookup l = MethodHandles.lookup();
             BUSY = l.findVarHandle(ConcurrentBitSet.class,
                     "busy", boolean.class);
-        } catch (ReflectiveOperationException e) {
+        } catch (final ReflectiveOperationException e) {
             throw new ExceptionInInitializerError(e);
         }
     }

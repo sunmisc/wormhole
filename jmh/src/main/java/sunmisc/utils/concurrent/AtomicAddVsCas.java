@@ -21,7 +21,7 @@ public class AtomicAddVsCas {
 
     @Setup
     public void prepare() {
-        x = new AtomicInteger();
+        this.x = new AtomicInteger();
     }
 
     @Benchmark
@@ -35,27 +35,25 @@ public class AtomicAddVsCas {
     public int testAddAndGetContended() {
         int i;
         do {
-            i = x.getOpaque();
-        } while (!x.weakCompareAndSetVolatile(i, i + 1));
+            i = this.x.getOpaque();
+        } while (!this.x.weakCompareAndSetVolatile(i, i + 1));
         return i;
     }
 
     @Benchmark
     @Threads(1)
     public int getAndAdd() {
-        return x.getAndIncrement();
+        return this.x.getAndIncrement();
     }
 
     @Benchmark
     @Threads(Threads.MAX)
     public int getAndAddContended() {
-        return x.getAndIncrement();
+        return this.x.getAndIncrement();
     }
 
-
-
-    public static void main(String[] args) throws RunnerException {
-        Options opt = new OptionsBuilder()
+    public static void main(final String[] args) throws RunnerException {
+        final Options opt = new OptionsBuilder()
                 .include(AtomicAddVsCas.class.getSimpleName())
                 .build();
         new Runner(opt).run();

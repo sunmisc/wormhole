@@ -11,10 +11,10 @@ import static java.lang.Integer.numberOfLeadingZeros;
 public class ImmutableSegmentsMemory<E> implements ModifiableMemory<E> {
     private final Object[][] segments;
 
-    public ImmutableSegmentsMemory(int size) {
+    public ImmutableSegmentsMemory(final int size) {
         this(make(size));
     }
-    private ImmutableSegmentsMemory(Object[][] segments) {
+    private ImmutableSegmentsMemory(final Object[][] segments) {
         this.segments = segments;
     }
 
@@ -22,32 +22,33 @@ public class ImmutableSegmentsMemory<E> implements ModifiableMemory<E> {
     @Override
     public ImmutableSegmentsMemory<E> realloc(int size) {
         size = 32 - numberOfLeadingZeros(size);
-        final Object[][] prev = segments;
+        final Object[][] prev = this.segments;
         int p = prev.length - 1;
         final Object[][] copy = Arrays.copyOf(prev, size);
-        for (; p < size; ++p)
+        for (; p < size; ++p) {
             copy[p] = new Object[1 << p];
+        }
         return new ImmutableSegmentsMemory<>(copy);
     }
     @Override
     public int length() {
-        return 1 << segments.length;
+        return 1 << this.segments.length;
     }
 
     @Override
-    public E fetch(int index) {
+    public E fetch(final int index) {
         final int exponent = segmentForIndex(index);
-        final Object[] segment = segments[exponent];
+        final Object[] segment = this.segments[exponent];
         final int i = indexForSegment(segment, index);
         return (E) AA.getAcquire(segment, i);
     }
 
     @Override
     public E fetchAndStore(
-            int index, E value
+            final int index, final E value
     ) throws IndexOutOfBoundsException {
         final int exponent = segmentForIndex(index);
-        final Object[] segment = segments[exponent];
+        final Object[] segment = this.segments[exponent];
         final int i = indexForSegment(segment, index);
         return (E) AA.getAndSet(segment, i, value);
     }
@@ -55,30 +56,27 @@ public class ImmutableSegmentsMemory<E> implements ModifiableMemory<E> {
     @Override
     public E
     compareAndExchange(
-            int index, E expected, E newValue
+            final int index, final E expected, final E newValue
     ) throws IndexOutOfBoundsException {
         final int exponent = segmentForIndex(index);
-        final Object[] segment = segments[exponent];
+        final Object[] segment = this.segments[exponent];
         final int i = indexForSegment(segment, index);
         return (E) AA.compareAndExchange(segment, i, expected, newValue);
     }
 
     @Override
-    public void store(int index, E val) {
+    public void store(final int index, final E val) {
         final int exponent = segmentForIndex(index);
-        final Object[] segment = segments[exponent];
+        final Object[] segment = this.segments[exponent];
         final int i = indexForSegment(segment, index);
-
         AA.setRelease(segment, i, val);
     }
 
     @Override
     public String toString() {
-        StringBuilder builder = new StringBuilder("\n");
-
-        for (Object[] segment : segments) {
-
-            StringJoiner joiner = new StringJoiner(
+        final StringBuilder builder = new StringBuilder("\n");
+        for (final Object[] segment : this.segments) {
+            final StringJoiner joiner = new StringJoiner(
                     ", ", "[", "]");
             for (int i = 0, n = segment.length; i < n; ++i) {
                 joiner.add(String.valueOf(
@@ -93,16 +91,17 @@ public class ImmutableSegmentsMemory<E> implements ModifiableMemory<E> {
     private static int segmentForIndex(final int index) {
         return index < 2 ? 0 : 31 - numberOfLeadingZeros(index);
     }
-    private static int indexForSegment(Object[] segment, int index) {
+    private static int indexForSegment(final Object[] segment, final int index) {
         return index < 2 ? index : index - segment.length;
     }
     @SuppressWarnings("unchecked")
     private static <E> E[][] make(int size) {
         size = 32 - numberOfLeadingZeros(Math.max(size - 1, 1));
-        Object[][] alloc = new Object[size][];
+        final Object[][] alloc = new Object[size][];
         alloc[0] = new Object[2];
-        for (int k = 1; k < size; ++k)
+        for (int k = 1; k < size; ++k) {
             alloc[k] = new Object[1 << k];
+        }
         return (E[][]) alloc;
     }
 

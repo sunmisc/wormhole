@@ -1,7 +1,7 @@
 package sunmisc.utils;
 
 @FunctionalInterface
-public interface Scalar<V, E extends Throwable> {
+public interface Scalar<V> {
 
-    V value() throws E;
+    V value() throws Exception;
 }
