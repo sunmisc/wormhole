@@ -2,9 +2,8 @@ package sunmisc.utils.concurrent.lists;
 
 import java.io.Serial;
 import java.io.Serializable;
-import java.lang.invoke.MethodHandles;
-import java.lang.invoke.VarHandle;
 import java.util.*;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.StampedLock;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
@@ -42,7 +41,7 @@ public class ConcurrentArrayList<E>
     private static final long serialVersionUID = 6746284661999574553L;
     private static final int DEFAULT_CAPACITY = 0;
     private final StampedLock lock = new StampedLock();
-    private int size;
+    private final AtomicInteger size;
     private E[] elements;
 
     public ConcurrentArrayList() {
@@ -51,6 +50,7 @@ public class ConcurrentArrayList<E>
     @SuppressWarnings("unchecked")
     public ConcurrentArrayList(final int initialCapacity) {
         this.elements = (E[]) new Object[Math.max(1, initialCapacity)];
+        this.size = new AtomicInteger(0);
     }
     @SuppressWarnings("unchecked")
     public ConcurrentArrayList(final Collection<? extends E> c) {
@@ -59,7 +59,7 @@ public class ConcurrentArrayList<E>
     // for subList
     private ConcurrentArrayList(final E[] elements) {
         this.elements = elements;
-        this.size = elements.length;
+        this.size = new AtomicInteger(elements.length);
     }
 
     @Override
@@ -73,7 +73,7 @@ public class ConcurrentArrayList<E>
                     continue;
                 }
                 for (;;) {
-                    final int n = this.size;
+                    final int n = this.size.getPlain();
                     final E[] es = this.elements;
                     final E val = i < n ? es[i] : null;
                     if (this.lock.validate(stamp)) {
@@ -107,7 +107,7 @@ public class ConcurrentArrayList<E>
                 if (stamp == 0L) {
                     continue;
                 }
-                final int n = this.size;
+                final int n = this.size.getPlain();
                 final E[] es = this.elements;
                 final E val = index < n ? es[index] : null;
                 if (this.lock.validate(stamp)) {
@@ -130,10 +130,9 @@ public class ConcurrentArrayList<E>
                 if (stamp == 0L) {
                     continue;
                 }
-                final int n = this.size;
+                final int n = this.size.getPlain();
                 final E[] es = this.elements;
                 final E val = es[0];
-
                 if (this.lock.validate(stamp)) {
                     if (n == 0) {
                         throw new NoSuchElementException();
@@ -156,11 +155,10 @@ public class ConcurrentArrayList<E>
                 if (stamp == 0L) {
                     continue;
                 }
-                final int n = this.size, index = n - 1;
+                final int n = this.size.getPlain();
+                final int index = n - 1;
                 final E[] es = this.elements;
-
                 final E val = index < n && index >= 0 ? es[index] : null;
-
                 if (this.lock.validate(stamp)) {
                     if (n == 0) {
                         throw new NoSuchElementException();
@@ -180,14 +178,14 @@ public class ConcurrentArrayList<E>
         Objects.requireNonNull(e);
         final long stamp = this.lock.writeLock();
         try {
-            final int index = this.size;
+            final int index = this.size.getPlain();
             final int n = index + 1;
             E[] es = this.elements;
             if (es.length <= index) {
                 this.elements = es = allocateNextArray(es, n);
             }
             es[index] = e;
-            updateSize(n);
+            this.size.setRelease(n);
         } finally {
             this.lock.unlockWrite(stamp);
         }
@@ -198,7 +196,7 @@ public class ConcurrentArrayList<E>
     public E set(final int index, final E element) {
         final long stamp = this.lock.writeLock();
         try {
-            Objects.checkIndex(index, this.size);
+            Objects.checkIndex(index, this.size.getPlain());
             final E oldValue = this.elements[index];
             this.elements[index] = element;
             return oldValue;
@@ -211,7 +209,8 @@ public class ConcurrentArrayList<E>
     public void add(final int index, final E element) {
         final long stamp = this.lock.writeLock();
         try {
-            final int s = this.size, n = s + 1;
+            final int s = this.size.getPlain();
+            final int n = s + 1;
             Objects.checkIndex(index, n);
             E[] es = this.elements;
             if (s == es.length) {
@@ -221,8 +220,7 @@ public class ConcurrentArrayList<E>
                     es, index + 1,
                     s - index);
             es[index] = element;
-
-            updateSize(n);
+            this.size.setRelease(n);
         } finally {
             this.lock.unlockWrite(stamp);
         }
@@ -231,7 +229,7 @@ public class ConcurrentArrayList<E>
     public E remove(final int index) {
         final long stamp = this.lock.writeLock();
         try {
-            Objects.checkIndex(index, this.size);
+            Objects.checkIndex(index, this.size.getPlain());
             return fastRemove(index);
         } finally {
             this.lock.unlockWrite(stamp);
@@ -241,19 +239,19 @@ public class ConcurrentArrayList<E>
         assert this.lock.isWriteLocked();
         final E[] es = this.elements;
         final E oldVal = es[index];
-        final int newSize = this.size - 1;
+        final int newSize = this.size.getPlain() - 1;
         if (newSize > index) {
             System.arraycopy(es, index + 1, es, index, newSize - index);
         }
         es[newSize] = null;
-        updateSize(newSize);
+        this.size.setRelease(newSize);
         return oldVal;
     }
     @Override
     public boolean remove(final Object o) {
         final long stamp = this.lock.writeLock();
         try {
-            final int i = indexOfRange(o, 0, this.size);
+            final int i = indexOfRange(o, 0, this.size.getPlain());
             if (i < 0) {
                 return false;
             }
@@ -268,7 +266,7 @@ public class ConcurrentArrayList<E>
         final long stamp = this.lock.writeLock();
         try {
             // order is not important
-            updateSize(0);
+            this.size.setRelease(0);
             // help gc
             Arrays.fill(this.elements, null);
         } finally {
@@ -278,11 +276,7 @@ public class ConcurrentArrayList<E>
 
     @Override
     public int size() {
-        return (int) SIZE.getAcquire(this);
-    }
-
-    private void updateSize(final int v) {
-        SIZE.setRelease(this, v);
+        return size.getAcquire();
     }
 
     @Override
@@ -295,12 +289,11 @@ public class ConcurrentArrayList<E>
         return indexOf(o) >= 0;
     }
 
-
     @Override
     public int indexOf(final Object o) {
         final long stamp = this.lock.readLock();
         try {
-            return indexOfRange(o, 0, this.size);
+            return indexOfRange(o, 0, this.size.getPlain());
         } finally {
             this.lock.unlockRead(stamp);
         }
@@ -310,7 +303,7 @@ public class ConcurrentArrayList<E>
     public int lastIndexOf(final Object o) {
         final long stamp = this.lock.readLock();
         try {
-            return lastIndexOfRange(o, 0, this.size);
+            return lastIndexOfRange(o, 0, this.size.getPlain());
         } finally {
             this.lock.unlockRead(stamp);
         }
@@ -340,7 +333,7 @@ public class ConcurrentArrayList<E>
         Objects.requireNonNull(c);
         final long stamp = this.lock.writeLock();
         try {
-            Arrays.sort(this.elements, 0, this.size, c);
+            Arrays.sort(this.elements, 0, this.size.getPlain(), c);
         } finally {
             this.lock.unlockWrite(stamp);
         }
@@ -350,7 +343,7 @@ public class ConcurrentArrayList<E>
     public Object[] toArray() {
         final long stamp = this.lock.readLock();
         try {
-            return Arrays.copyOf(this.elements, this.size);
+            return Arrays.copyOf(this.elements, this.size.getPlain());
         } finally {
             this.lock.unlockRead(stamp);
         }
@@ -360,7 +353,7 @@ public class ConcurrentArrayList<E>
     public <T> T[] toArray(final T[] a) {
         final long stamp = this.lock.readLock();
         try {
-            final int n = this.size;
+            final int n = this.size.getPlain();
             if (a.length < n) {
                 return (T[]) Arrays.copyOf(this.elements, n, a.getClass());
             }
@@ -378,9 +371,8 @@ public class ConcurrentArrayList<E>
     public boolean containsAll(final Collection<?> c) {
         Objects.requireNonNull(c);
         final long stamp = this.lock.readLock();
-
         try {
-            final int n = this.size;
+            final int n = this.size.getPlain();
             for (final Object e : c) {
                 if (indexOfRange(e, 0, n) < 0) {
                     return false;
@@ -400,7 +392,7 @@ public class ConcurrentArrayList<E>
         }
         final long stamp = this.lock.writeLock();
         try {
-            addAll0(this.size, c);
+            addAll0(this.size.getPlain(), c);
         } finally {
             this.lock.unlockWrite(stamp);
         }
@@ -422,9 +414,11 @@ public class ConcurrentArrayList<E>
         return true;
     }
     private void addAll0(final int index, final Collection<? extends E> c) {
+        assert lock.isWriteLocked();
         final int ts = c.size();
         E[] es = this.elements;
-        final int s = this.size, newSize = s + ts;
+        final int s = this.size.getPlain();
+        final int newSize = s + ts;
         if (ts > es.length - s) {
             this.elements = es = allocateNextArray(es, newSize);
         }
@@ -438,7 +432,7 @@ public class ConcurrentArrayList<E>
         for (final E e : c) {
             es[i++] = e;
         }
-        updateSize(newSize);
+        this.size.setRelease(newSize);
     }
 
 
@@ -461,10 +455,8 @@ public class ConcurrentArrayList<E>
             final E[] es = this.elements;
             // Optimize for initial run of survivors
             int i = 0;
-            final int end = this.size;
-            for (; i < end && !filter.test(es[i]); i++) {
-                ;
-            }
+            final int end = this.size.getPlain();
+            for (; i < end && !filter.test(es[i]); i++);
             // Tolerate predicates that reentrantly access the collection for
             // read (but writers still get CME), so traverse once to find
             // elements to delete, a second pass to physically expunge.
@@ -492,8 +484,8 @@ public class ConcurrentArrayList<E>
             this.lock.unlockWrite(stamp);
         }
     }
-    // A tiny bit set implementation
 
+    // A tiny bit set implementation
     private static long[] nBits(final int n) {
         return new long[((n - 1) >> 6) + 1];
     }
@@ -521,7 +513,7 @@ public class ConcurrentArrayList<E>
         final long stamp = this.lock.writeLock();
         try {
             final E[] es = this.elements;
-            for (int i = 0, n = this.size; i < n; ++i) {
+            for (int i = 0, n = this.size.getPlain(); i < n; ++i) {
                 es[i] = operator.apply(es[i]);
             }
         } finally {
@@ -533,8 +525,8 @@ public class ConcurrentArrayList<E>
         Objects.requireNonNull(c);
         assert this.lock.isWriteLocked();
         final E[] es = this.elements;
+        final int end = this.size.getPlain();
         int r;
-        final int end = this.size;
         // Optimize for initial run of survivors
         for (r = 0;; r++) {
             if (r == end) {
@@ -559,13 +551,14 @@ public class ConcurrentArrayList<E>
     private void shiftTailOverGap(final E[] es, final int lo, final int hi) {
         final int newSize = hi - (hi - lo);
         Arrays.fill(es, newSize, hi, null);
-        updateSize(newSize);
+        this.size.setRelease(newSize);
     }
     private E[] allocateNextArray(final E[] oldArray, final int minCapacity) {
         final int oldCapacity = oldArray.length;
         final int newCapacity = Math.max(
                             minCapacity,
-                            oldCapacity + 1);
+                            oldCapacity + 1
+        );
         return Arrays.copyOf(oldArray, newCapacity);
     }
 
@@ -573,8 +566,7 @@ public class ConcurrentArrayList<E>
     public List<E> subList(final int fromIndex, final int toIndex) {
         final long stamp = this.lock.readLock();
         try {
-            Objects.checkFromToIndex(fromIndex, toIndex, this.size);
-
+            Objects.checkFromToIndex(fromIndex, toIndex, this.size.getPlain());
             // to prevent memory leaks (by holding the current list)
             // we honestly copy (I was also too lazy to implement another list)
             final E[] es = Arrays.copyOfRange(this.elements, fromIndex, toIndex);
@@ -603,7 +595,8 @@ public class ConcurrentArrayList<E>
         return Spliterators.spliterator(this,
                 Spliterator.ORDERED |
                         Spliterator.NONNULL |
-                        Spliterator.CONCURRENT);
+                        Spliterator.CONCURRENT
+        );
     }
 
     public static class Itr<E> implements ListIterator<E> {
@@ -705,12 +698,10 @@ public class ConcurrentArrayList<E>
                     if (stamp == 0L) {
                         continue;
                     }
-                    final int n = this.list.size;
+                    final int n = this.list.size.getPlain();
                     final E[] es = this.list.elements;
-
                     final E next = i < n ? es[i] : null;
                     final E prev = p >= 0 && p < n ? es[p] : null;
-
                     if (lock.validate(stamp)) {
                         if (checkOutOfBoundsIndex) {
                             Objects.checkIndex(i, n);
@@ -725,16 +716,6 @@ public class ConcurrentArrayList<E>
                     lock.unlockRead(stamp);
                 }
             }
-        }
-    }
-    private static final VarHandle SIZE;
-    static {
-        try {
-            final MethodHandles.Lookup l = MethodHandles.lookup();
-            SIZE = l.findVarHandle(ConcurrentArrayList.class,
-                    "size", int.class);
-        } catch (final ReflectiveOperationException e) {
-            throw new ExceptionInInitializerError(e);
         }
     }
 }

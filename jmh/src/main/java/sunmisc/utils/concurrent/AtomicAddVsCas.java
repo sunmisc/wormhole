@@ -17,6 +17,13 @@ import java.util.concurrent.atomic.AtomicInteger;
 @Fork(1)
 public class AtomicAddVsCas {
 
+    public static void main(final String[] args) throws RunnerException {
+        final Options opt = new OptionsBuilder()
+                .include(AtomicAddVsCas.class.getSimpleName())
+                .build();
+        new Runner(opt).run();
+    }
+
     private AtomicInteger x;
 
     @Setup
@@ -50,12 +57,5 @@ public class AtomicAddVsCas {
     @Threads(Threads.MAX)
     public int getAndAddContended() {
         return this.x.getAndIncrement();
-    }
-
-    public static void main(final String[] args) throws RunnerException {
-        final Options opt = new OptionsBuilder()
-                .include(AtomicAddVsCas.class.getSimpleName())
-                .build();
-        new Runner(opt).run();
     }
 }

@@ -2,12 +2,11 @@ package sunmisc.utils.lazy;
 
 import sunmisc.utils.Scalar;
 
-public final class SimpleLazy<V, E extends Throwable>
-        implements Lazy<V,E> {
-    private Scalar<V,E> scalar;
+public final class SimpleLazy<V, E extends Throwable> implements Lazy<V, E> {
+    private Scalar<V, E> scalar;
     private V result;
 
-    public SimpleLazy(final Scalar<V,E> scalar) {
+    public SimpleLazy(final Scalar<V, E> scalar) {
         this.scalar = scalar;
     }
 

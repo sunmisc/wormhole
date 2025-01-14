@@ -8,13 +8,21 @@ import java.util.NoSuchElementException;
 
 public interface Cursor<E> {
 
-
     Cursor<?> EMPTY = new Cursor<>() {
-        @Override public boolean exists() { return false; }
+        @Override
+        public boolean exists() {
+            return false;
+        }
 
-        @Override public Cursor<Object> next() { throw new UnsupportedOperationException(); }
+        @Override
+        public Cursor<Object> next() {
+            throw new UnsupportedOperationException();
+        }
 
-        @Override public Object element() { throw new NoSuchElementException(); }
+        @Override
+        public Object element() {
+            throw new NoSuchElementException();
+        }
     };
 
     boolean exists();
@@ -37,7 +45,7 @@ public interface Cursor<E> {
 
     final class IteratorAsCursor<E> implements Cursor<E> {
         private final Iterator<E> iterator;
-        private final Lazy<E,RuntimeException> next;
+        private final Lazy<E, RuntimeException> next;
         private final E item;
 
         public IteratorAsCursor(final Iterator<E> iterator) {
@@ -47,9 +55,10 @@ public interface Cursor<E> {
         private IteratorAsCursor(final Iterator<E> iterator, final E item) {
             this(iterator, item, iterator::next);
         }
+
         private IteratorAsCursor(final Iterator<E> iterator,
                                  final E item,
-                                 final Scalar<E,RuntimeException> next) {
+                                 final Scalar<E, RuntimeException> next) {
             this.iterator = iterator;
             this.item = item;
             this.next = new SimpleLazy<>(next);

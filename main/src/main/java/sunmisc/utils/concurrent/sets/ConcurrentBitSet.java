@@ -13,7 +13,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class ConcurrentBitSet
         extends AbstractSet<Integer>
         implements Set<Integer> {
-
     private static final int ADDRESS_BITS_PER_CELL
             = Integer.numberOfTrailingZeros(Long.SIZE);
     private static final int BITS_PER_CELL =

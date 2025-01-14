@@ -23,19 +23,20 @@ import java.util.concurrent.TimeUnit;
 @Fork(1)
 public class ThreadSafeMaps {
 
-    @Param({"A", "N", "Z"})
-    private Letter key;
-
-    private @Param MapType mapType;
-    private Map<Letter, String> map, mismatch;
-
-    public enum MapType { HASH, ENUM }
-
     public static void main(final String[] args) throws RunnerException {
         final Options opt = new OptionsBuilder()
                 .include(ThreadSafeMaps.class.getSimpleName())
                 .build();
         new Runner(opt).run();
+    }
+
+    @Param({"A", "N", "Z"})
+    private Letter key;
+    private @Param MapType mapType;
+    private Map<Letter, String> map, mismatch;
+    public enum MapType { HASH, ENUM }
+    public enum Letter {
+        A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z
     }
 
     @Setup
@@ -66,59 +67,67 @@ public class ThreadSafeMaps {
         return last;
     }
 
-    public @Benchmark String putIfAbsent() {
+    @Benchmark
+    public String putIfAbsent() {
         return this.map.putIfAbsent(this.key, "Test-Fest");
     }
 
-    public @Benchmark String put() {
+    @Benchmark
+    public String put() {
         return this.map.put(this.key, "Test-Fest");
     }
 
-    public @Benchmark String remove() {
+    @Benchmark
+    public String remove() {
         return this.map.remove(this.key);
     }
 
-    public @Benchmark boolean removeVal() {
+    @Benchmark
+    public boolean removeVal() {
         return this.map.remove(this.key, "T");
     }
 
-    public @Benchmark boolean replace() {
+    @Benchmark
+    public boolean replace() {
         return this.map.replace(this.key, "Q", "L");
     }
 
-    public @Benchmark String merge() {
+    @Benchmark
+    public String merge() {
         return this.map.merge(this.key, "Test-Fest", (k, v) -> "T");
     }
 
-    public @Benchmark String compute() {
+    @Benchmark
+    public String compute() {
         return this.map.compute(this.key, (k, v) -> "F");
     }
 
-    public @Benchmark String computeIfAbsent() {
+    @Benchmark
+    public String computeIfAbsent() {
         return this.map.computeIfAbsent(this.key, (k) -> "Q");
     }
 
-    public @Benchmark String computeIfPresent() {
+    @Benchmark
+    public String computeIfPresent() {
         return this.map.computeIfPresent(this.key, (k, v) -> "H");
     }
 
-    public @Benchmark String get() {
+    @Benchmark
+    public String get() {
         return this.map.get(this.key);
     }
 
-    public @Benchmark int clear() {
+    @Benchmark
+    public int clear() {
         this.map.clear(); return 0;
     }
 
-    public @Benchmark int mapHashCode() {
+    @Benchmark
+    public int mapHashCode() {
         return this.map.hashCode();}
 
-
-    public @Benchmark boolean mapEquals() {
+    @Benchmark
+    public boolean mapEquals() {
         return this.map.equals(this.mismatch);
-    }
-
-    public enum Letter {
-        A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z
     }
 }

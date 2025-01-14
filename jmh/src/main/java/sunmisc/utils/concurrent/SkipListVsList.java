@@ -21,6 +21,14 @@ import java.util.concurrent.TimeUnit;
 @Fork(1)
 public class SkipListVsList {
 
+    public static void main(final String[] args) throws RunnerException {
+        final Options opt = new OptionsBuilder()
+                .include(SkipListVsList.class.getSimpleName())
+                // .addProfiler(GCProfiler.class)
+                .build();
+        new Runner(opt).run();
+    }
+
     @State(Scope.Group)
     public static class LinkedListState {
         final Queue<Integer> list
@@ -59,14 +67,5 @@ public class SkipListVsList {
     @Group("skiplist")
     public Integer poll(final SkipListState state) {
         return state.skipListSet.pollFirst();
-    }
-
-
-    public static void main(final String[] args) throws RunnerException {
-        final Options opt = new OptionsBuilder()
-                .include(SkipListVsList.class.getSimpleName())
-                // .addProfiler(GCProfiler.class)
-                .build();
-        new Runner(opt).run();
     }
 }

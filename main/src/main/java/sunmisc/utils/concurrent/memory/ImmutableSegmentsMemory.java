@@ -20,12 +20,11 @@ public class ImmutableSegmentsMemory<E> implements ModifiableMemory<E> {
 
     // O(30)
     @Override
-    public ImmutableSegmentsMemory<E> realloc(int size) {
-        size = 32 - numberOfLeadingZeros(size);
+    public ImmutableSegmentsMemory<E> realloc(final int size) {
+        final int aligned = 32 - numberOfLeadingZeros(size);
         final Object[][] prev = this.segments;
-        int p = prev.length - 1;
-        final Object[][] copy = Arrays.copyOf(prev, size);
-        for (; p < size; ++p) {
+        final Object[][] copy = Arrays.copyOf(prev, aligned);
+        for (int p = prev.length - 1; p < aligned; ++p) {
             copy[p] = new Object[1 << p];
         }
         return new ImmutableSegmentsMemory<>(copy);

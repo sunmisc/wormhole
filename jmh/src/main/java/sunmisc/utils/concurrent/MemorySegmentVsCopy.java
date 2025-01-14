@@ -21,6 +21,7 @@ import java.util.concurrent.TimeUnit;
 @Fork(1)
 public class MemorySegmentVsCopy {
     private static final int SIZE = 1 << 16;
+
     public static void main(final String[] args) throws RunnerException {
         final Options opt = new OptionsBuilder()
                 .include(MemorySegmentVsCopy.class.getSimpleName())
@@ -29,6 +30,19 @@ public class MemorySegmentVsCopy {
     }
     private ModifiableMemory<Integer> memory;
     private ImmutableSegmentsMemory<Integer> experimental;
+
+    @Setup
+    public void prepare() {
+        final ModifiableMemory<Integer> mem = new ReferenceSegmentMemory<>();
+        final ImmutableSegmentsMemory<Integer> exp = new ImmutableSegmentsMemory<>(SIZE);
+        mem.realloc(SIZE);
+        this.memory = mem;
+        this.experimental = exp;
+        for (int i = 0; i < SIZE - 1; ++i) {
+            mem.store(i,i);
+            exp.store(i,i);
+        }
+    }
 
     @Benchmark
     public Integer realloc() {
@@ -44,21 +58,4 @@ public class MemorySegmentVsCopy {
         return r;
     }
 
-    @Setup
-    public void prepare() {
-        final ModifiableMemory<Integer> mem
-                        = new ReferenceSegmentMemory<>();
-        final ImmutableSegmentsMemory<Integer> exp
-                = new ImmutableSegmentsMemory<>(SIZE);
-
-        mem.realloc(SIZE);
-        this.memory = mem;
-        this.experimental = exp;
-
-        for (int i = 0; i < SIZE - 1; ++i) {
-            mem.store(i,i);
-            exp.store(i,i);
-        }
-
-    }
 }

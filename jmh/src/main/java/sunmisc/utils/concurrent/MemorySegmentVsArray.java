@@ -24,7 +24,6 @@ public class MemorySegmentVsArray {
 
     private static final int SIZE = 1 << 13;
 
-
     public static void main(final String[] args) throws RunnerException {
         final Options opt = new OptionsBuilder()
                 .include(MemorySegmentVsArray.class.getSimpleName())
@@ -33,21 +32,9 @@ public class MemorySegmentVsArray {
     }
 
     public enum ContainerType { MALLOC, ARRAY, EXP }
+
     private @Param ContainerType containerType;
     private ModifiableMemory<Integer> memory;
-
-    @Benchmark
-    public Integer read() {
-        final int r = ThreadLocalRandom.current().nextInt(SIZE -1);
-        return this.memory.fetch(r);
-    }
-
-    @Benchmark
-    public int write() {
-        final int r = ThreadLocalRandom.current().nextInt(SIZE -1);
-        this.memory.store(r,r);
-        return r;
-    }
 
     @Setup
     public void prepare() {
@@ -62,4 +49,18 @@ public class MemorySegmentVsArray {
             case EXP -> new ImmutableSegmentsMemory<>(SIZE);
         };
     }
+
+    @Benchmark
+    public Integer read() {
+        final int r = ThreadLocalRandom.current().nextInt(SIZE -1);
+        return this.memory.fetch(r);
+    }
+
+    @Benchmark
+    public int write() {
+        final int r = ThreadLocalRandom.current().nextInt(SIZE -1);
+        this.memory.store(r,r);
+        return r;
+    }
+
 }

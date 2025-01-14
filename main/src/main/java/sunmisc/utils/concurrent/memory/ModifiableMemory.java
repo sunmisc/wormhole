@@ -4,16 +4,14 @@ import java.util.function.UnaryOperator;
 
 public interface ModifiableMemory<E> extends ReadableMemory<E> {
 
-    E fetchAndStore(int index, E value
-    ) throws IndexOutOfBoundsException;
+    E fetchAndStore(int index, E value) throws IndexOutOfBoundsException;
 
     E compareAndExchange(int index,
                          E expectedValue,
                          E newValue
     ) throws IndexOutOfBoundsException;
 
-    default boolean
-    compareAndStore(final int index,
+    default boolean compareAndStore(final int index,
                     final E expectedValue,
                     final E newValue
     ) throws IndexOutOfBoundsException {
@@ -23,8 +21,10 @@ public interface ModifiableMemory<E> extends ReadableMemory<E> {
         ) == expectedValue;
     }
 
-    default void
-    store(final int index, final E value) throws IndexOutOfBoundsException {
+    default void store(
+            final int index,
+            final E value
+    ) throws IndexOutOfBoundsException {
         fetchAndStore(index, value);
     }
 
@@ -33,7 +33,8 @@ public interface ModifiableMemory<E> extends ReadableMemory<E> {
     ModifiableMemory<E> realloc(int size) throws OutOfMemoryError;
 
     default void transform(
-            final int index, final UnaryOperator<E> operator
+            final int index,
+            final UnaryOperator<E> operator
     ) throws IndexOutOfBoundsException {
         for (E current;
              !compareAndStore(index,

@@ -11,22 +11,22 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
-public final class AsyncRefreshLazy<V> implements Scalar<V> {
+public final class AsyncRefreshLazy<V, E extends Throwable> implements Scalar<V, E> {
     private static final Object EMPTY = new Object();
     private final AtomicLong time = new AtomicLong(0);
     @SuppressWarnings("unchecked")
     private final AtomicReference<V> value = new AtomicReference<>((V) EMPTY);
     private final Lock lock = new ReentrantLock();
-    private final Scalar<V> origin;
+    private final Scalar<V, E> origin;
     private final Duration latency;
     private final Executor executor;
 
-    public AsyncRefreshLazy(final Scalar<V> origin,
+    public AsyncRefreshLazy(final Scalar<V, E> origin,
                             final Duration latency) {
         this(origin, latency, Executors.newVirtualThreadPerTaskExecutor());
     }
 
-    public AsyncRefreshLazy(final Scalar<V> origin,
+    public AsyncRefreshLazy(final Scalar<V, E> origin,
                             final Duration latency,
                             final Executor executor) {
         this.origin = origin;
@@ -35,7 +35,7 @@ public final class AsyncRefreshLazy<V> implements Scalar<V> {
     }
 
     @Override
-    public V value() throws Exception {
+    public V value() throws E {
         final long to = this.time.get();
         if (to >= System.nanoTime()) {
             return this.value.get();
@@ -54,7 +54,7 @@ public final class AsyncRefreshLazy<V> implements Scalar<V> {
                     try {
                         this.value.set(this.origin.value());
                         this.time.set(now + this.latency.toNanos());
-                    } catch (final Exception ex) {
+                    } catch (final Throwable ex) {
                         throw new RuntimeException(ex);
                     }
                 });

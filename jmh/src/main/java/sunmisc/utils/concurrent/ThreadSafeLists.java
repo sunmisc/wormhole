@@ -42,7 +42,6 @@ public class ThreadSafeLists {
             case SYNC -> Collections.synchronizedList(new ArrayList<>());
             case OPTIMISTIC -> new ConcurrentArrayList<>();
         };
-
         for (int i = 0; i < SIZE; ++i) {
             this.list.add(i);
         }
@@ -56,10 +55,12 @@ public class ThreadSafeLists {
         final int r = ThreadLocalRandom.current().nextInt(SIZE);
         return this.list.get(r);
     }
+
     @Benchmark
     public Integer getFirst() {
         return this.list.getFirst();
     }
+
     @Benchmark
     public boolean containsAs() {
         return this.list.containsAll(this.mismatch);

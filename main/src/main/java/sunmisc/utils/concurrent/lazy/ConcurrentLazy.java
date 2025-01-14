@@ -19,13 +19,13 @@ import java.util.concurrent.locks.ReentrantLock;
  * There is also an idea to write my own lightweight version of locking
  * on waiting for the first writer, but this idea may not be so promising
  */
-public final class ConcurrentLazy<V> implements Lazy<V> {
-    private final AtomicReference<Lazy<V>> outcome;
+public final class ConcurrentLazy<V, E extends Throwable> implements Lazy<V, E> {
+    private final AtomicReference<Lazy<V, E>> outcome;
 
-    public ConcurrentLazy(final Scalar<V> scalar) {
-        final class Sync extends ReentrantLock implements Lazy<V> {
+    public ConcurrentLazy(final Scalar<V, E> scalar) {
+        final class Sync extends ReentrantLock implements Lazy<V, E> {
             @Override
-            public V value() throws Exception {
+            public V value() throws E {
                 lock();
                 try {
                     if (completed()) {
@@ -68,7 +68,7 @@ public final class ConcurrentLazy<V> implements Lazy<V> {
 
 
     @Override
-    public V value() throws Exception {
+    public V value() throws E {
         return this.outcome.get().value();
     }
 
