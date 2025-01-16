@@ -1,7 +1,6 @@
 package sunmisc.utils.concurrent.lazy;
 
 import sunmisc.utils.Scalar;
-import sunmisc.utils.lazy.Lazy;
 
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicReference;
@@ -19,28 +18,23 @@ import java.util.concurrent.locks.ReentrantLock;
  * There is also an idea to write my own lightweight version of locking
  * on waiting for the first writer, but this idea may not be so promising
  */
-public final class ConcurrentLazy<V, E extends Throwable> implements Lazy<V, E> {
-    private final AtomicReference<Lazy<V, E>> outcome;
+public final class ConcurrentLazy<V, E extends Throwable> implements Scalar<V, E> {
+    private final AtomicReference<Scalar<V, E>> outcome;
 
     public ConcurrentLazy(final Scalar<V, E> scalar) {
-        final class Sync extends ReentrantLock implements Lazy<V, E> {
+        final class Sync extends ReentrantLock implements Scalar<V, E> {
             @Override
             public V value() throws E {
                 lock();
                 try {
-                    if (completed()) {
+                    if (ConcurrentLazy.this.outcome.getPlain() != this) {
                         return ConcurrentLazy.this.value();
                     }
                     final V val = scalar.value();
-                    ConcurrentLazy.this.outcome.set(new Lazy<>() {
+                    ConcurrentLazy.this.outcome.set(new Scalar<>() {
                         @Override
                         public V value() {
                             return val;
-                        }
-
-                        @Override
-                        public boolean completed() {
-                            return true;
                         }
 
                         @Override
@@ -55,10 +49,6 @@ public final class ConcurrentLazy<V, E extends Throwable> implements Lazy<V, E> 
             }
 
             @Override
-            public boolean completed() {
-                return ConcurrentLazy.this.outcome.get() == this;
-            }
-            @Override
             public String toString() {
                 return "uninitialized";
             }
@@ -70,11 +60,6 @@ public final class ConcurrentLazy<V, E extends Throwable> implements Lazy<V, E> 
     @Override
     public V value() throws E {
         return this.outcome.get().value();
-    }
-
-    @Override
-    public boolean completed() {
-        return this.outcome.get().completed();
     }
 
     @Override

@@ -36,7 +36,7 @@ import static java.util.Objects.requireNonNull;
  * @param <V> the type of mapped values
  */
 @SuppressWarnings("unchecked")
-public class ConcurrentEnumMap<K extends Enum<K>,V>
+public final class ConcurrentEnumMap<K extends Enum<K>,V>
         implements ConcurrentMap<K,V>, Serializable {
     @Serial
     private static final long serialVersionUID = 9193424923934859345L;
@@ -72,30 +72,29 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
         if (c == 0L) {
             return;
         }
-        LongAdder a = (LongAdder) ADDER.getOpaque(this);
-        if (a == null) {
+        LongAdder adder = (LongAdder) ADDER.getOpaque(this);
+        if (adder == null) {
             final LongAdder newAdder = new LongAdder();
-
-            if ((a = (LongAdder) ADDER.compareAndExchange(
+            if ((adder = (LongAdder) ADDER.compareAndExchange(
                     this, null, newAdder)) == null) {
-                a = newAdder;
+                adder = newAdder;
             }
         }
-        a.add(c);
+        adder.add(c);
     }
 
     @Override
     public int size() {
-        final LongAdder a = (LongAdder) ADDER.getOpaque(this);
-        return a == null ? 0
+        final LongAdder adder = (LongAdder) ADDER.getOpaque(this);
+        return adder == null ? 0
                 // let's handle the overflow
-                : Math.clamp(a.sum(), 0, Integer.MAX_VALUE);
+                : Math.clamp(adder.sum(), 0, Integer.MAX_VALUE);
     }
 
     @Override
     public boolean isEmpty() {
-        final LongAdder a = (LongAdder) ADDER.getOpaque(this);
-        return a == null || a.sum() <= 0L;
+        final LongAdder adder = (LongAdder) ADDER.getOpaque(this);
+        return adder == null || adder.sum() <= 0L;
     }
 
     @Override
@@ -120,7 +119,6 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
     @Override
     public void putAll(final Map<? extends K, ? extends V> m) {
         requireNonNull(m);
-
         long delta = 0L;
         final V[] tab = this.table;
         for (final Map.Entry<? extends K, ? extends V> e : m.entrySet()) {
@@ -135,7 +133,6 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
     @Override
     public void forEach(final BiConsumer<? super K, ? super V> action) {
         requireNonNull(action);
-
         final K[] ks = this.keys; final V[] tab = this.table;
         for (int i = 0, len = tab.length; i < len; ++i) {
             final V v = tabAt(tab, i);
@@ -181,7 +178,6 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
     @Override
     public boolean containsValue(final Object value) {
         requireNonNull(value);
-
         final V[] tab = this.table;
         for (int i = 0, len = tab.length; i < len; ++i) {
             if (Objects.equals(tabAt(tab, i), value)) {
@@ -195,7 +191,6 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
     public V putIfAbsent(final K key, final V value) {
         requireNonNull(key);
         requireNonNull(value);
-
         final int i = key.ordinal();
         final V[] tab = this.table; V p;
         if ((p = tabAt(tab, i)) == null &&
@@ -206,15 +201,13 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
     }
 
     @Override
-    public V compute(final K key, final
-    BiFunction<? super K, ? super V, ? extends V> remappingFunction) {
+    public V compute(final K key, final BiFunction<? super K, ? super V, ? extends V> remapping) {
         requireNonNull(key);
-        requireNonNull(remappingFunction);
-
+        requireNonNull(remapping);
         final int i = key.ordinal();
         final V[] tab = this.table;
         for (V oldVal;;) {
-            final V newVal = remappingFunction.apply(key,
+            final V newVal = remapping.apply(key,
                     oldVal = tabAt(tab, i));
             // strong CAS to minimize function call
             if (casTabAt(tab, i, oldVal, newVal)) {
@@ -224,16 +217,14 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
         }
     }
     @Override
-    public V computeIfAbsent(final K key, final
-    Function<? super K, ? extends V> mappingFunction) {
+    public V computeIfAbsent(final K key, final Function<? super K, ? extends V> remapping) {
         requireNonNull(key);
-        requireNonNull(mappingFunction);
-
+        requireNonNull(remapping);
         final int i = key.ordinal();
         final V[] tab = this.table;
         final V oldVal = tabAt(tab, i), newVal;
         if (oldVal != null ||
-                (newVal = mappingFunction.apply(key)) == null) {
+                (newVal = remapping.apply(key)) == null) {
             return oldVal;
         }
         // strong CAS to minimize function call
@@ -245,18 +236,16 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
         return witness;
     }
     @Override
-    public V computeIfPresent(final K key, final
-    BiFunction<? super K, ? super V, ? extends V> remappingFunction) {
+    public V computeIfPresent(final K key, final BiFunction<? super K, ? super V, ? extends V> remapping) {
         requireNonNull(key);
-        requireNonNull(remappingFunction);
-
+        requireNonNull(remapping);
         final int i = key.ordinal();
         for (final V[] tab = this.table;;) {
             final V oldVal = tabAt(tab, i);
             if (oldVal == null) {
                 return null;
             }
-            final V newVal = remappingFunction.apply(key, oldVal);
+            final V newVal = remapping.apply(key, oldVal);
             // strong CAS to minimize function call
             final V witness = caeTabAt(tab, i, oldVal, newVal);
 
@@ -271,12 +260,11 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
         }
     }
     @Override
-    public V merge(final K key, final V value, final
-    BiFunction<? super V, ? super V, ? extends V> remappingFunction) {
+    public V merge(final K key, final V value,
+                   final BiFunction<? super V, ? super V, ? extends V> remapping) {
         requireNonNull(key);
         requireNonNull(value);
-        requireNonNull(remappingFunction);
-
+        requireNonNull(remapping);
         final int i = key.ordinal();
         for (final V[] tab = this.table;;) {
             final V oldVal = tabAt(tab, i);
@@ -286,7 +274,7 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
                     return value;
                 }
             } else {
-                final V newVal = remappingFunction.apply(oldVal, value);
+                final V newVal = remapping.apply(oldVal, value);
                 // strong CAS to minimize function call
                 if (casTabAt(tab, i, oldVal, newVal)) {
                     if (newVal == null) {
@@ -300,9 +288,8 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
 
     @Override
     public boolean remove(final Object key, final Object value) {
-        requireNonNull(value);
-
         if (checkKey(key)) {
+            requireNonNull(value);
             final int i = ((Enum<?>) key).ordinal();
             for (final V[] tab = this.table;;) {
                 final V v = tabAt(tab, i);
@@ -327,7 +314,6 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
         requireNonNull(key);
         requireNonNull(oldValue);
         requireNonNull(newValue);
-
         final int i = key.ordinal();
         for (final V[] tab = this.table;;) {
             final V v = tabAt(tab, i);
@@ -350,10 +336,8 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
     }
 
     @Override
-    public void replaceAll(final
-    BiFunction<? super K, ? super V, ? extends V> function) {
-        requireNonNull(function);
-
+    public void replaceAll(final BiFunction<? super K, ? super V, ? extends V> remapping) {
+        requireNonNull(remapping);
         final K[] ks = this.keys; final V[] tab = this.table;
         for (int i = 0, len = tab.length; i < len; ++i) {
             for (;;) {
@@ -361,9 +345,8 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
                 if (oldVal == null) {
                     break;
                 }
-                final V newVal = requireNonNull(function.apply(ks[i], oldVal)),
+                final V newVal = requireNonNull(remapping.apply(ks[i], oldVal)),
                         witness = caeTabAt(tab, i, oldVal, newVal);
-
                 if (witness == oldVal || witness == null) {
                     break;
                 }
@@ -398,12 +381,12 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
         }
         return this.entrySet = new EntrySetView<>(this);
     }
+
     /**
      * Helper method for EntrySetView.removeIf.
      */
     boolean removeEntryIf(final Predicate<? super Entry<K,V>> function) {
         requireNonNull(function);
-
         boolean removed = false;
         final K[] ks = this.keys; final V[] tab = this.table;
         for (int i = 0, len = tab.length; i < len; ++i) {
@@ -413,7 +396,6 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
             }
             final K k = ks[i];
             final Map.Entry<K,V> entry = Map.entry(k,v);
-
             if (function.test(entry) && remove(k,v)) {
                 removed = true;
             }
@@ -423,7 +405,6 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
 
     boolean removeValueIf(final Predicate<? super V> function) {
         requireNonNull(function);
-
         boolean removed = false;
         final K[] ks = this.keys; final V[] tab = this.table;
         for (int i = 0, len = tab.length; i < len; ++i) {
@@ -449,13 +430,26 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
         KeySetView(final ConcurrentEnumMap<K,V> map) {
             this.map = map;
         }
-        @Override public int size() { return this.map.size(); }
-        @Override public boolean isEmpty() { return this.map.isEmpty(); }
-        @Override public void clear() {
-            this.map.clear(); }
 
-        @Override public Iterator<K>
-        iterator() { return new KeyIterator<>(this.map); }
+        @Override
+        public int size() {
+            return this.map.size();
+        }
+
+        @Override
+        public boolean isEmpty() {
+            return this.map.isEmpty();
+        }
+
+        @Override
+        public void clear() {
+            this.map.clear();
+        }
+
+        @Override
+        public Iterator<K> iterator() {
+            return new KeyIterator<>(this.map);
+        }
 
         @Override
         public void forEach(final Consumer<? super K> action) {
@@ -463,11 +457,15 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
             this.map.forEach((k, v) -> action.accept(k));
         }
 
-        @Override public boolean
-        contains(final Object o) { return this.map.containsKey(o); }
+        @Override
+        public boolean contains(final Object o) {
+            return this.map.containsKey(o);
+        }
 
-        @Override public boolean
-        remove(final Object o) { return this.map.remove(o) != null; }
+        @Override
+        public boolean remove(final Object o) {
+            return this.map.remove(o) != null;
+        }
 
         @Override
         public Spliterator<K> spliterator() {
@@ -475,9 +473,9 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
                     Spliterator.DISTINCT |
                             Spliterator.NONNULL |
                             Spliterator.ORDERED |
-                            Spliterator.CONCURRENT);
+                            Spliterator.CONCURRENT
+            );
         }
-
     }
 
     private static final class ValuesView<K extends Enum<K>,V>
@@ -490,17 +488,30 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
         ValuesView(final ConcurrentEnumMap<? super K, V> map) {
             this.map = map;
         }
-        @Override public int size() { return this.map.size(); }
-        @Override public boolean isEmpty() { return this.map.isEmpty(); }
-        @Override public void clear() {
-            this.map.clear(); }
+        @Override
+        public int size() {
+            return this.map.size();
+        }
 
+        @Override
+        public boolean isEmpty() {
+            return this.map.isEmpty();
+        }
 
-        @Override public Iterator<V>
-        iterator() { return new ValueIterator<>(this.map); }
+        @Override
+        public void clear() {
+            this.map.clear();
+        }
 
-        @Override public boolean
-        contains(final Object o) { return this.map.containsValue(o); }
+        @Override
+        public Iterator<V> iterator() {
+            return new ValueIterator<>(this.map);
+        }
+
+        @Override
+        public boolean contains(final Object o) {
+            return this.map.containsValue(o);
+        }
 
         @Override
         public void forEach(final Consumer<? super V> action) {
@@ -518,13 +529,13 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
             return Spliterators.spliterator(this,
                     Spliterator.NONNULL |
                             Spliterator.ORDERED |
-                            Spliterator.CONCURRENT);
+                            Spliterator.CONCURRENT
+            );
         }
 
         @Override
         public boolean remove(final Object o) {
             requireNonNull(o);
-
             final V[] tab = this.map.table;
             for (int i = 0, len = tab.length; i < len; ++i) {
                 for (;;) {
@@ -555,10 +566,20 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
         EntrySetView(final ConcurrentEnumMap<K,V> map) {
             this.map = map;
         }
-        @Override public int size() { return this.map.size(); }
-        @Override public boolean isEmpty() { return this.map.isEmpty(); }
-        @Override public void clear() {
-            this.map.clear(); }
+        @Override
+        public int size() {
+            return this.map.size();
+        }
+
+        @Override
+        public boolean isEmpty() {
+            return this.map.isEmpty();
+        }
+
+        @Override
+        public void clear() {
+            this.map.clear();
+        }
 
         @Override
         public Spliterator<Entry<K, V>> spliterator() {
@@ -566,11 +587,14 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
                     Spliterator.DISTINCT |
                             Spliterator.NONNULL |
                             Spliterator.ORDERED |
-                            Spliterator.CONCURRENT);
+                            Spliterator.CONCURRENT
+            );
         }
 
-        @Override public Iterator<Map.Entry<K,V>>
-        iterator() { return new EntryIterator<>(this.map); }
+        @Override
+        public Iterator<Map.Entry<K,V>> iterator() {
+            return new EntryIterator<>(this.map);
+        }
 
         @Override
         public void forEach(final Consumer<? super Entry<K,V>> action) {
@@ -590,6 +614,7 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
                     (k = e.getKey()) != null &&
                     Objects.equals(this.map.get(k), e.getValue());
         }
+
         @Override
         public boolean remove(final Object o) {
             final Object k; final Object v;
@@ -598,6 +623,7 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
                     (v = e.getValue()) != null &&
                     this.map.remove(k,v));
         }
+
         @Override
         public boolean add(final Entry<K,V> e) {
             return this.map.put(e.getKey(), e.getValue()) == null;
@@ -605,6 +631,7 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
     }
     private static final class KeyIterator<K extends Enum<K>,V>
             extends EnumMapIterator<K,V,K> {
+
         KeyIterator(final ConcurrentEnumMap<K,V> map) {
             super(map);
         }
@@ -627,6 +654,7 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
 
     private static final class ValueIterator<K extends Enum<K>,V>
             extends EnumMapIterator<K,V,V> {
+
         ValueIterator(final ConcurrentEnumMap<K,V> map) {
             super(map);
         }
@@ -650,6 +678,7 @@ public class ConcurrentEnumMap<K extends Enum<K>,V>
 
     private static final class EntryIterator<K extends Enum<K>,V>
             extends EnumMapIterator<K,V,Map.Entry<K,V>> {
+
         EntryIterator(final ConcurrentEnumMap<K,V> map) {
             super(map);
         }

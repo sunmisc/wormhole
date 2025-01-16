@@ -2,92 +2,72 @@ package sunmisc.utils.concurrent.memory;
 
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
-import java.util.Objects;
+import java.util.Arrays;
 import java.util.StringJoiner;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 
 import static java.lang.Integer.numberOfLeadingZeros;
 
-@SuppressWarnings("unchecked")
-public final class BitwiseSegmentMemory<E extends Number>
+public final class BitwiseSegmentsMemory<E extends Number>
         implements BitwiseModifiableMemory<E> {
 
-    private static final int MAXIMUM_CAPACITY = 1 << 30;
-    private static final VarHandle AA
-            = MethodHandles.arrayElementVarHandle(BitwiseModifiableMemory[].class);
-    private static final VarHandle CTL;
+    private final BitwiseModifiableMemory<E>[] areas;
+    private final Function<Integer, Area<E>> mapped;
 
-    static {
-        try {
-            final MethodHandles.Lookup l = MethodHandles.lookup();
-            CTL = l.findVarHandle(BitwiseSegmentMemory.class,
-                    "ctl", int.class);
-        } catch (final ReflectiveOperationException e) {
-            throw new ExceptionInInitializerError(e);
-        }
+    private BitwiseSegmentsMemory(final BitwiseModifiableMemory<E>[] areas,
+                                  final Function<Integer, Area<E>> mapped) {
+        this.areas = areas;
+        this.mapped = mapped;
     }
 
-    private final BitwiseModifiableMemory<E>[] areas;
-    private final Function<Integer, Area<E>> mapping;
-    private volatile int ctl = 2;
+    public BitwiseSegmentsMemory(final Class<E> componentType, final int size) {
+        final Function<Integer, Area<E>> map = typeToArea(componentType);
+        final int segments = 32 - numberOfLeadingZeros(Math.max(size - 1, 1));
+        @SuppressWarnings("unchecked")
+        final BitwiseModifiableMemory<E>[] areas = new BitwiseModifiableMemory[segments];
+        areas[0] = map.apply(2);
+        for (int segment = 1; segment < segments; ++segment) {
+            areas[segment] = map.apply(1 << segment);
+        }
+        this.mapped = map;
+        this.areas = areas;
+    }
 
-    public BitwiseSegmentMemory(final Class<E> componentType) {
+    @SuppressWarnings("unchecked")
+    private static <E extends Number> Function<Integer, Area<E>> typeToArea(Class<E> type) {
         final Function<Integer, Area<E>> map;
-        if (componentType == byte.class) {
+        if (type == byte.class) {
             map = len -> (Area<E>) new AreaBytes(new byte[len]);
-        } else if (componentType == short.class) {
+        } else if (type == short.class) {
             map = len -> (Area<E>) new AreaShorts(new short[len]);
-        } else if (componentType == int.class) {
+        } else if (type == int.class) {
             map = len -> (Area<E>) new AreaInts(new int[len]);
-        } else if (componentType == long.class) {
+        } else if (type == long.class) {
             map = len -> (Area<E>) new AreaLongs(new long[len]);
         } else {
             throw new IllegalArgumentException("Component type is not bitwise");
         }
-        final BitwiseModifiableMemory<E>[] areas = new BitwiseModifiableMemory[30];
-        areas[0] = map.apply(2);
-        this.areas = areas;
-        this.mapping = map;
+        return map;
+    }
+
+    private static int areaForIndex(final int index) {
+        return index < 2 ? 0 : 31 - numberOfLeadingZeros(index);
     }
 
     private int indexForArea(final BitwiseModifiableMemory<E> area, final int index) {
         return index < 2 ? index : index - area.length();
     }
-    private static int areaForIndex(final int index) {
-        return index < 2 ? 0 : 31 - numberOfLeadingZeros(index);
-    }
 
     @Override
-    public ModifiableMemory<E> realloc(int size) {
-        size = Math.max(2, size);
-        int n = -1 >>> numberOfLeadingZeros(size - 1);
-        if (n < 0 || n >= MAXIMUM_CAPACITY) {
-            throw new OutOfMemoryError("Required array size too large");
+    public BitwiseModifiableMemory<E> realloc(int size) {
+        final int aligned = 32 - numberOfLeadingZeros(Math.max(size - 1, 1));
+        final BitwiseModifiableMemory<E>[] prev = this.areas;
+        final BitwiseModifiableMemory<E>[] copy = Arrays.copyOf(prev, aligned);
+        for (int p = prev.length; p < aligned; ++p) {
+            copy[p] = this.mapped.apply(1 << p);
         }
-        int c; ++n;
-        while ((c = this.ctl) != n) {
-            if (c > n) {
-                final int index = areaForIndex(c - 1);
-                final BitwiseModifiableMemory<E> area = this.areas[index];
-                if (area != null &&
-                        CTL.weakCompareAndSet(this, c, c >> 1))
-                    // casSegmentAt(r, segment, null);
-                {
-                    freeSegment(index);
-                }
-            } else {
-                final int index = areaForIndex(c);
-                final var h = this.mapping.apply(1 << index);
-                if (casSegmentAt(index, null, h)) {
-                    final int k = (int) CTL.compareAndExchange(this, c, c << 1);
-                    if (k < c) {
-                        casSegmentAt(index, h, null);
-                    }
-                }
-            }
-        }
-        return this;
+        return new BitwiseSegmentsMemory<>(copy, this.mapped);
     }
 
     @Override
@@ -135,16 +115,13 @@ public final class BitwiseSegmentMemory<E extends Number>
 
     @Override
     public int length() {
-        return (int) CTL.getAcquire(this);
+        return 1 << this.areas.length;
     }
 
     private E compute(final int index,
                       final BiFunction<Integer, BitwiseModifiableMemory<E>, E> consumer) {
-        Objects.checkIndex(index, length());
-
         final int exponent = areaForIndex(index);
         final BitwiseModifiableMemory<E> area = this.areas[exponent];
-
         final int i = indexForArea(area, index);
         return consumer.apply(i, area);
     }
@@ -160,21 +137,10 @@ public final class BitwiseSegmentMemory<E extends Number>
         return joiner.toString();
     }
 
-
-    private void freeSegment(final int i) {
-        AA.setRelease(this.areas, i, null);
-    }
-
-    private boolean
-    casSegmentAt(final int i, final Area<E> expected, final Area<E> area) {
-        return AA.compareAndSet(this.areas, i, expected, area);
-    }
-
-
     private interface Area<E extends Number>
             extends BitwiseModifiableMemory<E> {
         @Override
-        default ModifiableMemory<E> realloc(final int size) throws OutOfMemoryError {
+        default BitwiseModifiableMemory<E> realloc(final int size) throws OutOfMemoryError {
             throw new UnsupportedOperationException();
         }
     }

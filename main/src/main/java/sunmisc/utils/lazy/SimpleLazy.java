@@ -2,7 +2,7 @@ package sunmisc.utils.lazy;
 
 import sunmisc.utils.Scalar;
 
-public final class SimpleLazy<V, E extends Throwable> implements Lazy<V, E> {
+public final class SimpleLazy<V, E extends Throwable> implements Scalar<V, E> {
     private Scalar<V, E> scalar;
     private V result;
 
@@ -18,10 +18,5 @@ public final class SimpleLazy<V, E extends Throwable> implements Lazy<V, E> {
             this.scalar = null;
         }
         return res;
-    }
-
-    @Override
-    public boolean completed() {
-        return this.scalar == null;
     }
 }

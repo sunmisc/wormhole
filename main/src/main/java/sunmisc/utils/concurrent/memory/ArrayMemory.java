@@ -55,9 +55,7 @@ public final class ArrayMemory<E> implements ModifiableMemory<E> {
 
     @Override
     public ModifiableMemory<E> realloc(final int size) throws OutOfMemoryError {
-        return new ArrayMemory<>(
-                Arrays.copyOf(this.array, size)
-        );
+        return new ArrayMemory<>(Arrays.copyOf(this.array, size));
     }
 
     @Override

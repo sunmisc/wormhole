@@ -1,10 +1,10 @@
 package sunmisc.utils;
 
-import sunmisc.utils.lazy.Lazy;
 import sunmisc.utils.lazy.SimpleLazy;
 
 import java.util.Iterator;
 import java.util.NoSuchElementException;
+import java.util.function.Consumer;
 
 public interface Cursor<E> {
 
@@ -31,21 +31,26 @@ public interface Cursor<E> {
 
     Cursor<E> next();
 
-
     // bruh
     default void remove() {
         throw new UnsupportedOperationException();
     }
 
+    default void forEach(final Consumer<E> action) {
+        for (Cursor<E> cursor = this; cursor.exists(); cursor = cursor.next()) {
+            action.accept(cursor.element());
+        }
+    }
 
     @SuppressWarnings("unchecked")
     static <E> Cursor<E> empty() {
         return (Cursor<E>) EMPTY;
     }
 
+
     final class IteratorAsCursor<E> implements Cursor<E> {
         private final Iterator<E> iterator;
-        private final Lazy<E, RuntimeException> next;
+        private final Scalar<E, RuntimeException> next;
         private final E item;
 
         public IteratorAsCursor(final Iterator<E> iterator) {
@@ -53,7 +58,7 @@ public interface Cursor<E> {
         }
 
         private IteratorAsCursor(final Iterator<E> iterator, final E item) {
-            this(iterator, item, iterator::next);
+            this(iterator, item, new SimpleLazy<>(iterator::next));
         }
 
         private IteratorAsCursor(final Iterator<E> iterator,
@@ -61,7 +66,7 @@ public interface Cursor<E> {
                                  final Scalar<E, RuntimeException> next) {
             this.iterator = iterator;
             this.item = item;
-            this.next = new SimpleLazy<>(next);
+            this.next = next;
         }
 
         @Override
@@ -87,7 +92,6 @@ public interface Cursor<E> {
         }
     }
     final class CursorAsIterator<E> implements Iterator<E> {
-
         private Cursor<E> cursor;
 
         public CursorAsIterator(final Cursor<E> origin) {

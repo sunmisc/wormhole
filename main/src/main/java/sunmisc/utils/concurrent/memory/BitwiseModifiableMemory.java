@@ -10,4 +10,7 @@ public interface BitwiseModifiableMemory<E extends Number>
     E fetchAndBitwiseAnd(int index, E mask);
 
     E fetchAndBitwiseXor(int index, E mask);
+
+    @Override
+    BitwiseModifiableMemory<E> realloc(int size) throws OutOfMemoryError;
 }

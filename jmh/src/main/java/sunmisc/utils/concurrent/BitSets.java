@@ -7,7 +7,8 @@ import org.openjdk.jmh.runner.options.Options;
 import org.openjdk.jmh.runner.options.OptionsBuilder;
 import sunmisc.utils.concurrent.sets.ConcurrentBitSet;
 
-import java.util.BitSet;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 
@@ -27,24 +28,26 @@ public class BitSets {
         new Runner(opt).run();
     }
 
+    private static final int SIZE = 1 << 14;
     private ConcurrentBitSet concurrentBitSet;
-    private BitSet bitSet;
+    private ConcurrentMap<Integer, Boolean> bitSet;
 
     @Setup
     public void init() {
         this.concurrentBitSet = new ConcurrentBitSet();
-        this.bitSet = new BitSet();
+        this.bitSet = new ConcurrentHashMap<>();
+    }
+
+    @Benchmark
+    public int putInConcurrentBitSet() {
+        final int delta = ThreadLocalRandom.current().nextInt(0, SIZE);
+        this.concurrentBitSet.add(delta);
+        return delta;
     }
     @Benchmark
-    public int concurrentWrite() {
-        final int i = ThreadLocalRandom.current().nextInt(0, 1024);
-        this.concurrentBitSet.add(i);
-        return i;
-    }
-    @Benchmark
-    public int plainWrite() {
-        final int i = ThreadLocalRandom.current().nextInt(0, 1024);
-        this.bitSet.set(i);
-        return i;
+    public int putInConcurrentMap() {
+        final int delta = ThreadLocalRandom.current().nextInt(0, SIZE);
+        this.bitSet.put(delta, true);
+        return delta;
     }
 }

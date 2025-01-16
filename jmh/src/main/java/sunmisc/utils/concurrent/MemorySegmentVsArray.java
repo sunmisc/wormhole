@@ -6,9 +6,8 @@ import org.openjdk.jmh.runner.RunnerException;
 import org.openjdk.jmh.runner.options.Options;
 import org.openjdk.jmh.runner.options.OptionsBuilder;
 import sunmisc.utils.concurrent.memory.ArrayMemory;
-import sunmisc.utils.concurrent.memory.ImmutableSegmentsMemory;
+import sunmisc.utils.concurrent.memory.SegmentsMemory;
 import sunmisc.utils.concurrent.memory.ModifiableMemory;
-import sunmisc.utils.concurrent.memory.ReferenceSegmentMemory;
 
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
@@ -31,22 +30,16 @@ public class MemorySegmentVsArray {
         new Runner(opt).run();
     }
 
-    public enum ContainerType { MALLOC, ARRAY, EXP }
+    public enum ContainerType { MALLOC, ARRAY }
 
-    private @Param ContainerType containerType;
+    private @Param ContainerType type;
     private ModifiableMemory<Integer> memory;
 
     @Setup
     public void prepare() {
-        this.memory = switch (this.containerType) {
-            case MALLOC -> {
-                final ModifiableMemory<Integer> mem
-                        = new ReferenceSegmentMemory<>();
-                mem.realloc(SIZE);
-                yield mem;
-            }
+        this.memory = switch (this.type) {
+            case MALLOC -> new SegmentsMemory<>(SIZE);
             case ARRAY -> new ArrayMemory<>(SIZE);
-            case EXP -> new ImmutableSegmentsMemory<>(SIZE);
         };
     }
 

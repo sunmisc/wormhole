@@ -28,20 +28,15 @@ public interface ModifiableMemory<E> extends ReadableMemory<E> {
         fetchAndStore(index, value);
     }
 
-    // base operations
-
     ModifiableMemory<E> realloc(int size) throws OutOfMemoryError;
 
-    default void transform(
-            final int index,
-            final UnaryOperator<E> operator
+    default void transform(final int index,
+                           final UnaryOperator<E> operator
     ) throws IndexOutOfBoundsException {
-        for (E current;
-             !compareAndStore(index,
-                     current = fetch(index),
-                     operator.apply(current)
+        for (E current; !compareAndStore(index,
+                current = fetch(index),
+                operator.apply(current)
              );) {
-            ;
         }
     }
 }
