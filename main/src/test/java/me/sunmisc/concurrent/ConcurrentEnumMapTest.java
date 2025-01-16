@@ -21,7 +21,7 @@ public final class ConcurrentEnumMapTest {
 
     @Test
     public void modifyMapWithLetters() {
-        final Map<Letter, Integer> hashMap = Collections.synchronizedMap(
+        final Map<Letter, Integer> lockedEnumMap = Collections.synchronizedMap(
                 new EnumMap<>(Letter.class)
         );
         try (final ExecutorService executor = Executors.newWorkStealingPool()) {
@@ -31,19 +31,19 @@ public final class ConcurrentEnumMapTest {
                     for (int i = 0; i < 128; i++) {
                         final Letter letter = Letter.rand();
                         this.map.put(letter, i);
-                        hashMap.put(letter, i);
+                        lockedEnumMap.put(letter, i);
                     }
                 });
                 executor.execute(() -> {
-                    hashMap.forEach((letter, value) -> {
+                    lockedEnumMap.forEach((letter, value) -> {
                         this.map.remove(letter, value);
-                        hashMap.remove(letter, value);
+                        lockedEnumMap.remove(letter, value);
                     });
                 });
             }
         }
         Assertions.assertEquals(
-                hashMap,
+                lockedEnumMap,
                 this.map,
                 "Maps should match"
         );
