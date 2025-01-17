@@ -56,7 +56,7 @@ public final class AsyncRefreshLazy<V, E extends Throwable> implements Scalar<V,
                         throw new RuntimeException(ex);
                     }
                 });
-                return value.get();
+                return this.value.get();
             }
             return old;
         } finally {

@@ -15,7 +15,7 @@ public interface ModifiableMemory<E> extends ReadableMemory<E> {
                     final E expectedValue,
                     final E newValue
     ) throws IndexOutOfBoundsException {
-        return compareAndExchange(index,
+        return this.compareAndExchange(index,
                 expectedValue,
                 newValue
         ) == expectedValue;
@@ -25,7 +25,7 @@ public interface ModifiableMemory<E> extends ReadableMemory<E> {
             final int index,
             final E value
     ) throws IndexOutOfBoundsException {
-        fetchAndStore(index, value);
+        this.fetchAndStore(index, value);
     }
 
     ModifiableMemory<E> realloc(int size) throws OutOfMemoryError;
@@ -33,8 +33,8 @@ public interface ModifiableMemory<E> extends ReadableMemory<E> {
     default void transform(final int index,
                            final UnaryOperator<E> operator
     ) throws IndexOutOfBoundsException {
-        for (E current; !compareAndStore(index,
-                current = fetch(index),
+        for (E current; !this.compareAndStore(index,
+                current = this.fetch(index),
                 operator.apply(current)
              );) {
         }

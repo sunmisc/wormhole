@@ -50,7 +50,7 @@ public class ConcurrentBitSet {
     public boolean set(final int bitIndex) {
         final int index = cellIndex(bitIndex);
         final long mask = 1L << bitIndex;
-        return (Objects.requireNonNull(putVal(index, mask,
+        return (Objects.requireNonNull(this.putVal(index, mask,
                 x -> x.getAndBitwiseOrRelease(mask))).value & mask) == 0;
     }
 
@@ -59,7 +59,7 @@ public class ConcurrentBitSet {
         final int index = cellIndex(bitIndex);
         final long mask = ~(1L << bitIndex);
 
-        putVal(index, null,
+        this.putVal(index, null,
                 x -> x.getAndBitwiseAndRelease(mask));
     }
 
@@ -67,7 +67,7 @@ public class ConcurrentBitSet {
         final int index = cellIndex(bitIndex);
         final long mask = (1L << bitIndex);
 
-        putVal(index, mask,
+        this.putVal(index, mask,
                 x -> x.getAndBitwiseXorRelease(mask));
     }
     public int nextSetBit(final int fromIndex) {
@@ -210,7 +210,7 @@ public class ConcurrentBitSet {
                 ", ",
                 "[", "]");
         for (int i = 0;;) {
-            final int t = nextSetBit(i);
+            final int t = this.nextSetBit(i);
             if (t < 0) {
                 break;
             }

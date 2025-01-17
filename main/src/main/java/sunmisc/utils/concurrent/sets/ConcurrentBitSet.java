@@ -91,14 +91,14 @@ public final class ConcurrentBitSet extends AbstractSet<Integer> implements Set<
 
     @Override
     public Iterator<Integer> iterator() {
-        final int i = nextSetBit(0);
+        final int i = this.nextSetBit(0);
         return new Cursor.CursorAsIterator<>(i < 0
                 ? Cursor.empty()
                 : new CursorImpl(this, i)
         );
     }
     public Iterator<Integer> iterator(final int index) {
-        Objects.checkIndex(index, memory.get().length());
+        Objects.checkIndex(index, this.memory.get().length());
         return new Cursor.CursorAsIterator<>(
                 new CursorImpl(this, index)
         );

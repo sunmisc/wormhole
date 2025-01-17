@@ -47,6 +47,28 @@ public interface Cursor<E> {
         return (Cursor<E>) EMPTY;
     }
 
+    final class OnceCursor<E> implements Cursor<E> {
+        private final E item;
+
+        public OnceCursor(final E item) {
+            this.item = item;
+        }
+
+        @Override
+        public boolean exists() {
+            return true;
+        }
+
+        @Override
+        public E element() {
+            return this.item;
+        }
+
+        @Override
+        public Cursor<E> next() {
+            return empty();
+        }
+    }
 
     final class IteratorAsCursor<E> implements Cursor<E> {
         private final Iterator<E> iterator;

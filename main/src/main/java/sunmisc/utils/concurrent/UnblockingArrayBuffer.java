@@ -159,7 +159,7 @@ public class UnblockingArrayBuffer<E>
                 }
             }
             else if (o instanceof final ForwardingPointer f) {
-                arr = helpTransfer(f, i);
+                arr = this.helpTransfer(f, i);
             } else if (o instanceof final Cell n) {
                 final Object val = n.value;
                 // Replacing a dead cell
@@ -192,7 +192,7 @@ public class UnblockingArrayBuffer<E>
             if ((o = arrayAt(arr, i)) == null) {
                 return null;
             } else if (o instanceof final ForwardingPointer f) {
-                arr = helpTransfer(f, i);
+                arr = this.helpTransfer(f, i);
             } else if (o instanceof final Cell<?> n &&
                     weakCasAt(arr, i, o, null)) {
                 return (E) n.value;
@@ -216,7 +216,7 @@ public class UnblockingArrayBuffer<E>
                 }
             }
             else if (o instanceof final ForwardingPointer f) {
-                arr = helpTransfer(f, i);
+                arr = this.helpTransfer(f, i);
             } else if (o instanceof final Cell<?> n) {
                 final Object v = n.value;
                 if (v == null) {
@@ -243,7 +243,7 @@ public class UnblockingArrayBuffer<E>
             if ((o = arrayAt(arr, i)) == null) {
                 return false;
             } else if (o instanceof final ForwardingPointer f) {
-                arr = helpTransfer(f, i);
+                arr = this.helpTransfer(f, i);
             } else if (o instanceof final Cell n) {
                 return n.cas(oldVal, newVal);
             }
@@ -263,7 +263,7 @@ public class UnblockingArrayBuffer<E>
             if ((o = arrayAt(arr, i)) == null) {
                 return false;
             } else if (o instanceof final ForwardingPointer f) {
-                arr = helpTransfer(f, i);
+                arr = this.helpTransfer(f, i);
             } else if (o instanceof final Cell n) {
                 final Object val = n.value;
                 /*
@@ -279,7 +279,7 @@ public class UnblockingArrayBuffer<E>
                 for (o = arrayAt(arr, i);;) {
                     switch (o) {
                         case null -> { return false; }
-                        case final ForwardingPointer f -> arr = helpTransfer(f, i);
+                        case final ForwardingPointer f -> arr = this.helpTransfer(f, i);
                         case final Cell<?> p -> {
                             if (n != p) {
                                 return false;
@@ -306,7 +306,7 @@ public class UnblockingArrayBuffer<E>
                 // we will commit either the same array or the next one
                 if (p instanceof final ForwardingPointer f &&
                         // recheck
-                        tryTransfer(f) instanceof final ForwardingPointer r &&
+                        this.tryTransfer(f) instanceof final ForwardingPointer r &&
                         !BRIDGE.weakCompareAndSet(
                                 this, r,
                                 new ContainerBridge(r.nextCells))) {
@@ -326,7 +326,7 @@ public class UnblockingArrayBuffer<E>
 
     private Object[]
     helpTransfer(final ForwardingPointer a, final int targetIndex) {
-        final ContainerBridge p = tryTransfer(a);
+        final ContainerBridge p = this.tryTransfer(a);
 
         final Object[] array = p instanceof final ForwardingPointer f
                 ? f.nextCells : p.array;
@@ -551,7 +551,7 @@ public class UnblockingArrayBuffer<E>
     @Serial
     private void writeObject(final ObjectOutputStream s)
             throws IOException {
-        forEach((k,v) -> {
+        this.forEach((k, v) -> {
             try {
                 s.writeObject(k); s.writeObject(v);
             } catch (final IOException e) {

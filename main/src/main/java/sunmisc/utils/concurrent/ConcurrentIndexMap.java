@@ -26,7 +26,7 @@ public abstract class ConcurrentIndexMap<E>
 
     @Override
     public E replace(final Integer key, final E value) {
-        return put(key,value);
+        return this.put(key,value);
     }
 
 

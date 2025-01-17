@@ -34,12 +34,12 @@ public class WeakCASx86 {
 
     @Actor
     public void actor1(final L_Result r) {
-        r.r1 = weakCasFail() ? 1 : 0;
+        r.r1 = this.weakCasFail() ? 1 : 0;
     }
 
     @Actor
     public void actor2(final L_Result r) {
-        r.r1 = weakCasFail() ? 1 : 0;
+        r.r1 = this.weakCasFail() ? 1 : 0;
     }
 
     private static final VarHandle LOC;

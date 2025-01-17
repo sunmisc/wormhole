@@ -48,7 +48,7 @@ public class ConcurrentBitSetTest {
     public void deleteBit() {
         try (final ExecutorService executor = Executors.newWorkStealingPool()) {
             executor.execute(() -> {
-                for (int index : this.bits) {
+                for (final int index : this.bits) {
                     this.bits.remove(index);
                     this.hash.remove(index);
                 }

@@ -62,7 +62,7 @@ public final class ArrayMemory<E> implements ModifiableMemory<E> {
     public String toString() {
         final StringJoiner joiner = new StringJoiner(
                 ", ", "[", "]");
-        forEach(x -> joiner.add(Objects.toString(x)));
+        this.forEach(x -> joiner.add(Objects.toString(x)));
         return joiner.toString();
     }
 

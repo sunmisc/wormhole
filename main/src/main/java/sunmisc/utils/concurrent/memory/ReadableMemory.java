@@ -13,8 +13,8 @@ public interface ReadableMemory<E> {
 
     default Cursor<E> origin() {
         try {
-            return length() > 0
-                    ? new CursorImpl<>(0, this, fetch(0))
+            return this.length() > 0
+                    ? new CursorImpl<>(0, this, this.fetch(0))
                     : Cursor.empty();
         } catch (final IndexOutOfBoundsException e) {
             return Cursor.empty();
@@ -24,7 +24,7 @@ public interface ReadableMemory<E> {
     default void forEach(final Consumer<? super E> action) {
         Objects.requireNonNull(action);
 
-        for (Cursor<E> cursor = origin();
+        for (Cursor<E> cursor = this.origin();
              cursor.exists();
              cursor = cursor.next()) {
             action.accept(cursor.element());

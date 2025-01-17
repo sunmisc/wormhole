@@ -34,7 +34,7 @@ public class AtomicAddVsCas {
     @Benchmark
     @Threads(1)
     public int testAddAndGet() {
-        return testAddAndGetContended();
+        return this.testAddAndGetContended();
     }
 
     @Benchmark

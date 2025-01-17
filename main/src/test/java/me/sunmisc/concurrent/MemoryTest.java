@@ -15,7 +15,7 @@ import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
-public final class ImmMemoryTest {
+public final class MemoryTest {
 
     @Test
     public void modifyMemory() {

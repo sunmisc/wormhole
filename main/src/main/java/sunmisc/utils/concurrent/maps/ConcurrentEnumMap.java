@@ -65,7 +65,7 @@ public final class ConcurrentEnumMap<K extends Enum<K>,V>
         this.keys = (K[]) m.keySet().toArray(Enum[]::new);
         this.keyType = this.keys[0].getDeclaringClass();
         this.table = (V[]) new Object[this.keyType.getEnumConstants().length];
-        putAll(m);
+        this.putAll(m);
     }
 
     private void addCount(final long c) {
@@ -99,7 +99,7 @@ public final class ConcurrentEnumMap<K extends Enum<K>,V>
 
     @Override
     public V get(final Object key) {
-        return checkKey(key)
+        return this.checkKey(key)
                 ? tabAt(this.table, ((Enum<?>)key).ordinal())
                 : null;
     }
@@ -111,7 +111,7 @@ public final class ConcurrentEnumMap<K extends Enum<K>,V>
         final int i = key.ordinal();
         final V prev = getAndSetAt(this.table, i, value);
         if (prev == null) {
-            addCount(1L);
+            this.addCount(1L);
         }
         return prev;
     }
@@ -127,7 +127,7 @@ public final class ConcurrentEnumMap<K extends Enum<K>,V>
                 ++delta;
             }
         }
-        addCount(delta);
+        this.addCount(delta);
     }
 
     @Override
@@ -153,17 +153,17 @@ public final class ConcurrentEnumMap<K extends Enum<K>,V>
                 --delta;
             }
         }
-        addCount(delta);
+        this.addCount(delta);
     }
 
     @Override
     public V remove(final Object key) {
-        if (checkKey(key)) {
+        if (this.checkKey(key)) {
             final int i = ((Enum<?>) key).ordinal();
             final V[] tab = this.table; V p = null;
             if (tabAt(tab, i) != null &&
                     (p = getAndSetAt(tab, i, null)) != null) {
-                addCount(-1L);
+                this.addCount(-1L);
             }
             return p;
         }
@@ -172,7 +172,7 @@ public final class ConcurrentEnumMap<K extends Enum<K>,V>
 
     @Override
     public boolean containsKey(final Object key) {
-        return get(key) != null;
+        return this.get(key) != null;
     }
 
     @Override
@@ -195,7 +195,7 @@ public final class ConcurrentEnumMap<K extends Enum<K>,V>
         final V[] tab = this.table; V p;
         if ((p = tabAt(tab, i)) == null &&
                 (p = caeTabAt(tab, i, null, value)) == null) {
-            addCount(1L);
+            this.addCount(1L);
         }
         return p;
     }
@@ -211,7 +211,7 @@ public final class ConcurrentEnumMap<K extends Enum<K>,V>
                     oldVal = tabAt(tab, i));
             // strong CAS to minimize function call
             if (casTabAt(tab, i, oldVal, newVal)) {
-                addCount(oldVal == null ? 1L : newVal == null ? -1L : 0);
+                this.addCount(oldVal == null ? 1L : newVal == null ? -1L : 0);
                 return newVal;
             }
         }
@@ -230,7 +230,7 @@ public final class ConcurrentEnumMap<K extends Enum<K>,V>
         // strong CAS to minimize function call
         final V witness = caeTabAt(tab, i, null, newVal);
         if (witness == null) {
-            addCount(1L);
+            this.addCount(1L);
             return newVal;
         }
         return witness;
@@ -251,7 +251,7 @@ public final class ConcurrentEnumMap<K extends Enum<K>,V>
 
             if (witness == oldVal) {
                 if (newVal == null) {
-                    addCount(-1L);
+                    this.addCount(-1L);
                 }
                 return newVal;
             } else if (witness == null) {
@@ -270,7 +270,7 @@ public final class ConcurrentEnumMap<K extends Enum<K>,V>
             final V oldVal = tabAt(tab, i);
             if (oldVal == null) {
                 if (weakCasTabAt(tab, i, null, value)) {
-                    addCount(1L);
+                    this.addCount(1L);
                     return value;
                 }
             } else {
@@ -278,7 +278,7 @@ public final class ConcurrentEnumMap<K extends Enum<K>,V>
                 // strong CAS to minimize function call
                 if (casTabAt(tab, i, oldVal, newVal)) {
                     if (newVal == null) {
-                        addCount(-1L);
+                        this.addCount(-1L);
                     }
                     return newVal;
                 }
@@ -288,7 +288,7 @@ public final class ConcurrentEnumMap<K extends Enum<K>,V>
 
     @Override
     public boolean remove(final Object key, final Object value) {
-        if (checkKey(key)) {
+        if (this.checkKey(key)) {
             requireNonNull(value);
             final int i = ((Enum<?>) key).ordinal();
             for (final V[] tab = this.table;;) {
@@ -296,7 +296,7 @@ public final class ConcurrentEnumMap<K extends Enum<K>,V>
                 if (Objects.equals(v, value)) {
                     final V witness = caeTabAt(tab, i, v, null);
                     if (witness == v) {
-                        addCount(-1);
+                        this.addCount(-1);
                         return true;
                     } else if (witness == null) {
                         return false;
@@ -332,7 +332,7 @@ public final class ConcurrentEnumMap<K extends Enum<K>,V>
 
     @Override
     public V replace(final K key, final V value) {
-        return put(key, value);
+        return this.put(key, value);
     }
 
     @Override
@@ -396,7 +396,7 @@ public final class ConcurrentEnumMap<K extends Enum<K>,V>
             }
             final K k = ks[i];
             final Map.Entry<K,V> entry = Map.entry(k,v);
-            if (function.test(entry) && remove(k,v)) {
+            if (function.test(entry) && this.remove(k,v)) {
                 removed = true;
             }
         }
@@ -411,7 +411,7 @@ public final class ConcurrentEnumMap<K extends Enum<K>,V>
             final V v = tabAt(tab, i);
             if (v != null &&
                     function.test(v) &&
-                    remove(ks[i],v)) {
+                    this.remove(ks[i],v)) {
                 removed = true;
             }
         }
@@ -642,7 +642,7 @@ public final class ConcurrentEnumMap<K extends Enum<K>,V>
                 throw new NoSuchElementException();
             }
             final int i = this.lastRet = this.index;
-            advance();
+            this.advance();
             return this.map.keys[i];
         }
         @Override
@@ -666,7 +666,7 @@ public final class ConcurrentEnumMap<K extends Enum<K>,V>
                 throw new NoSuchElementException();
             }
             this.lastRet = this.index;
-            advance();
+            this.advance();
             return e;
         }
         @Override
@@ -689,7 +689,7 @@ public final class ConcurrentEnumMap<K extends Enum<K>,V>
                 throw new NoSuchElementException();
             }
             final int i = this.lastRet = this.index;
-            advance();
+            this.advance();
             return Map.entry(this.map.keys[i], e);
         }
 
@@ -709,7 +709,7 @@ public final class ConcurrentEnumMap<K extends Enum<K>,V>
 
         EnumMapIterator(final ConcurrentEnumMap<K,V> map) {
             this.map = map;
-            advance();
+            this.advance();
         }
 
         void advance() {
@@ -767,7 +767,7 @@ public final class ConcurrentEnumMap<K extends Enum<K>,V>
             final K[] ks = this.keys; final V[] tab = this.table;
             final int maxSize = ks.length;
             final int sz = m.size();
-            if (sz > maxSize || sz != size()) {
+            if (sz > maxSize || sz != this.size()) {
                 return false;
             }
             for (int i = 0, n = tab.length; i < n; ++i) {
@@ -785,7 +785,7 @@ public final class ConcurrentEnumMap<K extends Enum<K>,V>
     @Serial
     private void writeObject(final ObjectOutputStream s) throws IOException {
         s.writeObject(this.keyType);
-        forEach((k,v) -> {
+        this.forEach((k, v) -> {
             try {
                 s.writeObject(k);
                 s.writeObject(v);
@@ -810,7 +810,7 @@ public final class ConcurrentEnumMap<K extends Enum<K>,V>
                     ++delta;
                 }
             } else {
-                addCount(delta);
+                this.addCount(delta);
                 return;
             }
         }
@@ -819,7 +819,7 @@ public final class ConcurrentEnumMap<K extends Enum<K>,V>
     public String toString() {
         final StringJoiner joiner = new StringJoiner(
                 ", ", "[", "]");
-        forEach((k,v) -> joiner.add(k + "=" + v));
+        this.forEach((k, v) -> joiner.add(k + "=" + v));
         return joiner.toString();
     }
 

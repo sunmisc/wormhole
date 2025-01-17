@@ -35,7 +35,7 @@ public final class SegmentsMemory<E> implements ModifiableMemory<E> {
     public E fetch(final int index) {
         final int exponent = segmentForIndex(index);
         final ReadableMemory<E> segment = this.segments[exponent];
-        final int i = indexForSegment(segment, index);
+        final int i = this.indexForSegment(segment, index);
         return segment.fetch(i);
     }
 
@@ -45,7 +45,7 @@ public final class SegmentsMemory<E> implements ModifiableMemory<E> {
     ) throws IndexOutOfBoundsException {
         final int exponent = segmentForIndex(index);
         final ModifiableMemory<E> segment = this.segments[exponent];
-        final int i = indexForSegment(segment, index);
+        final int i = this.indexForSegment(segment, index);
         return segment.fetchAndStore(i, value);
     }
 
@@ -56,7 +56,7 @@ public final class SegmentsMemory<E> implements ModifiableMemory<E> {
     ) throws IndexOutOfBoundsException {
         final int exponent = segmentForIndex(index);
         final ModifiableMemory<E> segment = this.segments[exponent];
-        final int i = indexForSegment(segment, index);
+        final int i = this.indexForSegment(segment, index);
         return segment.compareAndExchange(i, expected, newValue);
     }
 
@@ -64,7 +64,7 @@ public final class SegmentsMemory<E> implements ModifiableMemory<E> {
     public void store(final int index, final E val) {
         final int exponent = segmentForIndex(index);
         final ModifiableMemory<E> segment = this.segments[exponent];
-        final int i = indexForSegment(segment, index);
+        final int i = this.indexForSegment(segment, index);
         segment.store(i, val);
     }
 

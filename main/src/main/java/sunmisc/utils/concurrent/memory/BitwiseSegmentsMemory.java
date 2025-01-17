@@ -35,7 +35,7 @@ public final class BitwiseSegmentsMemory<E extends Number>
     }
 
     @SuppressWarnings("unchecked")
-    private static <E extends Number> Function<Integer, Area<E>> typeToArea(Class<E> type) {
+    private static <E extends Number> Function<Integer, Area<E>> typeToArea(final Class<E> type) {
         final Function<Integer, Area<E>> map;
         if (type == byte.class) {
             map = len -> (Area<E>) new AreaBytes(new byte[len]);
@@ -60,7 +60,7 @@ public final class BitwiseSegmentsMemory<E extends Number>
     }
 
     @Override
-    public BitwiseModifiableMemory<E> realloc(int size) {
+    public BitwiseModifiableMemory<E> realloc(final int size) {
         final int aligned = 32 - numberOfLeadingZeros(Math.max(size - 1, 1));
         final BitwiseModifiableMemory<E>[] prev = this.areas;
         final BitwiseModifiableMemory<E>[] copy = Arrays.copyOf(prev, aligned);
@@ -72,12 +72,12 @@ public final class BitwiseSegmentsMemory<E extends Number>
 
     @Override
     public E fetch(final int index) {
-        return compute(index, (i,area) -> area.fetch(i));
+        return this.compute(index, (i, area) -> area.fetch(i));
     }
 
     @Override
     public void store(final int index, final E value) {
-        compute(index, (i,area) -> {
+        this.compute(index, (i, area) -> {
             area.store(i, value);
             return value;
         });
@@ -85,32 +85,32 @@ public final class BitwiseSegmentsMemory<E extends Number>
 
     @Override
     public E compareAndExchange(final int index, final E expected, final E value) {
-        return compute(index, (i, area) -> area.compareAndExchange(i, expected, value));
+        return this.compute(index, (i, area) -> area.compareAndExchange(i, expected, value));
     }
 
     @Override
     public E fetchAndStore(final int index, final E value) {
-        return compute(index, (i, area) -> area.fetchAndStore(i, value));
+        return this.compute(index, (i, area) -> area.fetchAndStore(i, value));
     }
 
     @Override
     public E fetchAndAdd(final int index, final E value) {
-        return compute(index, (i,area) -> area.fetchAndAdd(i, value));
+        return this.compute(index, (i, area) -> area.fetchAndAdd(i, value));
     }
 
     @Override
     public E fetchAndBitwiseOr(final int index, final E mask) {
-        return compute(index, (i,area) -> area.fetchAndBitwiseOr(i, mask));
+        return this.compute(index, (i, area) -> area.fetchAndBitwiseOr(i, mask));
     }
 
     @Override
     public E fetchAndBitwiseAnd(final int index, final E mask) {
-        return compute(index, (i,area) -> area.fetchAndBitwiseAnd(i, mask));
+        return this.compute(index, (i, area) -> area.fetchAndBitwiseAnd(i, mask));
     }
 
     @Override
     public E fetchAndBitwiseXor(final int index, final E mask) {
-        return compute(index, (i,area) -> area.fetchAndBitwiseXor(i, mask));
+        return this.compute(index, (i, area) -> area.fetchAndBitwiseXor(i, mask));
     }
 
     @Override
@@ -122,7 +122,7 @@ public final class BitwiseSegmentsMemory<E extends Number>
                       final BiFunction<Integer, BitwiseModifiableMemory<E>, E> consumer) {
         final int exponent = areaForIndex(index);
         final BitwiseModifiableMemory<E> area = this.areas[exponent];
-        final int i = indexForArea(area, index);
+        final int i = this.indexForArea(area, index);
         return consumer.apply(i, area);
     }
     @Override

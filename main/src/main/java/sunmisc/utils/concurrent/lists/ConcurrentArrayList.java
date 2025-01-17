@@ -182,7 +182,7 @@ public class ConcurrentArrayList<E>
             final int n = index + 1;
             E[] es = this.elements;
             if (es.length <= index) {
-                this.elements = es = allocateNextArray(es, n);
+                this.elements = es = this.allocateNextArray(es, n);
             }
             es[index] = e;
             this.size.setRelease(n);
@@ -214,7 +214,7 @@ public class ConcurrentArrayList<E>
             Objects.checkIndex(index, n);
             E[] es = this.elements;
             if (s == es.length) {
-                this.elements = es = allocateNextArray(es, n);
+                this.elements = es = this.allocateNextArray(es, n);
             }
             System.arraycopy(es, index,
                     es, index + 1,
@@ -230,7 +230,7 @@ public class ConcurrentArrayList<E>
         final long stamp = this.lock.writeLock();
         try {
             Objects.checkIndex(index, this.size.getPlain());
-            return fastRemove(index);
+            return this.fastRemove(index);
         } finally {
             this.lock.unlockWrite(stamp);
         }
@@ -251,11 +251,11 @@ public class ConcurrentArrayList<E>
     public boolean remove(final Object o) {
         final long stamp = this.lock.writeLock();
         try {
-            final int i = indexOfRange(o, 0, this.size.getPlain());
+            final int i = this.indexOfRange(o, 0, this.size.getPlain());
             if (i < 0) {
                 return false;
             }
-            fastRemove(i);
+            this.fastRemove(i);
             return true;
         } finally {
             this.lock.unlockWrite(stamp);
@@ -276,24 +276,24 @@ public class ConcurrentArrayList<E>
 
     @Override
     public int size() {
-        return size.getAcquire();
+        return this.size.getAcquire();
     }
 
     @Override
     public boolean isEmpty() {
-        return size() == 0;
+        return this.size() == 0;
     }
 
     @Override
     public boolean contains(final Object o) {
-        return indexOf(o) >= 0;
+        return this.indexOf(o) >= 0;
     }
 
     @Override
     public int indexOf(final Object o) {
         final long stamp = this.lock.readLock();
         try {
-            return indexOfRange(o, 0, this.size.getPlain());
+            return this.indexOfRange(o, 0, this.size.getPlain());
         } finally {
             this.lock.unlockRead(stamp);
         }
@@ -303,7 +303,7 @@ public class ConcurrentArrayList<E>
     public int lastIndexOf(final Object o) {
         final long stamp = this.lock.readLock();
         try {
-            return lastIndexOfRange(o, 0, this.size.getPlain());
+            return this.lastIndexOfRange(o, 0, this.size.getPlain());
         } finally {
             this.lock.unlockRead(stamp);
         }
@@ -374,7 +374,7 @@ public class ConcurrentArrayList<E>
         try {
             final int n = this.size.getPlain();
             for (final Object e : c) {
-                if (indexOfRange(e, 0, n) < 0) {
+                if (this.indexOfRange(e, 0, n) < 0) {
                     return false;
                 }
             }
@@ -392,7 +392,7 @@ public class ConcurrentArrayList<E>
         }
         final long stamp = this.lock.writeLock();
         try {
-            addAll0(this.size.getPlain(), c);
+            this.addAll0(this.size.getPlain(), c);
         } finally {
             this.lock.unlockWrite(stamp);
         }
@@ -407,20 +407,20 @@ public class ConcurrentArrayList<E>
         }
         final long stamp = this.lock.writeLock();
         try {
-            addAll0(index, c);
+            this.addAll0(index, c);
         } finally {
             this.lock.unlockWrite(stamp);
         }
         return true;
     }
     private void addAll0(final int index, final Collection<? extends E> c) {
-        assert lock.isWriteLocked();
+        assert this.lock.isWriteLocked();
         final int ts = c.size();
         E[] es = this.elements;
         final int s = this.size.getPlain();
         final int newSize = s + ts;
         if (ts > es.length - s) {
-            this.elements = es = allocateNextArray(es, newSize);
+            this.elements = es = this.allocateNextArray(es, newSize);
         }
         final int numMoved = s - index;
         if (numMoved > 0) {
@@ -441,7 +441,7 @@ public class ConcurrentArrayList<E>
         Objects.requireNonNull(c);
         final long stamp = this.lock.writeLock();
         try {
-            return batchRemove(c, false);
+            return this.batchRemove(c, false);
         } finally {
             this.lock.unlockWrite(stamp);
         }
@@ -475,7 +475,7 @@ public class ConcurrentArrayList<E>
                         es[w++] = es[i];
                     }
                 }
-                shiftTailOverGap(es, w, end);
+                this.shiftTailOverGap(es, w, end);
                 return true;
             } else {
                 return false;
@@ -501,7 +501,7 @@ public class ConcurrentArrayList<E>
         Objects.requireNonNull(c);
         final long stamp = this.lock.writeLock();
         try {
-            return batchRemove(c, true);
+            return this.batchRemove(c, true);
         } finally {
             this.lock.unlockWrite(stamp);
         }
@@ -544,7 +544,7 @@ public class ConcurrentArrayList<E>
                 }
             }
         } finally {
-            shiftTailOverGap(es, w, end);
+            this.shiftTailOverGap(es, w, end);
         }
         return true;
     }
@@ -577,12 +577,12 @@ public class ConcurrentArrayList<E>
     }
     @Override
     public Iterator<E> iterator() {
-        return listIterator();
+        return this.listIterator();
     }
 
     @Override
     public ListIterator<E> listIterator() {
-        return listIterator(0);
+        return this.listIterator(0);
     }
 
     @Override
@@ -607,7 +607,7 @@ public class ConcurrentArrayList<E>
         public Itr(final ConcurrentArrayList<E> list, final int index) {
             this.list = list;
             this.index = index;
-            advance(true);
+            this.advance(true);
         }
 
         @Override
@@ -627,7 +627,7 @@ public class ConcurrentArrayList<E>
                 throw new NoSuchElementException();
             }
             this.lastRet = this.index++;
-            advance(false);
+            this.advance(false);
             return e;
         }
         @Override
@@ -637,7 +637,7 @@ public class ConcurrentArrayList<E>
                 throw new NoSuchElementException();
             }
             this.lastRet = this.index--;
-            advance(false);
+            this.advance(false);
             return e;
         }
 

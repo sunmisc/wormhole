@@ -25,7 +25,7 @@ public final class ConcurrentLazy<V, E extends Throwable> implements Scalar<V, E
         final class Sync extends ReentrantLock implements Scalar<V, E> {
             @Override
             public V value() throws E {
-                lock();
+                this.lock();
                 try {
                     if (ConcurrentLazy.this.outcome.getPlain() != this) {
                         return ConcurrentLazy.this.value();
@@ -44,7 +44,7 @@ public final class ConcurrentLazy<V, E extends Throwable> implements Scalar<V, E
                     });
                     return val;
                 } finally {
-                    unlock();
+                    this.unlock();
                 }
             }
 

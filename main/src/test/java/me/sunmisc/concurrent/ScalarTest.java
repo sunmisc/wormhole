@@ -65,7 +65,7 @@ public final class ScalarTest {
 
         @Override
         public Integer value() throws RuntimeException {
-            return count.getAndIncrement();
+            return this.count.getAndIncrement();
         }
     }
 }
