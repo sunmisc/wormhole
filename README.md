@@ -1,6 +1,6 @@
 # Wormhole Framework of Structures
 
-![Logo](https://github.com/sunmisc/MyConcurrencyWorld/assets/49918694/43fb0920-1fcb-441e-b72f-f64e42008f64)
+<img alt="logo" src="https://github.com/sunmisc/MyConcurrencyWorld/assets/49918694/43fb0920-1fcb-441e-b72f-f64e42008f64" height="100px" />
 
 This repository is primarily for fun rather than practicality. That said, it adheres to a personal code quality policy detailed below.
 
