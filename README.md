@@ -1,16 +1,31 @@
-# Wormhole framework of structures
-<img alt="logo" src="https://github.com/sunmisc/MyConcurrencyWorld/assets/49918694/43fb0920-1fcb-441e-b72f-f64e42008f64" height="100px" />
+# Wormhole Framework of Structures
 
-This repository is more just for fun than practical.
-Nevertheless, I offer my policy on code quality:
-1. No `synchronized`. I favor minimalism. Objects should not have some magical properties like await/notify... attached to them. and synchronization by object. Use `java.util.concurrent.lock` instead
-2. The same goes for the keyword - `volatile`. I don't recommend to use it too, as well as VarHandle, instead you can conveniently use `java.util.concurrent.atomic`. Still, sometimes, in critical moments to reduce the footprint of an object you can use `VarHandle` `volatile`
-3. No `ThreadLocal`. The concept of ThreadLocal is terrible IMHO, it is unsafe and causes memory leak problems
-   (This list may be added to)
+![Logo](https://github.com/sunmisc/MyConcurrencyWorld/assets/49918694/43fb0920-1fcb-441e-b72f-f64e42008f64)
 
-## Some practical uses:
+This repository is primarily for fun rather than practicality. That said, it adheres to a personal code quality policy detailed below.
 
-Example use `Scalar`
+---
+
+## Code Quality Policy
+
+1. **No `synchronized`**
+   - I favor minimalism. Objects should not have magical properties like `await`/`notify` or synchronization by object.
+   - Instead, use `java.util.concurrent.lock`.
+
+2. **No `volatile`**
+   - I do not recommend using `volatile` or `VarHandle` unless absolutely necessary.
+   - Prefer `java.util.concurrent.atomic`. However, in critical moments where reducing the footprint of an object is essential, `VarHandle volatile` can be used.
+
+3. **No `ThreadLocal`**
+   - The concept of `ThreadLocal` is inherently unsafe and prone to memory leaks.
+
+> _This list may be expanded over time._
+
+---
+
+## Practical Examples
+
+### Example: Using `Scalar`
 ```java
 final Scalar<User, IOException> user = new RefreshLazy<>(
         new Scalar<>() {
@@ -23,10 +38,10 @@ final Scalar<User, IOException> user = new RefreshLazy<>(
 );
 ```
 
-Example use `ModifiableMemory`
+---
 
+### Example: Using `ModifiableMemory`
 ```java
-
 final AtomicReference<ModifiableMemory<Node<K, V>>> table =
         new AtomicReference<>(
                 new SegmentsMemory<>(16)
@@ -42,7 +57,7 @@ void put(final K key, final V value) {
    final Node<K, V> node = memory.fetch(index);
    if (node == null) {
       final Node<K, V> witness = memory.compareAndExchange(
-              index, 
+              index,
               null,
               newNode
       );
@@ -59,8 +74,9 @@ void put(final K key, final V value) {
 }
 ```
 
-Example use `Cursor`
+---
 
+### Example: Using `Cursor`
 ```java
 public final class ListCursor<E> implements Cursor<E> {
     private final List<E> origin;
@@ -97,11 +113,21 @@ public static void main(final String[] args) {
            .boxed()
            .toList();
    new ListCursor<>(
-           list, 
-           list.getFirst(), 
+           list,
+           list.getFirst(),
            0
    ).forEach(e -> System.out.println(e));
 }
 ```
 
-You will need Maven 3.3+ and Java 21+
+---
+
+## Requirements
+
+- **Maven**: 3.3+
+- **Java**: 21+
+
+---
+
+Feel free to contribute or provide feedback!
+
