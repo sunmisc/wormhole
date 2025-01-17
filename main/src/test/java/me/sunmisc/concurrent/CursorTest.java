@@ -4,6 +4,7 @@ import org.hamcrest.CoreMatchers;
 import org.hamcrest.MatcherAssert;
 import org.junit.jupiter.api.Test;
 import sunmisc.utils.Cursor;
+
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;

@@ -1,6 +1,7 @@
 package sunmisc.utils.concurrent.lazy;
 
 import sunmisc.utils.Scalar;
+
 import java.time.Duration;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;

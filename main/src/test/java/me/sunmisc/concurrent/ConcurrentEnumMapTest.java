@@ -9,7 +9,10 @@ import java.util.Collections;
 import java.util.EnumMap;
 import java.util.Map;
 import java.util.Random;
-import java.util.concurrent.*;
+import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadLocalRandom;
 
 public final class ConcurrentEnumMapTest {
     private ConcurrentMap<Letter, Integer> map;

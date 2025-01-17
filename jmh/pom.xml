@@ -5,14 +5,11 @@
     <modelVersion>4.0.0</modelVersion>
     <parent>
         <groupId>sunmisc</groupId>
-        <artifactId>concurrency-world</artifactId>
+        <artifactId>wormhole</artifactId>
         <version>1.0-SNAPSHOT</version>
     </parent>
-
     <artifactId>jmh</artifactId>
-
     <packaging>jar</packaging>
-
     <build>
         <plugins>
             <plugin>
@@ -47,7 +44,6 @@
             </plugin>
         </plugins>
     </build>
-
     <dependencies>
         <dependency>
             <groupId>org.openjdk.jmh</groupId>
@@ -65,5 +61,4 @@
             <version>1.0-SNAPSHOT</version>
         </dependency>
     </dependencies>
-
 </project>

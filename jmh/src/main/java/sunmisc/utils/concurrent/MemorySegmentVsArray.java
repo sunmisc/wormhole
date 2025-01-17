@@ -6,8 +6,8 @@ import org.openjdk.jmh.runner.RunnerException;
 import org.openjdk.jmh.runner.options.Options;
 import org.openjdk.jmh.runner.options.OptionsBuilder;
 import sunmisc.utils.concurrent.memory.ArrayMemory;
-import sunmisc.utils.concurrent.memory.SegmentsMemory;
 import sunmisc.utils.concurrent.memory.ModifiableMemory;
+import sunmisc.utils.concurrent.memory.SegmentsMemory;
 
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;

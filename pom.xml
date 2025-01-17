@@ -1,19 +1,32 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
-    
   <modelVersion>4.0.0</modelVersion>
-    
   <groupId>sunmisc</groupId>
-    
-  <artifactId>concurrency-world</artifactId>
-    
+  <artifactId>wormhole</artifactId>
   <version>1.0-SNAPSHOT</version>
-    
   <packaging>pom</packaging>
-    
+  <description>Wormhole framework of structures</description>
   <modules>
-    <module>jcstress</module>
     <module>jmh</module>
     <module>main</module>
   </modules>
+  <licenses>
+    <license>
+      <name>MIT License</name>
+      <url>https://opensource.org/licenses/MIT</url>
+      <distribution>repo</distribution>
+    </license>
+  </licenses>
+  <developers>
+    <developer>
+      <id>1</id>
+      <name>Sunmisc Unsafe</name>
+      <email>zelvalea@gmail.com</email>
+      <roles>
+        <role>Architect</role>
+        <role>Developer</role>
+      </roles>
+      <timezone>+3</timezone>
+    </developer>
+  </developers>
 </project>

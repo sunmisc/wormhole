@@ -2,6 +2,7 @@ package sunmisc.utils.world.tensors;
 
 import sunmisc.utils.Cursor;
 import sunmisc.utils.world.tensors.exceptions.ShapeTensorException;
+
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;

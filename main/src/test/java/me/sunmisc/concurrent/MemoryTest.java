@@ -5,8 +5,8 @@ import org.hamcrest.MatcherAssert;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
-import sunmisc.utils.concurrent.memory.SegmentsMemory;
 import sunmisc.utils.concurrent.memory.ModifiableMemory;
+import sunmisc.utils.concurrent.memory.SegmentsMemory;
 
 import java.util.ArrayList;
 import java.util.List;
