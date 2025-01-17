@@ -1,37 +1,107 @@
-A separate type of mentally retarded creativity
+# Wormhole framework of structures
+<img alt="logo" src="https://github.com/sunmisc/MyConcurrencyWorld/assets/49918694/43fb0920-1fcb-441e-b72f-f64e42008f64" height="100px" />
 
-The author does not guarantee the correct operation of this shit (especially on
-platforms other than x86)
-(even though he conducts testing and benchmarks)
-these are just sketches of ideas and thoughts
+This repository is more just for fun than practical.
+Nevertheless, I offer my policy on code quality:
+1. No `synchronized`. I favor minimalism. Objects should not have some magical properties like await/notify... attached to them. and synchronization by object. Use `java.util.concurrent.lock` instead
+2. The same goes for the keyword - `volatile`. I don't recommend to use it too, as well as VarHandle, instead you can conveniently use `java.util.concurrent.atomic`. Still, sometimes, in critical moments to reduce the footprint of an object you can use `VarHandle` `volatile`
+3. No `ThreadLocal`. The concept of ThreadLocal is terrible IMHO, it is unsafe and causes memory leak problems
+   (This list may be added to)
 
-**Goal:**
-* Provide more parallelism tools compared to standard jdk library.
-* Provide more utilities
-* Bring everything into a common (abstract) form as much as possible.
+## Some practical uses:
 
-This library is just a sharp instrument, rushing
-fill holes in the standard library
-There's always some kind of obscure shit going on here,
-using super-greedy optimization techniques, I often like
-contradict oneself, confusing even experienced people intellectuals
-Take these or those tools with a cool fakeHead, KNOWING WHAT THEY ARE
-DO, select more profitable methods specifically for your case.
+Example use `Scalar`
+```java
+final Scalar<User, IOException> user = new RefreshLazy<>(
+        new Scalar<>() {
+            @Override
+            public User value() throws IOException {
+                return database.fetch("foo/bar");
+            }
+        },
+        Duration.ofMinutes(10)
+);
+```
 
-**I urge:**
-* Don't use ```synchronized``` You will make life easier for yourself and the openjdk project
-synchronized by object entails a number of crutches and supports inside the jvm.
-The Valhalla project is especially difficult with synchronized.
-It’s hard for the Loom project too.
-It is uncontrollable (if we do synchronized (this) - that's it) synchronized on an object gives it control over the lock.
-The alternative is simple: ``java.util.concurrent.lock``
-It provides proper locking mechanism design
+Example use `ModifiableMemory`
 
-* Don`t use ```ThreadLocal``` use your own separate storage, for example: ``ConcurrentMap<Long, V>`` where Long is the threadId
-The ThreadLocal concept is terrible, it's insecure and causes performance problems
+```java
 
+final AtomicReference<ModifiableMemory<Node<K, V>>> table =
+        new AtomicReference<>(
+                new SegmentsMemory<>(16)
+        );
+final AtomicInteger size = new AtomicInteger(0);
 
-I'm not at all happy with primitives in Java, I believe that a tensor should not be limited by the dimensionality of the system. And BigInteger design (along with performance too), maybe things will go better with projects like Vector API, Valhalla, Liliput and I will continue to work on math elements.
+void put(final K key, final V value) {
+   final int hash = key.hashCode();
+   final ModifiableMemory<Node<K, V>> memory = this.table.get();
+   final int n = memory.length();
+   final int index = hash & (n - 1);
+   final Node<K, V> newNode = new Node<>(key, value);
+   final Node<K, V> node = memory.fetch(index);
+   if (node == null) {
+      final Node<K, V> witness = memory.compareAndExchange(
+              index, 
+              null,
+              newNode
+      );
+      if (witness != null) {
+          witness.add(newNode);
+      }
+   } else {
+      node.add(newNode);
+   }
+   final int inc = this.size.getAndIncrement();
+   if (n <= inc) {
+       this.table.compareAndSet(memory, memory.realloc(Math.max(n, inc + 1)));
+   }
+}
+```
 
-![image](https://github.com/sunmisc/MyConcurrencyWorld/assets/49918694/43fb0920-1fcb-441e-b72f-f64e42008f64)
+Example use `Cursor`
 
+```java
+public final class ListCursor<E> implements Cursor<E> {
+    private final List<E> origin;
+    private final E item;
+    private final int index;
+
+    public ListCursor(final List<E> origin, final E item, final int index) {
+        this.origin = origin;
+        this.item = item;
+        this.index = index;
+    }
+
+    @Override
+    public boolean exists() {
+        return true;
+    }
+
+    @Override
+    public E element() {
+        return this.item;
+    }
+
+    @Override
+    public Cursor<E> next() {
+        final int shift = this.index + 1;
+        return shift < this.origin.size()
+                ? new ListCursor<>(this.origin, this.origin.get(shift), shift)
+                : Cursor.empty();
+    }
+}
+public static void main(final String[] args) {
+   final List<Integer> list = IntStream
+           .range(0, 16)
+           .boxed()
+           .toList();
+   new ListCursor<>(
+           list, 
+           list.getFirst(), 
+           0
+   ).forEach(e -> System.out.println(e));
+}
+```
+
+You will need Maven 3.3+ and Java 21+

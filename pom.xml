@@ -7,7 +7,7 @@
   <packaging>pom</packaging>
   <description>Wormhole framework of structures</description>
   <modules>
-    <module>jmh</module>
+    <module>bench</module>
     <module>main</module>
   </modules>
   <licenses>
