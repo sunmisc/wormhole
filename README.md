@@ -107,6 +107,7 @@ public final class ListCursor<E> implements Cursor<E> {
                 : Cursor.empty();
     }
 }
+
 public static void main(final String[] args) {
    final List<Integer> list = IntStream
            .range(0, 16)
